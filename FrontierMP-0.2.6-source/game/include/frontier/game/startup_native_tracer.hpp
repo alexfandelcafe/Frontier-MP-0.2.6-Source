@@ -1,11 +1,11 @@
 #pragma once
 
+#include "frontier/game/native_invoker.hpp"
+
 #include <cstdint>
 #include <string>
 
 namespace frontier::game {
-
-class NativeInvoker;
 
 class StartupNativeTracer final {
 public:
