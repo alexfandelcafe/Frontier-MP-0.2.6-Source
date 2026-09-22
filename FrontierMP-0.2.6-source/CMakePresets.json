@@ -1,0 +1,48 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "windows-vs2026-x64",
+      "displayName": "Windows / Visual Studio 2026 / x64",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/vs2026-x64",
+      "cacheVariables": {
+        "CMAKE_CXX_STANDARD": "20",
+        "FRONTIER_BUILD_CLIENT": "ON",
+        "FRONTIER_BUILD_TOOLS": "ON",
+        "FRONTIER_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "windows-vs2022-x64",
+      "displayName": "Windows / Visual Studio 2022 / x64 (legacy)",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/vs2022-x64",
+      "cacheVariables": {
+        "CMAKE_CXX_STANDARD": "20",
+        "FRONTIER_BUILD_CLIENT": "ON",
+        "FRONTIER_BUILD_TOOLS": "ON",
+        "FRONTIER_BUILD_TESTS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-vs2026-x64-release",
+      "configurePreset": "windows-vs2026-x64",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-vs2022-x64-release",
+      "configurePreset": "windows-vs2022-x64",
+      "configuration": "Release"
+    }
+  ]
+}

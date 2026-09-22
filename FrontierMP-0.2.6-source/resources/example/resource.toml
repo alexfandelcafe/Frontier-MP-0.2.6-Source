@@ -1,0 +1,8 @@
+name = "example"
+version = "0.1.0"
+
+[client]
+script = "client.lua"
+
+[server]
+script = "server.lua"
