@@ -394,7 +394,9 @@ void StartupNativeTracer::launch_new_script_with_args_hook(void* context) {
     const bool hasArgCount = read_i32_arg(context, 2, argCount);
     const bool hasStackSize = read_i32_arg(context, 3, stackSize);
 
-    char buffer[768]{};
+    // LAUNCH_NEW_SCRIPT_WITH_ARGS declares its payload as int*, so the
+    // pointed-to script arguments are 32-bit elements on this build.
+    char buffer[1024]{};
     std::snprintf(buffer, sizeof(buffer),
                   "[FrontierNativeTrace] LAUNCH_NEW_SCRIPT_WITH_ARGS path=%s argsPtr=0x%llX argCount=%s%d stackSize=%s%d values=",
                   pathReadable ? path : "<unreadable>",
@@ -403,15 +405,15 @@ void StartupNativeTracer::launch_new_script_with_args_hook(void* context) {
                   hasStackSize ? "" : "?", hasStackSize ? stackSize : 0);
 
     std::size_t used = std::strlen(buffer);
-    if (hasArgs && argsPtr != 0 && hasArgCount) {
-        const auto count = (argCount > 0 && argCount < 8) ? static_cast<std::uint32_t>(argCount) : 0u;
-        for (std::uint32_t index = 0; index < count && used + 110u < sizeof(buffer); ++index) {
-            std::uintptr_t raw = 0;
+    if (hasArgs && argsPtr != 0 && hasArgCount && argCount > 0) {
+        const auto count = (argCount < 8) ? static_cast<std::uint32_t>(argCount) : 8u;
+        for (std::uint32_t index = 0; index < count && used + 80u < sizeof(buffer); ++index) {
+            std::uint32_t raw = 0;
             bool ok = false;
 #ifdef _WIN32
             __try {
                 std::memcpy(&raw,
-                            reinterpret_cast<const void*>(argsPtr + static_cast<std::uintptr_t>(index) * sizeof(std::uintptr_t)),
+                            reinterpret_cast<const void*>(argsPtr + static_cast<std::uintptr_t>(index) * sizeof(raw)),
                             sizeof(raw));
                 ok = true;
             } __except (EXCEPTION_EXECUTE_HANDLER) {
@@ -419,15 +421,13 @@ void StartupNativeTracer::launch_new_script_with_args_hook(void* context) {
             }
 #endif
             if (ok) {
-                const auto raw32 = static_cast<std::uint32_t>(raw);
                 float asFloat = 0.0f;
-                std::memcpy(&asFloat, &raw32, sizeof(asFloat));
+                std::memcpy(&asFloat, &raw, sizeof(asFloat));
                 const int n = std::snprintf(buffer + used, sizeof(buffer) - used,
-                                            "%s0x%016llX low32=0x%08X i32=%d f32=%.6f",
+                                            "%s0x%08X i32=%d f32=%.6f",
                                             index == 0 ? "" : ",",
-                                            static_cast<unsigned long long>(raw),
-                                            raw32,
-                                            static_cast<std::int32_t>(raw32),
+                                            raw,
+                                            static_cast<std::int32_t>(raw),
                                             static_cast<double>(asFloat));
                 if (n > 0) used += static_cast<std::size_t>(n);
             } else {
@@ -437,16 +437,47 @@ void StartupNativeTracer::launch_new_script_with_args_hook(void* context) {
                 if (n > 0) used += static_cast<std::size_t>(n);
             }
         }
+        if (argCount > 8 && used + 8u < sizeof(buffer)) {
+            std::snprintf(buffer + used, sizeof(buffer) - used, ",...");
+        }
     } else if (hasArgs && argsPtr != 0 && hasArgCount && argCount > 0) {
-        std::snprintf(buffer + used, sizeof(buffer) - used, "<too-many-to-dump>");
+        std::snprintf(buffer + used, sizeof(buffer) - used, "<payload-unreadable>");
     } else if (!hasArgs) {
         std::snprintf(buffer + used, sizeof(buffer) - used, "<args-pointer-unreadable>");
     } else {
         std::snprintf(buffer + used, sizeof(buffer) - used, "<no-args>");
     }
-    log(buffer);
 
-    if (tracer->originalLaunchNewScriptWithArgs_) tracer->originalLaunchNewScriptWithArgs_(context);
+    // Preserve the original native call exactly; only inspect its return slot
+    // after execution. The documented native returns int.
+    if (tracer->originalLaunchNewScriptWithArgs_) {
+        tracer->originalLaunchNewScriptWithArgs_(context);
+    }
+
+    std::int32_t result = 0;
+    bool resultReadable = false;
+#ifdef _WIN32
+    if (context) {
+        const auto* call = reinterpret_cast<const NativeTraceContext*>(context);
+        if (call->returnBuffer) {
+            __try {
+                std::memcpy(&result, call->returnBuffer, sizeof(result));
+                resultReadable = true;
+            } __except (EXCEPTION_EXECUTE_HANDLER) {
+                resultReadable = false;
+            }
+        }
+    }
+#endif
+
+    if (used + 48u < sizeof(buffer)) {
+        const int n = std::snprintf(buffer + used, sizeof(buffer) - used,
+                                    " result=%s%d",
+                                    resultReadable ? "" : "?",
+                                    resultReadable ? result : 0);
+        (void)n;
+    }
+    log(buffer);
 }
 
 void StartupNativeTracer::set_mission_info_hook(void* context) {
