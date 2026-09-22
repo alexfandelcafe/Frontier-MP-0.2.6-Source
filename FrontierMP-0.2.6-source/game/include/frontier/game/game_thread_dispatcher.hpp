@@ -5,6 +5,8 @@
 #include <condition_variable>
 #include <deque>
 #include <functional>
+#include <memory>
+#include <atomic>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -39,7 +41,7 @@ private:
     void (*originalWait_)(void* context){};
     bool attached_{};
     mutable std::mutex queueMutex_;
-    std::deque<PendingTask*> queue_;
+    std::deque<std::shared_ptr<PendingTask>> queue_;
     std::thread::id gameThreadId_{};
     bool gameThreadKnown_{};
 };
