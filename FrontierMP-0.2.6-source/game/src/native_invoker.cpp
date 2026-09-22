@@ -128,7 +128,11 @@ bool NativeInvoker::read_table(std::uintptr_t storage, std::uintptr_t& table,
         if (diagnostics) *diagnostics = "storage=0";
         return false;
     }
-    if (!readable(storage, sizeof(table))) {
+    // G.R.E-Lab models sm_CommandsRegistrationTable as:
+    //   +0x00: pointer to the 16-byte native registration entries
+    //   +0x08: uint32 modulator
+    // The modulator therefore belongs to the storage object, not the table.
+    if (!readable(storage, sizeof(std::uintptr_t) + sizeof(std::uint32_t))) {
         if (diagnostics) {
             char buffer[128]{};
             std::snprintf(buffer, sizeof(buffer), "storage=0x%llX unreadable",
@@ -142,19 +146,33 @@ bool NativeInvoker::read_table(std::uintptr_t storage, std::uintptr_t& table,
     if (!guarded_copy(reinterpret_cast<const void*>(storage), &rawTable, sizeof(rawTable))) {
         if (diagnostics) {
             char buffer[128]{};
-            std::snprintf(buffer, sizeof(buffer), "storage=0x%llX read-failed",
+            std::snprintf(buffer, sizeof(buffer), "storage=0x%llX table-read-failed",
                           static_cast<unsigned long long>(storage));
             *diagnostics = buffer;
         }
         return false;
     }
+
+    std::uint32_t rawModulator = 0;
+    if (!guarded_copy(reinterpret_cast<const void*>(storage + sizeof(std::uintptr_t)),
+                      &rawModulator, sizeof(rawModulator))) {
+        if (diagnostics) {
+            char buffer[128]{};
+            std::snprintf(buffer, sizeof(buffer), "storage=0x%llX mod-read-failed",
+                          static_cast<unsigned long long>(storage));
+            *diagnostics = buffer;
+        }
+        return false;
+    }
+
     table = rawTable;
+    modulator = rawModulator;
 
     if (!table) {
         if (diagnostics) {
-            char buffer[128]{};
-            std::snprintf(buffer, sizeof(buffer), "storage=0x%llX table=0",
-                          static_cast<unsigned long long>(storage));
+            char buffer[160]{};
+            std::snprintf(buffer, sizeof(buffer), "storage=0x%llX table=0 mod=%u",
+                          static_cast<unsigned long long>(storage), rawModulator);
             *diagnostics = buffer;
         }
         return false;
@@ -171,20 +189,6 @@ bool NativeInvoker::read_table(std::uintptr_t storage, std::uintptr_t& table,
         table = 0;
         return false;
     }
-
-    std::uint32_t rawModulator = 0;
-    if (!guarded_copy(reinterpret_cast<const void*>(table + 8), &rawModulator, sizeof(rawModulator))) {
-        if (diagnostics) {
-            char buffer[160]{};
-            std::snprintf(buffer, sizeof(buffer), "storage=0x%llX table=0x%llX mod-read-failed",
-                          static_cast<unsigned long long>(storage),
-                          static_cast<unsigned long long>(table));
-            *diagnostics = buffer;
-        }
-        table = 0;
-        return false;
-    }
-    modulator = rawModulator;
 
     if (modulator == 0 || modulator > 0x100000u) {
         if (diagnostics) {
@@ -311,12 +315,19 @@ bool NativeInvoker::initialize(std::uintptr_t moduleBase, std::size_t imageSize,
     const auto getPositionHandler = find_handler_in_table(table, modulator, 0x99BD9D6Fu);
     const auto getGameStateHandler = find_handler_in_table(table, modulator, 0xDD9BD22Bu);
 
+    const auto streamingWorldLoadedHandler = find_handler_in_table(table, modulator, 0x87B74064u);
+    const auto simulateStartMultiplayerHandler = find_handler_in_table(table, modulator, 0x9A73C2CDu);
+    const auto startPosCommandLineHandler = find_handler_in_table(table, modulator, 0x814D97E8u);
+
     std::fprintf(stderr,
-        "[FrontierNative] table=0x%llX mod=%u sentinel=%s getPosition=%s getGameState=%s\n",
+        "[FrontierNative] table=0x%llX mod=%u sentinel=%s getPosition=%s getGameState=%s worldLoaded=%s simulateMp=%s startPos=%s\n",
         static_cast<unsigned long long>(table), modulator,
         sentinelHandler ? "yes" : "no",
         getPositionHandler ? "yes" : "no",
-        getGameStateHandler ? "yes" : "no");
+        getGameStateHandler ? "yes" : "no",
+        streamingWorldLoadedHandler ? "yes" : "no",
+        simulateStartMultiplayerHandler ? "yes" : "no",
+        startPosCommandLineHandler ? "yes" : "no");
 
     if (!getPositionHandler && !getGameStateHandler) {
         lastError_ = "native table found but known RDR native handlers were not found";
@@ -331,6 +342,15 @@ bool NativeInvoker::initialize(std::uintptr_t moduleBase, std::size_t imageSize,
     (void)imageSize;
     (void)textRva;
     (void)textSize;
+    return false;
+#endif
+}
+
+bool NativeInvoker::has_handler(std::uint32_t hash) const {
+#ifdef _WIN32
+    return get_handler(hash) != nullptr;
+#else
+    (void)hash;
     return false;
 #endif
 }

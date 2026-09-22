@@ -13,10 +13,13 @@ class RdrBridge final {
 public:
     bool initialize(const ExecutableFingerprint& fingerprint, KnownBuild build);
     bool read_local_player_state(PlayerState& outState, std::string& error) const;
+    bool local_player_pointer_available() const;
     bool try_initialize_native_invoker();
     bool native_invoker_ready() const { return nativeInvoker_.ready(); }
     const std::string& native_invoker_error() const { return nativeInvoker_.last_error(); }
-    bool read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bool& simulateStartMultiplayer, bool& startPosCommandLine, std::string& error) const;
+    bool read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bool& worldLoadedKnown,
+                           bool& simulateStartMultiplayer, bool& simulateStartMultiplayerKnown,
+                           bool& startPosCommandLine, bool& startPosCommandLineKnown, std::string& error) const;
 
     bool initialized() const { return initialized_; }
     bool local_player_symbol_resolved() const { return localPlayerStorage_ != 0; }
