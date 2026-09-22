@@ -12,6 +12,7 @@ enum class FrontierSessionState : std::uint8_t {
     WaitingForNativeInvoker,
     Frontend,
     WaitingForWorld,
+    RuntimeQueryFailed,
     WaitingForLocalPlayer,
     Active
 };
