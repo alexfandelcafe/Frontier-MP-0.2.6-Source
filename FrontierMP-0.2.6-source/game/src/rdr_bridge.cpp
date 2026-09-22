@@ -1,6 +1,7 @@
 #include "frontier/game/rdr_bridge.hpp"
 
 #include "frontier/game/pattern_scanner.hpp"
+#include "frontier/game/game_thread_dispatcher.hpp"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -9,6 +10,7 @@
 
 #include <cstring>
 #include <sstream>
+#include <memory>
 
 namespace frontier::game {
 
@@ -176,10 +178,32 @@ bool RdrBridge::try_initialize_native_invoker() {
 #endif
 }
 
+bool RdrBridge::try_initialize_game_thread_dispatcher() {
+#ifdef _WIN32
+    if (!initialized_ || !nativeInvoker_.ready()) {
+        gameThreadDispatcherError_ = "native invoker not ready";
+        return false;
+    }
+    if (gameThreadDispatcher_.attached()) return true;
+
+    std::string error;
+    if (!gameThreadDispatcher_.attach(nativeInvoker_, error)) {
+        gameThreadDispatcherError_ = error;
+        return false;
+    }
+
+    gameThreadDispatcherError_.clear();
+    return true;
+#else
+    gameThreadDispatcherError_ = "game-thread dispatcher is Windows-only";
+    return false;
+#endif
+}
+
 bool RdrBridge::read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bool& worldLoadedKnown,
                                    bool& simulateStartMultiplayer, bool& simulateStartMultiplayerKnown,
                                    bool& startPosCommandLine, bool& startPosCommandLineKnown,
-                                   std::string& error) const {
+                                   std::string& error) {
     gameState = -1;
     worldLoaded = false;
     worldLoadedKnown = false;
@@ -193,24 +217,70 @@ bool RdrBridge::read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bo
         error = "native invoker not ready";
         return false;
     }
-
-    std::uint32_t value = 0;
-    if (!nativeInvoker_.has_handler(kNativeGetGameState) ||
-        !nativeInvoker_.invoke_u32(kNativeGetGameState, value)) {
-        error = "GET_GAME_STATE invoke failed; ";
+    if (!gameThreadDispatcher_.attached()) {
+        error = gameThreadDispatcherError_.empty()
+            ? "game-thread dispatcher not attached"
+            : gameThreadDispatcherError_;
         return false;
     }
-    gameState = static_cast<std::int32_t>(value);
 
-    // Do not call STREAMING_IS_WORLD_LOADED from the Frontier worker thread.
-    // Its handler is valid, but this native can touch game-thread state and has
-    // produced access violations when invoked off-thread during frontend loading.
-    // World readiness is instead derived from the already-verified local-player
-    // storage pointer, which is a plain guarded memory read.
-    worldLoaded = local_player_pointer_available();
-    worldLoadedKnown = true;
+    struct RuntimeNativeResult final {
+        bool gameStateOk{};
+        std::uint32_t gameState{};
+        bool worldLoadedOk{};
+        std::uint32_t worldLoaded{};
+        bool simulateMpOk{};
+        std::uint32_t simulateMp{};
+        bool startPosOk{};
+        std::uint32_t startPos{};
+    };
 
-    return true;
+    auto result = std::make_shared<RuntimeNativeResult>();
+    std::string dispatchError;
+    const bool dispatched = gameThreadDispatcher_.submit_and_wait(
+        [this, result]() {
+            result->gameStateOk = nativeInvoker_.invoke_u32(kNativeGetGameState, result->gameState);
+            result->worldLoadedOk = nativeInvoker_.invoke_u32(kNativeStreamingIsWorldLoaded, result->worldLoaded);
+            result->simulateMpOk = nativeInvoker_.invoke_u32(kNativeIsSimulateStartMultiplayer, result->simulateMp);
+            result->startPosOk = nativeInvoker_.invoke_u32(kNativeIsStartPosInCommandLine, result->startPos);
+        },
+        1000,
+        dispatchError);
+
+    if (!dispatched) {
+        error = dispatchError.empty() ? "game-thread native dispatch failed" : dispatchError;
+        return false;
+    }
+
+    if (!result->gameStateOk) {
+        error += "GET_GAME_STATE invoke failed; ";
+    } else {
+        gameState = static_cast<std::int32_t>(result->gameState);
+    }
+
+    worldLoadedKnown = result->worldLoadedOk;
+    if (result->worldLoadedOk) {
+        worldLoaded = result->worldLoaded != 0;
+    } else {
+        error += "STREAMING_IS_WORLD_LOADED invoke failed; ";
+    }
+
+    simulateStartMultiplayerKnown = result->simulateMpOk;
+    if (result->simulateMpOk) {
+        simulateStartMultiplayer = result->simulateMp != 0;
+    } else {
+        error += "IS_SIMULATE_START_MULTIPLAYER invoke failed; ";
+    }
+
+    startPosCommandLineKnown = result->startPosOk;
+    if (result->startPosOk) {
+        startPosCommandLine = result->startPos != 0;
+    } else {
+        error += "IS_STARTPOS_IN_COMMANDLINE invoke failed; ";
+    }
+
+    return result->gameStateOk && result->worldLoadedOk &&
+           result->simulateMpOk && result->startPosOk;
 }
 
 bool RdrBridge::read_local_player_state(PlayerState& outState, std::string& error) const {
