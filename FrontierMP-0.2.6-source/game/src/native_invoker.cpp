@@ -315,12 +315,19 @@ bool NativeInvoker::initialize(std::uintptr_t moduleBase, std::size_t imageSize,
     const auto getPositionHandler = find_handler_in_table(table, modulator, 0x99BD9D6Fu);
     const auto getGameStateHandler = find_handler_in_table(table, modulator, 0xDD9BD22Bu);
 
+    const auto streamingWorldLoadedHandler = find_handler_in_table(table, modulator, 0x87B74064u);
+    const auto simulateStartMultiplayerHandler = find_handler_in_table(table, modulator, 0x9A73C2CDu);
+    const auto startPosCommandLineHandler = find_handler_in_table(table, modulator, 0x814D97E8u);
+
     std::fprintf(stderr,
-        "[FrontierNative] table=0x%llX mod=%u sentinel=%s getPosition=%s getGameState=%s\n",
+        "[FrontierNative] table=0x%llX mod=%u sentinel=%s getPosition=%s getGameState=%s worldLoaded=%s simulateMp=%s startPos=%s\n",
         static_cast<unsigned long long>(table), modulator,
         sentinelHandler ? "yes" : "no",
         getPositionHandler ? "yes" : "no",
-        getGameStateHandler ? "yes" : "no");
+        getGameStateHandler ? "yes" : "no",
+        streamingWorldLoadedHandler ? "yes" : "no",
+        simulateStartMultiplayerHandler ? "yes" : "no",
+        startPosCommandLineHandler ? "yes" : "no");
 
     if (!getPositionHandler && !getGameStateHandler) {
         lastError_ = "native table found but known RDR native handlers were not found";
@@ -335,6 +342,15 @@ bool NativeInvoker::initialize(std::uintptr_t moduleBase, std::size_t imageSize,
     (void)imageSize;
     (void)textRva;
     (void)textSize;
+    return false;
+#endif
+}
+
+bool NativeInvoker::has_handler(std::uint32_t hash) const {
+#ifdef _WIN32
+    return get_handler(hash) != nullptr;
+#else
+    (void)hash;
     return false;
 #endif
 }
