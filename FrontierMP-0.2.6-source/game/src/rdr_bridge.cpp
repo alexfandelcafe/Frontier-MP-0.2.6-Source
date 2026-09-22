@@ -193,6 +193,15 @@ bool RdrBridge::try_initialize_game_thread_dispatcher() {
     }
 
     gameThreadDispatcherError_.clear();
+
+    if (!startupNativeTracer_.attached()) {
+        std::string traceError;
+        if (!startupNativeTracer_.attach(nativeInvoker_, traceError)) {
+            gameThreadDispatcherError_ = "dispatcher attached but startup tracer failed: " + traceError;
+            return true;
+        }
+    }
+
     return true;
 #else
     gameThreadDispatcherError_ = "game-thread dispatcher is Windows-only";
