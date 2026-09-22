@@ -26,15 +26,28 @@ struct NativeTraceContext final {
     std::uint32_t argumentCount{};
     void* argumentBuffer{};
     std::uint32_t dataCount{};
+    void* outputVectors[4]{};
+    std::uint8_t inputVectors[0x30]{};
 };
 
 bool read_i32_arg(void* context, std::uint32_t index, std::int32_t& out) {
+    out = 0;
     if (!context) return false;
+
     const auto* call = reinterpret_cast<const NativeTraceContext*>(context);
     if (!call->argumentBuffer || index >= call->argumentCount) return false;
-    const auto* values = reinterpret_cast<const std::uintptr_t*>(call->argumentBuffer);
-    out = static_cast<std::int32_t>(values[index]);
-    return true;
+
+#ifdef _WIN32
+    __try {
+        const auto* values = reinterpret_cast<const std::uintptr_t*>(call->argumentBuffer);
+        out = static_cast<std::int32_t>(values[index]);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+#else
+    return false;
+#endif
 }
 
 void write_log_line(const char* message) {
@@ -107,6 +120,7 @@ void StartupNativeTracer::set_start_pos_hook(void* context) {
     auto* tracer = g_tracer;
     if (!tracer) return;
 
+    const auto* call = reinterpret_cast<const NativeTraceContext*>(context);
     std::int32_t a0=0,a1=0,a2=0,a3=0,a4=0;
     const bool ok = read_i32_arg(context,0,a0) && read_i32_arg(context,1,a1) &&
                     read_i32_arg(context,2,a2) && read_i32_arg(context,3,a3) &&
@@ -114,11 +128,21 @@ void StartupNativeTracer::set_start_pos_hook(void* context) {
     if (ok) {
         char buffer[256]{};
         std::snprintf(buffer, sizeof(buffer),
-                      "[FrontierNativeTrace] SET_START_POS(%d,%d,%d,%d,%d)",
-                      a0,a1,a2,a3,a4);
+                      "[FrontierNativeTrace] SET_START_POS(%d,%d,%d,%d,%d) argc=%u args=0x%llX",
+                      a0,a1,a2,a3,a4,
+                      call ? call->argumentCount : 0u,
+                      call ? static_cast<unsigned long long>(
+                          reinterpret_cast<std::uintptr_t>(call->argumentBuffer)) : 0ull);
         log(buffer);
     } else {
-        log("[FrontierNativeTrace] SET_START_POS(<args-unreadable>)");
+        char buffer[256]{};
+        std::snprintf(buffer, sizeof(buffer),
+                      "[FrontierNativeTrace] SET_START_POS(<args-unreadable>) argc=%u args=0x%llX data=%u",
+                      call ? call->argumentCount : 0u,
+                      call ? static_cast<unsigned long long>(
+                          reinterpret_cast<std::uintptr_t>(call->argumentBuffer)) : 0ull,
+                      call ? call->dataCount : 0u);
+        log(buffer);
     }
 
     if (tracer->originalSetStartPos_) tracer->originalSetStartPos_(context);
