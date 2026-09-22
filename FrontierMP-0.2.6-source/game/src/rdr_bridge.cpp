@@ -237,7 +237,7 @@ bool RdrBridge::read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bo
 
     auto result = std::make_shared<RuntimeNativeResult>();
     std::string dispatchError;
-    const bool dispatched = gameThreadDispatcher_.submit_and_wait(
+    bool dispatched = gameThreadDispatcher_.submit_and_wait(
         [this, result]() {
             result->gameStateOk = nativeInvoker_.invoke_u32(kNativeGetGameState, result->gameState);
             result->worldLoadedOk = nativeInvoker_.invoke_u32(kNativeStreamingIsWorldLoaded, result->worldLoaded);
