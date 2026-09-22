@@ -203,7 +203,7 @@ bool RdrBridge::try_initialize_game_thread_dispatcher() {
 bool RdrBridge::read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bool& worldLoadedKnown,
                                    bool& simulateStartMultiplayer, bool& simulateStartMultiplayerKnown,
                                    bool& startPosCommandLine, bool& startPosCommandLineKnown,
-                                   std::string& error) {
+                                   std::string& error) const {
     gameState = -1;
     worldLoaded = false;
     worldLoadedKnown = false;
