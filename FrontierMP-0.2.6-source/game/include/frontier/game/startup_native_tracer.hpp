@@ -22,6 +22,7 @@ private:
     static void was_last_reset_for_multiplayer_hook(void* context);
     static void is_launch_retail_hook(void* context);
     static void is_simulate_start_press_hook(void* context);
+    static void is_script_valid_hook(void* context);
 
     static void log(const char* message);
 
@@ -35,6 +36,7 @@ private:
     NativeInvoker::NativeHandler originalWasLastResetForMultiplayer_{};
     NativeInvoker::NativeHandler originalIsLaunchRetail_{};
     NativeInvoker::NativeHandler originalIsSimulateStartPress_{};
+    NativeInvoker::NativeHandler originalIsScriptValid_{};
     bool attached_{};
 };
 
