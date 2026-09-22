@@ -3,6 +3,10 @@
 #include "frontier/game/native_invoker.hpp"
 
 #include <chrono>
+#include <cstdio>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace frontier::game {
 
@@ -157,6 +161,10 @@ std::size_t GameThreadDispatcher::pump(std::size_t maxTasks) {
     if (!gameThreadKnown_.load(std::memory_order_acquire)) {
         gameThreadId_ = std::this_thread::get_id();
         gameThreadKnown_.store(true, std::memory_order_release);
+#ifdef _WIN32
+        std::fprintf(stderr, "[FrontierNative] dispatcher first pump thread=%lu\\n",
+                     static_cast<unsigned long>(GetCurrentThreadId()));
+#endif
     }
 
     std::size_t processed = 0;
