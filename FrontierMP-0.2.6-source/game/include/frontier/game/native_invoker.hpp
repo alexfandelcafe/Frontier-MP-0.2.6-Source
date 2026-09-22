@@ -15,6 +15,7 @@ public:
     const std::string& last_error() const { return lastError_; }
 
     bool has_handler(std::uint32_t hash) const;
+    bool current_handler(std::uint32_t hash, NativeHandler& out) const;
     bool invoke_u32(std::uint32_t hash, std::uint32_t& out) const;
     bool invoke_bool(std::uint32_t hash, bool& out) const;
 
