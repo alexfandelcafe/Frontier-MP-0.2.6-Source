@@ -94,6 +94,16 @@ bool RdrBridge::read_pointer(std::uintptr_t address, std::uintptr_t& out) const 
 #endif
 }
 
+bool RdrBridge::local_player_pointer_available() const {
+#ifdef _WIN32
+    if (!initialized_ || !localPlayerStorage_) return false;
+    std::uintptr_t localPlayer = 0;
+    return read_pointer(localPlayerStorage_, localPlayer);
+#else
+    return false;
+#endif
+}
+
 bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild build) {
     initialized_ = false;
     build_ = build;
@@ -178,63 +188,29 @@ bool RdrBridge::read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bo
     startPosCommandLine = false;
     startPosCommandLineKnown = false;
     error.clear();
+
     if (!nativeInvoker_.ready()) {
         error = "native invoker not ready";
         return false;
     }
 
-    bool allOk = true;
     std::uint32_t value = 0;
-
-    if (nativeInvoker_.has_handler(kNativeGetGameState)) {
-        if (nativeInvoker_.invoke_u32(kNativeGetGameState, value)) {
-            gameState = static_cast<std::int32_t>(value);
-        } else {
-            allOk = false;
-            error += "GET_GAME_STATE invoke failed; ";
-        }
-    } else {
-        allOk = false;
-        error += "GET_GAME_STATE handler missing; ";
+    if (!nativeInvoker_.has_handler(kNativeGetGameState) ||
+        !nativeInvoker_.invoke_u32(kNativeGetGameState, value)) {
+        error = "GET_GAME_STATE invoke failed; ";
+        return false;
     }
+    gameState = static_cast<std::int32_t>(value);
 
-    if (nativeInvoker_.has_handler(kNativeStreamingIsWorldLoaded)) {
-        if (nativeInvoker_.invoke_bool(kNativeStreamingIsWorldLoaded, worldLoaded)) {
-            worldLoadedKnown = true;
-        } else {
-            allOk = false;
-            error += "STREAMING_IS_WORLD_LOADED invoke failed; ";
-        }
-    } else {
-        allOk = false;
-        error += "STREAMING_IS_WORLD_LOADED handler missing; ";
-    }
+    // Do not call STREAMING_IS_WORLD_LOADED from the Frontier worker thread.
+    // Its handler is valid, but this native can touch game-thread state and has
+    // produced access violations when invoked off-thread during frontend loading.
+    // World readiness is instead derived from the already-verified local-player
+    // storage pointer, which is a plain guarded memory read.
+    worldLoaded = local_player_pointer_available();
+    worldLoadedKnown = true;
 
-    if (nativeInvoker_.has_handler(kNativeIsSimulateStartMultiplayer)) {
-        if (nativeInvoker_.invoke_bool(kNativeIsSimulateStartMultiplayer, simulateStartMultiplayer)) {
-            simulateStartMultiplayerKnown = true;
-        } else {
-            allOk = false;
-            error += "IS_SIMULATE_START_MULTIPLAYER invoke failed; ";
-        }
-    } else {
-        allOk = false;
-        error += "IS_SIMULATE_START_MULTIPLAYER handler missing; ";
-    }
-
-    if (nativeInvoker_.has_handler(kNativeIsStartPosInCommandLine)) {
-        if (nativeInvoker_.invoke_bool(kNativeIsStartPosInCommandLine, startPosCommandLine)) {
-            startPosCommandLineKnown = true;
-        } else {
-            allOk = false;
-            error += "IS_STARTPOS_IN_COMMANDLINE invoke failed; ";
-        }
-    } else {
-        allOk = false;
-        error += "IS_STARTPOS_IN_COMMANDLINE handler missing; ";
-    }
-
-    return allOk;
+    return true;
 }
 
 bool RdrBridge::read_local_player_state(PlayerState& outState, std::string& error) const {
