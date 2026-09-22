@@ -86,6 +86,34 @@ bool NativeInvoker::readable(std::uintptr_t address, std::size_t size) const {
 #endif
 }
 
+std::uintptr_t NativeInvoker::find_entry_in_table(std::uintptr_t table,
+                                                       std::uint32_t modulator,
+                                                       std::uint32_t hash) const {
+#ifdef _WIN32
+    if (!table || modulator == 0 || modulator > 0x100000u) return 0;
+    std::uint32_t tempHash = hash;
+    std::uint32_t index = hash % modulator;
+    for (std::uint32_t probes = 0; probes < modulator; ++probes) {
+        const auto entry = table + static_cast<std::uintptr_t>(index) * 16u;
+        if (!readable(entry, 16)) return 0;
+
+        std::uint32_t entryHash = 0;
+        if (!guarded_copy(reinterpret_cast<const void*>(entry), &entryHash, sizeof(entryHash))) {
+            return 0;
+        }
+        if (entryHash == hash) return entry;
+        if (entryHash == 0) return 0;
+
+        tempHash = (tempHash >> 1u) + 1u;
+        index = (tempHash + index) % modulator;
+    }
+#endif
+    (void)table;
+    (void)modulator;
+    (void)hash;
+    return 0;
+}
+
 std::uintptr_t NativeInvoker::find_handler_in_table(std::uintptr_t table,
                                                         std::uint32_t modulator,
                                                         std::uint32_t hash) const {
@@ -388,6 +416,118 @@ bool NativeInvoker::invoke_u32(std::uint32_t hash, std::uint32_t& out) const {
 #else
     (void)hash;
     out = 0;
+    return false;
+#endif
+}
+
+bool NativeInvoker::hook_native(std::uint32_t hash, NativeHandler replacement,
+                                      NativeHandler& original, std::string* error) {
+#ifdef _WIN32
+    original = nullptr;
+    if (error) error->clear();
+    if (!ready_ || !nativeRegistrationStorage_) {
+        if (error) *error = "native invoker not ready";
+        return false;
+    }
+    if (!replacement) {
+        if (error) *error = "replacement handler is null";
+        return false;
+    }
+
+    std::uintptr_t table = 0;
+    std::uint32_t modulator = 0;
+    if (!read_table(nativeRegistrationStorage_, table, modulator, error)) return false;
+
+    const auto entry = find_entry_in_table(table, modulator, hash);
+    if (!entry) {
+        if (error) {
+            char buffer[128]{};
+            std::snprintf(buffer, sizeof(buffer), "native handler not found: 0x%08X", hash);
+            *error = buffer;
+        }
+        return false;
+    }
+
+    std::uintptr_t current = 0;
+    if (!guarded_copy(reinterpret_cast<const void*>(entry + 8), &current, sizeof(current))) {
+        if (error) *error = "native handler pointer read failed";
+        return false;
+    }
+    if (!current) {
+        if (error) *error = "native handler pointer is null";
+        return false;
+    }
+
+    DWORD oldProtect = 0;
+    if (!VirtualProtect(reinterpret_cast<void*>(entry + 8), sizeof(std::uintptr_t),
+                        PAGE_READWRITE, &oldProtect)) {
+        if (error) *error = "native handler table protection change failed";
+        return false;
+    }
+
+    const auto replacementPtr = reinterpret_cast<std::uintptr_t>(replacement);
+    const auto previousPtr = reinterpret_cast<std::uintptr_t>(
+        InterlockedExchangePointer(reinterpret_cast<PVOID volatile*>(entry + 8),
+                                    reinterpret_cast<PVOID>(replacementPtr)));
+
+    DWORD ignored = 0;
+    VirtualProtect(reinterpret_cast<void*>(entry + 8), sizeof(std::uintptr_t),
+                   oldProtect, &ignored);
+
+    original = reinterpret_cast<NativeHandler>(previousPtr);
+    if (!original) {
+        if (error) *error = "native handler replacement returned null original";
+        return false;
+    }
+
+    std::fprintf(stderr,
+                 "[FrontierNative] hooked hash=0x%08X entry=0x%llX original=0x%llX replacement=0x%llX\n",
+                 hash,
+                 static_cast<unsigned long long>(entry),
+                 static_cast<unsigned long long>(previousPtr),
+                 static_cast<unsigned long long>(replacementPtr));
+    return true;
+#else
+    (void)hash;
+    (void)replacement;
+    original = nullptr;
+    if (error) *error = "native hooking is Windows-only";
+    return false;
+#endif
+}
+
+bool NativeInvoker::unhook_native(std::uint32_t hash, NativeHandler replacement, NativeHandler original) {
+#ifdef _WIN32
+    if (!ready_ || !nativeRegistrationStorage_ || !replacement || !original) return false;
+
+    std::uintptr_t table = 0;
+    std::uint32_t modulator = 0;
+    if (!read_table(nativeRegistrationStorage_, table, modulator)) return false;
+
+    const auto entry = find_entry_in_table(table, modulator, hash);
+    if (!entry) return false;
+
+    std::uintptr_t current = 0;
+    if (!guarded_copy(reinterpret_cast<const void*>(entry + 8), &current, sizeof(current))) return false;
+    if (current != reinterpret_cast<std::uintptr_t>(replacement)) return false;
+
+    DWORD oldProtect = 0;
+    if (!VirtualProtect(reinterpret_cast<void*>(entry + 8), sizeof(std::uintptr_t),
+                        PAGE_READWRITE, &oldProtect)) {
+        return false;
+    }
+
+    InterlockedExchangePointer(reinterpret_cast<PVOID volatile*>(entry + 8),
+                                reinterpret_cast<PVOID>(reinterpret_cast<std::uintptr_t>(original)));
+
+    DWORD ignored = 0;
+    VirtualProtect(reinterpret_cast<void*>(entry + 8), sizeof(std::uintptr_t),
+                   oldProtect, &ignored);
+    return true;
+#else
+    (void)hash;
+    (void)replacement;
+    (void)original;
     return false;
 #endif
 }
