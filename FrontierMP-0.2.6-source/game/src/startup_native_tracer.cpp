@@ -222,9 +222,6 @@ void StartupNativeTracer::clear_mission_info_hook(void* context) {
     if (tracer->originalClearMissionInfo_) tracer->originalClearMissionInfo_(context);
 }
 
-} // namespace frontier::game
-
-
 void StartupNativeTracer::launch_new_script_hook(void* context) {
     auto* tracer = g_tracer;
     if (!tracer) return;
@@ -243,7 +240,7 @@ void StartupNativeTracer::launch_new_script_hook(void* context) {
             std::size_t i = 0;
             for (; i + 1 < sizeof(path); ++i) {
                 const char ch = source[i];
-                if (ch == '\\0') {
+                if (ch == '\0') {
                     pathReadable = true;
                     break;
                 }
@@ -252,8 +249,8 @@ void StartupNativeTracer::launch_new_script_hook(void* context) {
                 }
                 path[i] = ch;
             }
-            if (i + 1 == sizeof(path)) path[sizeof(path) - 1] = '\\0';
-            if (!pathReadable && path[0] != '\\0') pathReadable = true;
+            if (i + 1 == sizeof(path)) path[sizeof(path) - 1] = '\0';
+            if (!pathReadable && path[0] != '\0') pathReadable = true;
         } __except (EXCEPTION_EXECUTE_HANDLER) {
             pathReadable = false;
         }
@@ -279,3 +276,6 @@ void StartupNativeTracer::launch_new_script_hook(void* context) {
 
     if (tracer->originalLaunchNewScript_) tracer->originalLaunchNewScript_(context);
 }
+
+
+} // namespace frontier::game
