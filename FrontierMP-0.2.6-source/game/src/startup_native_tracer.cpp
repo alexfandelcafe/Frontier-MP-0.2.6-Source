@@ -394,13 +394,56 @@ void StartupNativeTracer::launch_new_script_with_args_hook(void* context) {
     const bool hasArgCount = read_i32_arg(context, 2, argCount);
     const bool hasStackSize = read_i32_arg(context, 3, stackSize);
 
-    char buffer[320]{};
+    char buffer[768]{};
     std::snprintf(buffer, sizeof(buffer),
-                  "[FrontierNativeTrace] LAUNCH_NEW_SCRIPT_WITH_ARGS path=%s argsPtr=0x%llX argCount=%s%d stackSize=%s%d",
+                  "[FrontierNativeTrace] LAUNCH_NEW_SCRIPT_WITH_ARGS path=%s argsPtr=0x%llX argCount=%s%d stackSize=%s%d values=",
                   pathReadable ? path : "<unreadable>",
                   static_cast<unsigned long long>(argsPtr),
                   hasArgCount ? "" : "?", hasArgCount ? argCount : 0,
                   hasStackSize ? "" : "?", hasStackSize ? stackSize : 0);
+
+    std::size_t used = std::strlen(buffer);
+    if (hasArgs && argsPtr != 0 && hasArgCount) {
+        const auto count = (argCount > 0 && argCount < 8) ? static_cast<std::uint32_t>(argCount) : 0u;
+        for (std::uint32_t index = 0; index < count && used + 110u < sizeof(buffer); ++index) {
+            std::uintptr_t raw = 0;
+            bool ok = false;
+#ifdef _WIN32
+            __try {
+                std::memcpy(&raw,
+                            reinterpret_cast<const void*>(argsPtr + static_cast<std::uintptr_t>(index) * sizeof(std::uintptr_t)),
+                            sizeof(raw));
+                ok = true;
+            } __except (EXCEPTION_EXECUTE_HANDLER) {
+                ok = false;
+            }
+#endif
+            if (ok) {
+                const auto raw32 = static_cast<std::uint32_t>(raw);
+                float asFloat = 0.0f;
+                std::memcpy(&asFloat, &raw32, sizeof(asFloat));
+                const int n = std::snprintf(buffer + used, sizeof(buffer) - used,
+                                            "%s0x%016llX low32=0x%08X i32=%d f32=%.6f",
+                                            index == 0 ? "" : ",",
+                                            static_cast<unsigned long long>(raw),
+                                            raw32,
+                                            static_cast<std::int32_t>(raw32),
+                                            static_cast<double>(asFloat));
+                if (n > 0) used += static_cast<std::size_t>(n);
+            } else {
+                const int n = std::snprintf(buffer + used, sizeof(buffer) - used,
+                                            "%s<unreadable>",
+                                            index == 0 ? "" : ",");
+                if (n > 0) used += static_cast<std::size_t>(n);
+            }
+        }
+    } else if (hasArgs && argsPtr != 0 && hasArgCount && argCount > 0) {
+        std::snprintf(buffer + used, sizeof(buffer) - used, "<too-many-to-dump>");
+    } else if (!hasArgs) {
+        std::snprintf(buffer + used, sizeof(buffer) - used, "<args-pointer-unreadable>");
+    } else {
+        std::snprintf(buffer + used, sizeof(buffer) - used, "<no-args>");
+    }
     log(buffer);
 
     if (tracer->originalLaunchNewScriptWithArgs_) tracer->originalLaunchNewScriptWithArgs_(context);
