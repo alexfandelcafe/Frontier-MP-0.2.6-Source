@@ -166,13 +166,17 @@ bool RdrBridge::try_initialize_native_invoker() {
 #endif
 }
 
-bool RdrBridge::read_game_runtime(std::int32_t& gameState, bool& worldLoaded,
-                                   bool& simulateStartMultiplayer, bool& startPosCommandLine,
+bool RdrBridge::read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bool& worldLoadedKnown,
+                                   bool& simulateStartMultiplayer, bool& simulateStartMultiplayerKnown,
+                                   bool& startPosCommandLine, bool& startPosCommandLineKnown,
                                    std::string& error) const {
     gameState = -1;
     worldLoaded = false;
+    worldLoadedKnown = false;
     simulateStartMultiplayer = false;
+    simulateStartMultiplayerKnown = false;
     startPosCommandLine = false;
+    startPosCommandLineKnown = false;
     error.clear();
     if (!nativeInvoker_.ready()) {
         error = "native invoker not ready";
