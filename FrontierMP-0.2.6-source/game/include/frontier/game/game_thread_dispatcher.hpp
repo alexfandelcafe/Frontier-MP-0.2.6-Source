@@ -38,12 +38,12 @@ private:
     static void wait_hook(void* context);
 
     NativeInvoker* invoker_{};
-    void (*originalWait_)(void* context){};
-    bool attached_{};
+    std::atomic<NativeHandler> originalWait_{};
+    std::atomic<bool> attached_{false};
     mutable std::mutex queueMutex_;
     std::deque<std::shared_ptr<PendingTask>> queue_;
     std::thread::id gameThreadId_{};
-    bool gameThreadKnown_{};
+    std::atomic<bool> gameThreadKnown_{false};
 };
 
 } // namespace frontier::game
