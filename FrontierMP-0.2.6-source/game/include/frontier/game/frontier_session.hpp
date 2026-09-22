@@ -10,6 +10,7 @@ class RdrBridge;
 enum class FrontierSessionState : std::uint8_t {
     Booting,
     WaitingForNativeInvoker,
+    WaitingForGameThreadDispatcher,
     Frontend,
     WaitingForWorld,
     RuntimeQueryFailed,
