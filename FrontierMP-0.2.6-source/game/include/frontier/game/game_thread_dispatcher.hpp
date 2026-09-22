@@ -17,6 +17,8 @@ class NativeInvoker;
 
 class GameThreadDispatcher final {
 public:
+    using Handler = void(*)(void* context);
+
     bool attach(NativeInvoker& invoker, std::string& error);
     void detach();
     bool attached() const { return attached_; }
@@ -38,7 +40,7 @@ private:
     static void wait_hook(void* context);
 
     NativeInvoker* invoker_{};
-    std::atomic<NativeHandler> originalWait_{};
+    std::atomic<Handler> originalWait_{};
     std::atomic<bool> attached_{false};
     mutable std::mutex queueMutex_;
     std::deque<std::shared_ptr<PendingTask>> queue_;
