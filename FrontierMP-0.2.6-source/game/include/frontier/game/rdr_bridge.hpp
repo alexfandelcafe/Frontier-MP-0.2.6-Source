@@ -2,6 +2,8 @@
 
 #include "frontier/game/build_fingerprint.hpp"
 #include "frontier/game/native_invoker.hpp"
+#include "frontier/game/game_thread_dispatcher.hpp"
+#include "frontier/game/startup_native_tracer.hpp"
 #include "frontier/types.hpp"
 
 #include <cstdint>
@@ -13,10 +15,17 @@ class RdrBridge final {
 public:
     bool initialize(const ExecutableFingerprint& fingerprint, KnownBuild build);
     bool read_local_player_state(PlayerState& outState, std::string& error) const;
+    bool local_player_pointer_available() const;
     bool try_initialize_native_invoker();
+    bool try_initialize_game_thread_dispatcher();
+    bool game_thread_dispatcher_attached() const { return gameThreadDispatcher_.attached(); }
+    const std::string& game_thread_dispatcher_error() const { return gameThreadDispatcherError_; }
+    bool startup_native_tracer_attached() const { return startupNativeTracer_.attached(); }
     bool native_invoker_ready() const { return nativeInvoker_.ready(); }
     const std::string& native_invoker_error() const { return nativeInvoker_.last_error(); }
-    bool read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bool& simulateStartMultiplayer, bool& startPosCommandLine, std::string& error) const;
+    bool read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bool& worldLoadedKnown,
+                           bool& simulateStartMultiplayer, bool& simulateStartMultiplayerKnown,
+                           bool& startPosCommandLine, bool& startPosCommandLineKnown, std::string& error) const;
 
     bool initialized() const { return initialized_; }
     bool local_player_symbol_resolved() const { return localPlayerStorage_ != 0; }
@@ -33,6 +42,9 @@ private:
     std::uintptr_t localPlayerStorage_{};
     std::uintptr_t actorManagerSlotsStorage_{};
     NativeInvoker nativeInvoker_{};
+    mutable GameThreadDispatcher gameThreadDispatcher_{};
+    std::string gameThreadDispatcherError_;
+    StartupNativeTracer startupNativeTracer_{};
 };
 
 } // namespace frontier::game
