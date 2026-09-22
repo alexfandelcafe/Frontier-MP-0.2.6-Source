@@ -7,13 +7,13 @@
 namespace frontier::game {
 
 namespace {
-GameThreadDispatcher* g_dispatcher = nullptr;
+std::atomic<GameThreadDispatcher*> g_dispatcher{nullptr};
 constexpr std::uint32_t kNativeScrThreadWait = 0x7715C03Bu;
 }
 
 bool GameThreadDispatcher::attach(NativeInvoker& invoker, std::string& error) {
     if (attached_) return true;
-    if (g_dispatcher != nullptr) {
+    if (g_dispatcher.load(std::memory_order_acquire) != nullptr) {
         error = "another game-thread dispatcher is already attached";
         return false;
     }
@@ -27,22 +27,23 @@ bool GameThreadDispatcher::attach(NativeInvoker& invoker, std::string& error) {
     originalWait_ = original;
     attached_ = true;
     gameThreadKnown_ = false;
-    g_dispatcher = this;
+    g_dispatcher.store(this, std::memory_order_release);
     return true;
 }
 
 void GameThreadDispatcher::detach() {
     if (!attached_) return;
 
-    if (g_dispatcher == this) g_dispatcher = nullptr;
+    // Keep the dispatcher visible until the table entry has been restored so a
+    // concurrent call already entering wait_hook can still reach originalWait_.
 
-    std::deque<PendingTask*> cancelled;
+    std::deque<std::shared_ptr<PendingTask>> cancelled;
     {
         std::lock_guard lock(queueMutex_);
         cancelled.swap(queue_);
     }
 
-    for (auto* task : cancelled) {
+    for (const auto& task : cancelled) {
         {
             std::lock_guard taskLock(task->mutex);
             task->cancelled = true;
@@ -53,6 +54,10 @@ void GameThreadDispatcher::detach() {
 
     if (invoker_) {
         invoker_->unhook_native(kNativeScrThreadWait, &GameThreadDispatcher::wait_hook, originalWait_);
+    }
+
+    if (g_dispatcher.load(std::memory_order_acquire) == this) {
+        g_dispatcher.store(nullptr, std::memory_order_release);
     }
 
     invoker_ = nullptr;
@@ -79,8 +84,8 @@ bool GameThreadDispatcher::submit_and_wait(std::function<void()> task,
         return true;
     }
 
-    PendingTask pending{};
-    pending.fn = std::move(task);
+    auto pending = std::make_shared<PendingTask>();
+    pending->fn = std::move(task);
 
     {
         std::lock_guard lock(queueMutex_);
@@ -88,34 +93,34 @@ bool GameThreadDispatcher::submit_and_wait(std::function<void()> task,
             error = "game-thread dispatcher detached";
             return false;
         }
-        queue_.push_back(&pending);
+        queue_.push_back(pending);
     }
 
-    std::unique_lock taskLock(pending.mutex);
-    const bool signalled = pending.cv.wait_for(
+    std::unique_lock taskLock(pending->mutex);
+    const bool signalled = pending->cv.wait_for(
         taskLock,
         std::chrono::milliseconds(timeoutMs),
-        [&pending] { return pending.completed; });
+        [&pending] { return pending->completed; });
 
     if (!signalled) {
         {
             std::lock_guard queueLock(queueMutex_);
             for (auto it = queue_.begin(); it != queue_.end(); ++it) {
-                if (*it == &pending) {
+                if (it->get() == pending.get()) {
                     queue_.erase(it);
                     break;
                 }
             }
         }
 
-        if (!pending.completed) {
-            pending.cancelled = true;
+        if (!pending->completed) {
+            pending->cancelled = true;
             error = "game-thread task timed out";
             return false;
         }
     }
 
-    if (pending.cancelled) {
+    if (pending->cancelled) {
         error = "game-thread task cancelled";
         return false;
     }
@@ -133,11 +138,11 @@ std::size_t GameThreadDispatcher::pump(std::size_t maxTasks) {
 
     std::size_t processed = 0;
     while (processed < maxTasks) {
-        PendingTask* task = nullptr;
+        std::shared_ptr<PendingTask> task;
         {
             std::lock_guard lock(queueMutex_);
             if (queue_.empty()) break;
-            task = queue_.front();
+            task = std::move(queue_.front());
             queue_.pop_front();
         }
 
@@ -172,7 +177,7 @@ bool GameThreadDispatcher::is_game_thread() const {
 }
 
 void GameThreadDispatcher::wait_hook(void* context) {
-    auto* dispatcher = g_dispatcher;
+    auto* dispatcher = g_dispatcher.load(std::memory_order_acquire);
     if (dispatcher) {
         dispatcher->pump();
         if (dispatcher->originalWait_) {
