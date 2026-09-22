@@ -11,6 +11,7 @@ const char* state_name(FrontierSessionState state) {
     case FrontierSessionState::WaitingForNativeInvoker: return "waiting-native-invoker";
     case FrontierSessionState::Frontend: return "frontend";
     case FrontierSessionState::WaitingForWorld: return "waiting-world";
+    case FrontierSessionState::RuntimeQueryFailed: return "runtime-query-failed";
     case FrontierSessionState::WaitingForLocalPlayer: return "waiting-local-player";
     case FrontierSessionState::Active: return "active";
     }
@@ -44,15 +45,21 @@ bool FrontierSession::update(RdrBridge& bridge, std::string& logLine) {
     bool simulateMp = false;
     bool startPosCommandLine = false;
     std::string runtimeError;
-    const bool gotGameState = bridge.read_game_runtime(gameState, worldLoaded, simulateMp, startPosCommandLine, runtimeError);
+    bool worldLoadedKnown = false;
+    bool simulateMpKnown = false;
+    bool startPosCommandLineKnown = false;
+    (void)bridge.read_game_runtime(gameState, worldLoaded, worldLoadedKnown,
+                                   simulateMp, simulateMpKnown,
+                                   startPosCommandLine, startPosCommandLineKnown,
+                                   runtimeError);
 
     next.gameState = gameState;
     next.worldLoaded = worldLoaded;
     next.simulateStartMultiplayer = simulateMp;
     next.startPositionFromCommandLine = startPosCommandLine;
 
-    if (!gotGameState) {
-        next.state = FrontierSessionState::WaitingForNativeInvoker;
+    if (gameState < 0 || !worldLoadedKnown) {
+        next.state = FrontierSessionState::RuntimeQueryFailed;
     } else if (!worldLoaded) {
         next.state = FrontierSessionState::Frontend;
     } else {

@@ -166,13 +166,17 @@ bool RdrBridge::try_initialize_native_invoker() {
 #endif
 }
 
-bool RdrBridge::read_game_runtime(std::int32_t& gameState, bool& worldLoaded,
-                                   bool& simulateStartMultiplayer, bool& startPosCommandLine,
+bool RdrBridge::read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bool& worldLoadedKnown,
+                                   bool& simulateStartMultiplayer, bool& simulateStartMultiplayerKnown,
+                                   bool& startPosCommandLine, bool& startPosCommandLineKnown,
                                    std::string& error) const {
     gameState = -1;
     worldLoaded = false;
+    worldLoadedKnown = false;
     simulateStartMultiplayer = false;
+    simulateStartMultiplayerKnown = false;
     startPosCommandLine = false;
+    startPosCommandLineKnown = false;
     error.clear();
     if (!nativeInvoker_.ready()) {
         error = "native invoker not ready";
@@ -181,26 +185,53 @@ bool RdrBridge::read_game_runtime(std::int32_t& gameState, bool& worldLoaded,
 
     bool allOk = true;
     std::uint32_t value = 0;
-    if (nativeInvoker_.invoke_u32(kNativeGetGameState, value)) {
-        gameState = static_cast<std::int32_t>(value);
+
+    if (nativeInvoker_.has_handler(kNativeGetGameState)) {
+        if (nativeInvoker_.invoke_u32(kNativeGetGameState, value)) {
+            gameState = static_cast<std::int32_t>(value);
+        } else {
+            allOk = false;
+            error += "GET_GAME_STATE invoke failed; ";
+        }
     } else {
         allOk = false;
-        error += "GET_GAME_STATE failed; ";
+        error += "GET_GAME_STATE handler missing; ";
     }
 
-    if (!nativeInvoker_.invoke_bool(kNativeStreamingIsWorldLoaded, worldLoaded)) {
+    if (nativeInvoker_.has_handler(kNativeStreamingIsWorldLoaded)) {
+        if (nativeInvoker_.invoke_bool(kNativeStreamingIsWorldLoaded, worldLoaded)) {
+            worldLoadedKnown = true;
+        } else {
+            allOk = false;
+            error += "STREAMING_IS_WORLD_LOADED invoke failed; ";
+        }
+    } else {
         allOk = false;
-        error += "STREAMING_IS_WORLD_LOADED failed; ";
+        error += "STREAMING_IS_WORLD_LOADED handler missing; ";
     }
 
-    if (!nativeInvoker_.invoke_bool(kNativeIsSimulateStartMultiplayer, simulateStartMultiplayer)) {
+    if (nativeInvoker_.has_handler(kNativeIsSimulateStartMultiplayer)) {
+        if (nativeInvoker_.invoke_bool(kNativeIsSimulateStartMultiplayer, simulateStartMultiplayer)) {
+            simulateStartMultiplayerKnown = true;
+        } else {
+            allOk = false;
+            error += "IS_SIMULATE_START_MULTIPLAYER invoke failed; ";
+        }
+    } else {
         allOk = false;
-        error += "IS_SIMULATE_START_MULTIPLAYER failed; ";
+        error += "IS_SIMULATE_START_MULTIPLAYER handler missing; ";
     }
 
-    if (!nativeInvoker_.invoke_bool(kNativeIsStartPosInCommandLine, startPosCommandLine)) {
+    if (nativeInvoker_.has_handler(kNativeIsStartPosInCommandLine)) {
+        if (nativeInvoker_.invoke_bool(kNativeIsStartPosInCommandLine, startPosCommandLine)) {
+            startPosCommandLineKnown = true;
+        } else {
+            allOk = false;
+            error += "IS_STARTPOS_IN_COMMANDLINE invoke failed; ";
+        }
+    } else {
         allOk = false;
-        error += "IS_STARTPOS_IN_COMMANDLINE failed; ";
+        error += "IS_STARTPOS_IN_COMMANDLINE handler missing; ";
     }
 
     return allOk;
