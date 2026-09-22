@@ -48,10 +48,10 @@ bool FrontierSession::update(RdrBridge& bridge, std::string& logLine) {
     bool worldLoadedKnown = false;
     bool simulateMpKnown = false;
     bool startPosCommandLineKnown = false;
-    const bool gotGameState = bridge.read_game_runtime(gameState, worldLoaded, worldLoadedKnown,
-                                                       simulateMp, simulateMpKnown,
-                                                       startPosCommandLine, startPosCommandLineKnown,
-                                                       runtimeError);
+    (void)bridge.read_game_runtime(gameState, worldLoaded, worldLoadedKnown,
+                                   simulateMp, simulateMpKnown,
+                                   startPosCommandLine, startPosCommandLineKnown,
+                                   runtimeError);
 
     next.gameState = gameState;
     next.worldLoaded = worldLoaded;
