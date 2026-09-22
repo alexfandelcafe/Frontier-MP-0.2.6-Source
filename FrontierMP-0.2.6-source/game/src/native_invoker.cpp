@@ -128,7 +128,11 @@ bool NativeInvoker::read_table(std::uintptr_t storage, std::uintptr_t& table,
         if (diagnostics) *diagnostics = "storage=0";
         return false;
     }
-    if (!readable(storage, sizeof(table))) {
+    // G.R.E-Lab models sm_CommandsRegistrationTable as:
+    //   +0x00: pointer to the 16-byte native registration entries
+    //   +0x08: uint32 modulator
+    // The modulator therefore belongs to the storage object, not the table.
+    if (!readable(storage, sizeof(std::uintptr_t) + sizeof(std::uint32_t))) {
         if (diagnostics) {
             char buffer[128]{};
             std::snprintf(buffer, sizeof(buffer), "storage=0x%llX unreadable",
@@ -142,19 +146,33 @@ bool NativeInvoker::read_table(std::uintptr_t storage, std::uintptr_t& table,
     if (!guarded_copy(reinterpret_cast<const void*>(storage), &rawTable, sizeof(rawTable))) {
         if (diagnostics) {
             char buffer[128]{};
-            std::snprintf(buffer, sizeof(buffer), "storage=0x%llX read-failed",
+            std::snprintf(buffer, sizeof(buffer), "storage=0x%llX table-read-failed",
                           static_cast<unsigned long long>(storage));
             *diagnostics = buffer;
         }
         return false;
     }
+
+    std::uint32_t rawModulator = 0;
+    if (!guarded_copy(reinterpret_cast<const void*>(storage + sizeof(std::uintptr_t)),
+                      &rawModulator, sizeof(rawModulator))) {
+        if (diagnostics) {
+            char buffer[128]{};
+            std::snprintf(buffer, sizeof(buffer), "storage=0x%llX mod-read-failed",
+                          static_cast<unsigned long long>(storage));
+            *diagnostics = buffer;
+        }
+        return false;
+    }
+
     table = rawTable;
+    modulator = rawModulator;
 
     if (!table) {
         if (diagnostics) {
-            char buffer[128]{};
-            std::snprintf(buffer, sizeof(buffer), "storage=0x%llX table=0",
-                          static_cast<unsigned long long>(storage));
+            char buffer[160]{};
+            std::snprintf(buffer, sizeof(buffer), "storage=0x%llX table=0 mod=%u",
+                          static_cast<unsigned long long>(storage), rawModulator);
             *diagnostics = buffer;
         }
         return false;
@@ -171,20 +189,6 @@ bool NativeInvoker::read_table(std::uintptr_t storage, std::uintptr_t& table,
         table = 0;
         return false;
     }
-
-    std::uint32_t rawModulator = 0;
-    if (!guarded_copy(reinterpret_cast<const void*>(table + 8), &rawModulator, sizeof(rawModulator))) {
-        if (diagnostics) {
-            char buffer[160]{};
-            std::snprintf(buffer, sizeof(buffer), "storage=0x%llX table=0x%llX mod-read-failed",
-                          static_cast<unsigned long long>(storage),
-                          static_cast<unsigned long long>(table));
-            *diagnostics = buffer;
-        }
-        table = 0;
-        return false;
-    }
-    modulator = rawModulator;
 
     if (modulator == 0 || modulator > 0x100000u) {
         if (diagnostics) {
