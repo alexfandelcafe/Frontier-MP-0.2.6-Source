@@ -9,6 +9,7 @@ const char* state_name(FrontierSessionState state) {
     switch (state) {
     case FrontierSessionState::Booting: return "booting";
     case FrontierSessionState::WaitingForNativeInvoker: return "waiting-native-invoker";
+    case FrontierSessionState::WaitingForGameThreadDispatcher: return "waiting-game-thread-dispatcher";
     case FrontierSessionState::Frontend: return "frontend";
     case FrontierSessionState::WaitingForWorld: return "waiting-world";
     case FrontierSessionState::RuntimeQueryFailed: return "runtime-query-failed";
@@ -35,6 +36,20 @@ bool FrontierSession::update(RdrBridge& bridge, std::string& logLine) {
         } else if (previous != runtime_.state) {
             logLine = "[FrontierSession] waiting for native invoker registration table";
             if (!bridge.native_invoker_error().empty()) logLine += " error=" + bridge.native_invoker_error();
+        }
+        return false;
+    }
+
+    if (!bridge.game_thread_dispatcher_attached()) {
+        const auto previous = runtime_.state;
+        runtime_.state = FrontierSessionState::WaitingForGameThreadDispatcher;
+        if (bridge.try_initialize_game_thread_dispatcher()) {
+            logLine = "[FrontierSession] game-thread dispatcher attached";
+        } else if (previous != runtime_.state) {
+            logLine = "[FrontierSession] waiting for game-thread dispatcher";
+            if (!bridge.game_thread_dispatcher_error().empty()) {
+                logLine += " error=" + bridge.game_thread_dispatcher_error();
+            }
         }
         return false;
     }
