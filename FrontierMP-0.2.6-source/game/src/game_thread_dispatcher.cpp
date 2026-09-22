@@ -75,7 +75,8 @@ void GameThreadDispatcher::detach() {
     }
 
     if (invoker_) {
-        invoker_->unhook_native(kNativeScrThreadWait, &GameThreadDispatcher::wait_hook, originalWait_);
+        invoker_->unhook_native(kNativeScrThreadWait, &GameThreadDispatcher::wait_hook,
+                                originalWait_.load(std::memory_order_acquire));
     }
 
     if (g_dispatcher.load(std::memory_order_acquire) == this) {
