@@ -383,6 +383,17 @@ bool NativeInvoker::has_handler(std::uint32_t hash) const {
 #endif
 }
 
+bool NativeInvoker::current_handler(std::uint32_t hash, NativeHandler& out) const {
+    out = nullptr;
+#ifdef _WIN32
+    out = get_handler(hash);
+    return out != nullptr;
+#else
+    (void)hash;
+    return false;
+#endif
+}
+
 NativeInvoker::NativeHandler NativeInvoker::get_handler(std::uint32_t hash) const {
 #ifdef _WIN32
     if (!ready_ || !nativeRegistrationStorage_) return nullptr;
