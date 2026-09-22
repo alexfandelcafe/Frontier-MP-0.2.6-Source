@@ -17,6 +17,26 @@ namespace frontier::game {
 
 namespace {
 StartupNativeTracer* g_tracer = nullptr;
+std::int32_t g_scriptHandles[16]{};
+std::size_t g_scriptHandleCount = 0;
+
+void remember_script_handle(std::int32_t handle) {
+    if (handle <= 0) return;
+    for (std::size_t i = 0; i < g_scriptHandleCount; ++i) {
+        if (g_scriptHandles[i] == handle) return;
+    }
+    if (g_scriptHandleCount < (sizeof(g_scriptHandles) / sizeof(g_scriptHandles[0]))) {
+        g_scriptHandles[g_scriptHandleCount++] = handle;
+    }
+}
+
+bool is_remembered_script_handle(std::int32_t handle) {
+    if (handle <= 0) return false;
+    for (std::size_t i = 0; i < g_scriptHandleCount; ++i) {
+        if (g_scriptHandles[i] == handle) return true;
+    }
+    return false;
+}
 
 constexpr std::uint32_t kSetStartPos = 0x0CB93120u;
 constexpr std::uint32_t kScriptDoneLoading = 0x5401F0CAu;
@@ -27,6 +47,7 @@ constexpr std::uint32_t kSetMissionInfo = 0x3B417D4Eu;
 constexpr std::uint32_t kWasLastResetForMultiplayer = 0x3B004817u;
 constexpr std::uint32_t kIsLaunchRetail = 0x7CE2C2E1u;
 constexpr std::uint32_t kIsSimulateStartPress = 0xD8E31D42u;
+constexpr std::uint32_t kIsScriptValid = 0x45F7D589u;
 
 struct NativeTraceContext final {
     void* returnBuffer{};
@@ -271,6 +292,27 @@ bool StartupNativeTracer::attach(NativeInvoker& invoker, std::string& error) {
         return false;
     }
 
+    if (!invoker.hook_native(kIsScriptValid, &StartupNativeTracer::is_script_valid_hook,
+                             originalIsScriptValid_, &error)) {
+        invoker.unhook_native(kIsSimulateStartPress, &StartupNativeTracer::is_simulate_start_press_hook, originalIsSimulateStartPress_);
+        invoker.unhook_native(kIsLaunchRetail, &StartupNativeTracer::is_launch_retail_hook, originalIsLaunchRetail_);
+        invoker.unhook_native(kWasLastResetForMultiplayer, &StartupNativeTracer::was_last_reset_for_multiplayer_hook, originalWasLastResetForMultiplayer_);
+        invoker.unhook_native(kSetMissionInfo, &StartupNativeTracer::set_mission_info_hook, originalSetMissionInfo_);
+        invoker.unhook_native(kLaunchNewScriptWithArgs, &StartupNativeTracer::launch_new_script_with_args_hook, originalLaunchNewScriptWithArgs_);
+        invoker.unhook_native(kLaunchNewScript, &StartupNativeTracer::launch_new_script_hook, originalLaunchNewScript_);
+        invoker.unhook_native(kClearMissionInfo, &StartupNativeTracer::clear_mission_info_hook, originalClearMissionInfo_);
+        invoker.unhook_native(kScriptDoneLoading, &StartupNativeTracer::script_done_loading_hook, originalScriptDoneLoading_);
+        invoker.unhook_native(kSetStartPos, &StartupNativeTracer::set_start_pos_hook, originalSetStartPos_);
+        g_tracer = nullptr; invoker_ = nullptr;
+        originalSetStartPos_ = nullptr; originalScriptDoneLoading_ = nullptr; originalClearMissionInfo_ = nullptr;
+        originalLaunchNewScript_ = nullptr; originalLaunchNewScriptWithArgs_ = nullptr; originalSetMissionInfo_ = nullptr;
+        originalWasLastResetForMultiplayer_ = nullptr; originalIsLaunchRetail_ = nullptr;
+        originalIsSimulateStartPress_ = nullptr; originalWasLastResetForMultiplayer_ = nullptr;
+        originalIsScriptValid_ = nullptr;
+        return false;
+    }
+
+    g_scriptHandleCount = 0;
     attached_ = true;
     log("[FrontierNativeTrace] startup native tracer attached");
     return true;
@@ -359,27 +401,39 @@ void StartupNativeTracer::launch_new_script_hook(void* context) {
     char path[96]{};
     const bool pathReadable = read_c_string(context, 0, path, sizeof(path));
 
-    char buffer[256]{};
+    if (tracer->originalLaunchNewScript_) {
+        tracer->originalLaunchNewScript_(context);
+    }
 
-    std::snprintf(buffer, sizeof(buffer),
-                  "[FrontierNativeTrace] LAUNCH_NEW_SCRIPT path=%s ptr=0x%llX arg1=%s%d argc=%u",
-                  pathReadable ? path : "<unreadable>",
-                  static_cast<unsigned long long>(scriptPtr),
-                  hasArg1 ? "" : "?",
-                  hasArg1 ? arg1 : 0,
-                  0u);
+    std::uint32_t result = 0;
+    bool resultReadable = false;
+#ifdef _WIN32
     if (context) {
         const auto* call = reinterpret_cast<const NativeTraceContext*>(context);
-        const auto pos = std::strlen(buffer);
-        if (pos + 16 < sizeof(buffer)) {
-            std::snprintf(buffer + pos, sizeof(buffer) - pos, " supplied=%u", call->argumentCount);
+        if (call->returnBuffer) {
+            __try {
+                std::memcpy(&result, call->returnBuffer, sizeof(result));
+                resultReadable = true;
+            } __except (EXCEPTION_EXECUTE_HANDLER) {
+                resultReadable = false;
+            }
         }
     }
+#endif
+
+    char buffer[288]{};
+    const std::uint32_t supplied = context
+        ? reinterpret_cast<const NativeTraceContext*>(context)->argumentCount
+        : 0u;
+    std::snprintf(buffer, sizeof(buffer),
+                  "[FrontierNativeTrace] LAUNCH_NEW_SCRIPT path=%s ptr=0x%llX arg1=%s%d supplied=%u result=%s%u",
+                  pathReadable ? path : "<unreadable>",
+                  static_cast<unsigned long long>(scriptPtr),
+                  hasArg1 ? "" : "?", hasArg1 ? arg1 : 0,
+                  supplied,
+                  resultReadable ? "" : "?", resultReadable ? result : 0u);
     log(buffer);
-
-    if (tracer->originalLaunchNewScript_) tracer->originalLaunchNewScript_(context);
 }
-
 
 void StartupNativeTracer::launch_new_script_with_args_hook(void* context) {
     auto* tracer = g_tracer;
@@ -470,6 +524,10 @@ void StartupNativeTracer::launch_new_script_with_args_hook(void* context) {
     }
 #endif
 
+    if (resultReadable) {
+        remember_script_handle(result);
+    }
+
     if (used + 48u < sizeof(buffer)) {
         const int n = std::snprintf(buffer + used, sizeof(buffer) - used,
                                     " result=%s%d",
@@ -477,6 +535,48 @@ void StartupNativeTracer::launch_new_script_with_args_hook(void* context) {
                                     resultReadable ? result : 0);
         (void)n;
     }
+    log(buffer);
+}
+
+void StartupNativeTracer::is_script_valid_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    std::int32_t scriptId = 0;
+    const bool hasScriptId = read_i32_arg(context, 0, scriptId);
+
+    bool shouldTrace = false;
+    if (hasScriptId) {
+        shouldTrace = is_remembered_script_handle(scriptId);
+    }
+
+    if (tracer->originalIsScriptValid_) {
+        tracer->originalIsScriptValid_(context);
+    }
+
+    if (!shouldTrace) return;
+
+    std::uint32_t result = 0;
+    bool resultReadable = false;
+#ifdef _WIN32
+    if (context) {
+        const auto* call = reinterpret_cast<const NativeTraceContext*>(context);
+        if (call->returnBuffer) {
+            __try {
+                std::memcpy(&result, call->returnBuffer, sizeof(result));
+                resultReadable = true;
+            } __except (EXCEPTION_EXECUTE_HANDLER) {
+                resultReadable = false;
+            }
+        }
+    }
+#endif
+
+    char buffer[192]{};
+    std::snprintf(buffer, sizeof(buffer),
+                  "[FrontierNativeTrace] IS_SCRIPT_VALID id=%s%d result=%s%u",
+                  hasScriptId ? "" : "?", hasScriptId ? scriptId : 0,
+                  resultReadable ? "" : "?", resultReadable ? result : 0u);
     log(buffer);
 }
 
