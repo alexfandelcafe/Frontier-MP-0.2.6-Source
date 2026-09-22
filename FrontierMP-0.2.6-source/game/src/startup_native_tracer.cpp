@@ -6,6 +6,7 @@
 #include <fstream>
 #include <filesystem>
 #include <sstream>
+#include <cstring>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -20,6 +21,7 @@ StartupNativeTracer* g_tracer = nullptr;
 constexpr std::uint32_t kSetStartPos = 0x0CB93120u;
 constexpr std::uint32_t kScriptDoneLoading = 0x5401F0CAu;
 constexpr std::uint32_t kClearMissionInfo = 0x02092A6Eu;
+constexpr std::uint32_t kLaunchNewScript = 0x85A30503u;
 
 struct NativeTraceContext final {
     void* returnBuffer{};
@@ -29,6 +31,27 @@ struct NativeTraceContext final {
     void* outputVectors[4]{};
     std::uint8_t inputVectors[0x30]{};
 };
+
+bool read_u64_arg(void* context, std::uint32_t index, std::uintptr_t& out) {
+    out = 0;
+    if (!context) return false;
+
+    const auto* call = reinterpret_cast<const NativeTraceContext*>(context);
+    if (!call->argumentBuffer || index >= call->argumentCount) return false;
+
+#ifdef _WIN32
+    __try {
+        const auto* values = reinterpret_cast<const std::uintptr_t*>(call->argumentBuffer);
+        out = values[index];
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        out = 0;
+        return false;
+    }
+#else
+    return false;
+#endif
+}
 
 bool read_i32_arg(void* context, std::uint32_t index, std::int32_t& out) {
     out = 0;
@@ -107,6 +130,22 @@ bool StartupNativeTracer::attach(NativeInvoker& invoker, std::string& error) {
         return false;
     }
 
+    if (!invoker.hook_native(kLaunchNewScript, &StartupNativeTracer::launch_new_script_hook,
+                             originalLaunchNewScript_, &error)) {
+        invoker.unhook_native(kClearMissionInfo, &StartupNativeTracer::clear_mission_info_hook,
+                              originalClearMissionInfo_);
+        invoker.unhook_native(kScriptDoneLoading, &StartupNativeTracer::script_done_loading_hook,
+                              originalScriptDoneLoading_);
+        invoker.unhook_native(kSetStartPos, &StartupNativeTracer::set_start_pos_hook,
+                              originalSetStartPos_);
+        g_tracer = nullptr;
+        invoker_ = nullptr;
+        originalSetStartPos_ = nullptr;
+        originalScriptDoneLoading_ = nullptr;
+        originalClearMissionInfo_ = nullptr;
+        return false;
+    }
+
     attached_ = true;
     log("[FrontierNativeTrace] startup native tracer attached");
     return true;
@@ -139,15 +178,19 @@ void StartupNativeTracer::set_start_pos_hook(void* context) {
     } else {
         std::size_t used = static_cast<std::size_t>(written);
         const auto count = (argc < 8u) ? argc : 8u;
-        for (std::uint32_t index = 0; index < count && used + 64u < sizeof(buffer); ++index) {
-            std::int32_t value = 0;
-            const bool ok = read_i32_arg(context, index, value);
+        for (std::uint32_t index = 0; index < count && used + 96u < sizeof(buffer); ++index) {
+            std::uintptr_t rawSlot = 0;
+            const bool ok = read_u64_arg(context, index, rawSlot);
             if (ok) {
-                const auto raw = static_cast<std::uint32_t>(value);
+                float asFloat = 0.0f;
+                const auto raw32 = static_cast<std::uint32_t>(rawSlot);
+                std::memcpy(&asFloat, &raw32, sizeof(asFloat));
                 const int n = std::snprintf(buffer + used, sizeof(buffer) - used,
-                                            "%s%d(0x%08X)",
+                                            "%s0x%08X i32=%d f32=%.6f",
                                             index == 0 ? "" : ",",
-                                            value, raw);
+                                            raw32,
+                                            static_cast<std::int32_t>(raw32),
+                                            static_cast<double>(asFloat));
                 if (n > 0) used += static_cast<std::size_t>(n);
             } else {
                 const int n = std::snprintf(buffer + used, sizeof(buffer) - used,
@@ -180,3 +223,59 @@ void StartupNativeTracer::clear_mission_info_hook(void* context) {
 }
 
 } // namespace frontier::game
+
+
+void StartupNativeTracer::launch_new_script_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    std::uintptr_t scriptPtr = 0;
+    std::int32_t arg1 = 0;
+    const bool hasScript = read_u64_arg(context, 0, scriptPtr);
+    const bool hasArg1 = read_i32_arg(context, 1, arg1);
+
+    char path[96]{};
+    bool pathReadable = false;
+#ifdef _WIN32
+    if (hasScript && scriptPtr != 0) {
+        __try {
+            const auto* source = reinterpret_cast<const char*>(scriptPtr);
+            std::size_t i = 0;
+            for (; i + 1 < sizeof(path); ++i) {
+                const char ch = source[i];
+                if (ch == '\\0') {
+                    pathReadable = true;
+                    break;
+                }
+                if (static_cast<unsigned char>(ch) < 0x20u || static_cast<unsigned char>(ch) > 0x7Eu) {
+                    break;
+                }
+                path[i] = ch;
+            }
+            if (i + 1 == sizeof(path)) path[sizeof(path) - 1] = '\\0';
+            if (!pathReadable && path[0] != '\\0') pathReadable = true;
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            pathReadable = false;
+        }
+    }
+#endif
+
+    char buffer[256]{};
+    std::snprintf(buffer, sizeof(buffer),
+                  "[FrontierNativeTrace] LAUNCH_NEW_SCRIPT path=%s ptr=0x%llX arg1=%s%d argc=%u",
+                  pathReadable ? path : "<unreadable>",
+                  static_cast<unsigned long long>(scriptPtr),
+                  hasArg1 ? "" : "?",
+                  hasArg1 ? arg1 : 0,
+                  0u);
+    if (context) {
+        const auto* call = reinterpret_cast<const NativeTraceContext*>(context);
+        const auto pos = std::strlen(buffer);
+        if (pos + 16 < sizeof(buffer)) {
+            std::snprintf(buffer + pos, sizeof(buffer) - pos, " supplied=%u", call->argumentCount);
+        }
+    }
+    log(buffer);
+
+    if (tracer->originalLaunchNewScript_) tracer->originalLaunchNewScript_(context);
+}
