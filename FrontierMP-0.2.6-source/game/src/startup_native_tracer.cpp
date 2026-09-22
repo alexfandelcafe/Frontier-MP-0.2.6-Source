@@ -121,27 +121,44 @@ void StartupNativeTracer::set_start_pos_hook(void* context) {
     if (!tracer) return;
 
     const auto* call = reinterpret_cast<const NativeTraceContext*>(context);
-    std::int32_t a0=0,a1=0,a2=0,a3=0,a4=0;
-    const bool ok = read_i32_arg(context,0,a0) && read_i32_arg(context,1,a1) &&
-                    read_i32_arg(context,2,a2) && read_i32_arg(context,3,a3) &&
-                    read_i32_arg(context,4,a4);
-    if (ok) {
-        char buffer[256]{};
-        std::snprintf(buffer, sizeof(buffer),
-                      "[FrontierNativeTrace] SET_START_POS(%d,%d,%d,%d,%d) argc=%u args=0x%llX",
-                      a0,a1,a2,a3,a4,
-                      call ? call->argumentCount : 0u,
-                      call ? static_cast<unsigned long long>(
-                          reinterpret_cast<std::uintptr_t>(call->argumentBuffer)) : 0ull);
-        log(buffer);
+    const auto argc = call ? call->argumentCount : 0u;
+    const auto argsAddress = call
+        ? static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(call->argumentBuffer))
+        : 0ull;
+    const auto dataCount = call ? call->dataCount : 0u;
+
+    // The public RDR1 native declaration lists five parameters for SET_START_POS,
+    // but the live call site currently reports argc=4. Trace exactly what the
+    // engine supplied instead of requiring the documented arity.
+    char buffer[768]{};
+    int written = std::snprintf(buffer, sizeof(buffer),
+                                "[FrontierNativeTrace] SET_START_POS argc=%u args=0x%llX data=%u values=",
+                                argc, argsAddress, dataCount);
+    if (written < 0) {
+        log("[FrontierNativeTrace] SET_START_POS(<format-failed>)");
     } else {
-        char buffer[256]{};
-        std::snprintf(buffer, sizeof(buffer),
-                      "[FrontierNativeTrace] SET_START_POS(<args-unreadable>) argc=%u args=0x%llX data=%u",
-                      call ? call->argumentCount : 0u,
-                      call ? static_cast<unsigned long long>(
-                          reinterpret_cast<std::uintptr_t>(call->argumentBuffer)) : 0ull,
-                      call ? call->dataCount : 0u);
+        std::size_t used = static_cast<std::size_t>(written);
+        const auto count = (argc < 8u) ? argc : 8u;
+        for (std::uint32_t index = 0; index < count && used + 64u < sizeof(buffer); ++index) {
+            std::int32_t value = 0;
+            const bool ok = read_i32_arg(context, index, value);
+            if (ok) {
+                const auto raw = static_cast<std::uint32_t>(value);
+                const int n = std::snprintf(buffer + used, sizeof(buffer) - used,
+                                            "%s%d(0x%08X)",
+                                            index == 0 ? "" : ",",
+                                            value, raw);
+                if (n > 0) used += static_cast<std::size_t>(n);
+            } else {
+                const int n = std::snprintf(buffer + used, sizeof(buffer) - used,
+                                            "%s<unreadable>",
+                                            index == 0 ? "" : ",");
+                if (n > 0) used += static_cast<std::size_t>(n);
+            }
+        }
+        if (argc > count && used + 8u < sizeof(buffer)) {
+            std::snprintf(buffer + used, sizeof(buffer) - used, ",...");
+        }
         log(buffer);
     }
 
