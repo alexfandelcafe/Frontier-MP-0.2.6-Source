@@ -19,20 +19,42 @@ bool GameThreadDispatcher::attach(NativeInvoker& invoker, std::string& error) {
     }
 
     NativeInvoker::NativeHandler original = nullptr;
-    if (!invoker.hook_native(kNativeScrThreadWait, &GameThreadDispatcher::wait_hook, original, &error)) {
+    if (!invoker.current_handler(kNativeScrThreadWait, original)) {
+        error = "scrThread::Wait handler not found";
         return false;
     }
 
     invoker_ = &invoker;
-    originalWait_ = original;
-    attached_ = true;
-    gameThreadKnown_ = false;
+    originalWait_.store(original, std::memory_order_release);
+    attached_.store(true, std::memory_order_release);
+    gameThreadKnown_.store(false, std::memory_order_release);
     g_dispatcher.store(this, std::memory_order_release);
+
+    NativeInvoker::NativeHandler installedOriginal = nullptr;
+    if (!invoker.hook_native(kNativeScrThreadWait, &GameThreadDispatcher::wait_hook,
+                             installedOriginal, &error)) {
+        g_dispatcher.store(nullptr, std::memory_order_release);
+        attached_.store(false, std::memory_order_release);
+        invoker_ = nullptr;
+        originalWait_.store(nullptr, std::memory_order_release);
+        return false;
+    }
+
+    if (installedOriginal != original) {
+        invoker.unhook_native(kNativeScrThreadWait, &GameThreadDispatcher::wait_hook, installedOriginal);
+        g_dispatcher.store(nullptr, std::memory_order_release);
+        attached_.store(false, std::memory_order_release);
+        invoker_ = nullptr;
+        originalWait_.store(nullptr, std::memory_order_release);
+        error = "scrThread::Wait handler changed during hook installation";
+        return false;
+    }
+
     return true;
 }
 
 void GameThreadDispatcher::detach() {
-    if (!attached_) return;
+    if (!attached_.load(std::memory_order_acquire)) return;
 
     // Keep the dispatcher visible until the table entry has been restored so a
     // concurrent call already entering wait_hook can still reach originalWait_.
@@ -61,9 +83,9 @@ void GameThreadDispatcher::detach() {
     }
 
     invoker_ = nullptr;
-    originalWait_ = nullptr;
-    attached_ = false;
-    gameThreadKnown_ = false;
+    originalWait_.store(nullptr, std::memory_order_release);
+    attached_.store(false, std::memory_order_release);
+    gameThreadKnown_.store(false, std::memory_order_release);
     gameThreadId_ = {};
 }
 
@@ -71,7 +93,7 @@ bool GameThreadDispatcher::submit_and_wait(std::function<void()> task,
                                            std::uint32_t timeoutMs,
                                            std::string& error) {
     error.clear();
-    if (!attached_) {
+    if (!attached_.load(std::memory_order_acquire)) {
         error = "game-thread dispatcher not attached";
         return false;
     }
@@ -131,9 +153,9 @@ bool GameThreadDispatcher::submit_and_wait(std::function<void()> task,
 std::size_t GameThreadDispatcher::pump(std::size_t maxTasks) {
     if (!attached_ || maxTasks == 0) return 0;
 
-    if (!gameThreadKnown_) {
+    if (!gameThreadKnown_.load(std::memory_order_acquire)) {
         gameThreadId_ = std::this_thread::get_id();
-        gameThreadKnown_ = true;
+        gameThreadKnown_.store(true, std::memory_order_release);
     }
 
     std::size_t processed = 0;
@@ -173,15 +195,16 @@ std::size_t GameThreadDispatcher::pump(std::size_t maxTasks) {
 }
 
 bool GameThreadDispatcher::is_game_thread() const {
-    return gameThreadKnown_ && std::this_thread::get_id() == gameThreadId_;
+    return gameThreadKnown_.load(std::memory_order_acquire) && std::this_thread::get_id() == gameThreadId_;
 }
 
 void GameThreadDispatcher::wait_hook(void* context) {
     auto* dispatcher = g_dispatcher.load(std::memory_order_acquire);
     if (dispatcher) {
         dispatcher->pump();
-        if (dispatcher->originalWait_) {
-            dispatcher->originalWait_(context);
+        const auto original = dispatcher->originalWait_.load(std::memory_order_acquire);
+        if (original) {
+            original(context);
         }
         return;
     }
