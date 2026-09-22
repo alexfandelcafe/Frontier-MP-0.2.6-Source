@@ -18,15 +18,38 @@ namespace frontier::game {
 namespace {
 StartupNativeTracer* g_tracer = nullptr;
 std::int32_t g_scriptHandles[16]{};
+bool g_scriptHandleValid[16]{};
+bool g_scriptHandleValidKnown[16]{};
 std::size_t g_scriptHandleCount = 0;
 
-void remember_script_handle(std::int32_t handle) {
-    if (handle <= 0) return;
+int find_remembered_script_handle(std::int32_t handle) {
+    if (handle <= 0) return -1;
+    for (std::size_t i = 0; i < g_scriptHandleCount; ++i) {
+        if (g_scriptHandles[i] == handle) return static_cast<int>(i);
+    }
+    return -1;
+}
+
+bool is_startup_script_path(const char* path) {
+    if (!path || !*path) return false;
+    return std::strcmp(path, "$/content/frontier/pr_frontier") == 0 ||
+           std::strcmp(path, "$/content/frontier/hennigans_stead/hennigansstead") == 0 ||
+           std::strcmp(path, "$/content/frontier/hennigans_stead/hennigans_ranch/hennigansranch") == 0 ||
+           std::strcmp(path, "$/content/init/pop/hen_population") == 0 ||
+           std::strcmp(path, "HennigansSteadVol") == 0 ||
+           std::strcmp(path, "HennigansRanchVol") == 0;
+}
+
+void remember_startup_script_handle(const char* path, std::int32_t handle) {
+    if (!is_startup_script_path(path) || handle <= 0) return;
     for (std::size_t i = 0; i < g_scriptHandleCount; ++i) {
         if (g_scriptHandles[i] == handle) return;
     }
     if (g_scriptHandleCount < (sizeof(g_scriptHandles) / sizeof(g_scriptHandles[0]))) {
-        g_scriptHandles[g_scriptHandleCount++] = handle;
+        g_scriptHandles[g_scriptHandleCount] = handle;
+        g_scriptHandleValid[g_scriptHandleCount] = false;
+        g_scriptHandleValidKnown[g_scriptHandleCount] = false;
+        ++g_scriptHandleCount;
     }
 }
 
@@ -313,6 +336,8 @@ bool StartupNativeTracer::attach(NativeInvoker& invoker, std::string& error) {
     }
 
     g_scriptHandleCount = 0;
+    std::memset(g_scriptHandleValid, 0, sizeof(g_scriptHandleValid));
+    std::memset(g_scriptHandleValidKnown, 0, sizeof(g_scriptHandleValidKnown));
     attached_ = true;
     log("[FrontierNativeTrace] startup native tracer attached");
     return true;
@@ -525,7 +550,7 @@ void StartupNativeTracer::launch_new_script_with_args_hook(void* context) {
 #endif
 
     if (resultReadable) {
-        remember_script_handle(result);
+        remember_startup_script_handle(path, result);
     }
 
     if (used + 48u < sizeof(buffer)) {
@@ -572,11 +597,22 @@ void StartupNativeTracer::is_script_valid_hook(void* context) {
     }
 #endif
 
+    if (!resultReadable) return;
+
+    const int slot = find_remembered_script_handle(scriptId);
+    if (slot < 0) return;
+
+    const bool valid = result != 0;
+    if (g_scriptHandleValidKnown[slot] && g_scriptHandleValid[slot] == valid) {
+        return;
+    }
+    g_scriptHandleValidKnown[slot] = true;
+    g_scriptHandleValid[slot] = valid;
+
     char buffer[192]{};
     std::snprintf(buffer, sizeof(buffer),
-                  "[FrontierNativeTrace] IS_SCRIPT_VALID id=%s%d result=%s%u",
-                  hasScriptId ? "" : "?", hasScriptId ? scriptId : 0,
-                  resultReadable ? "" : "?", resultReadable ? result : 0u);
+                  "[FrontierNativeTrace] IS_SCRIPT_VALID id=%d result=%u transition",
+                  scriptId, result);
     log(buffer);
 }
 
