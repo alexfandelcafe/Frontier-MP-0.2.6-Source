@@ -1,0 +1,185 @@
+#include "frontier/game/game_thread_dispatcher.hpp"
+
+#include "frontier/game/native_invoker.hpp"
+
+#include <chrono>
+
+namespace frontier::game {
+
+namespace {
+GameThreadDispatcher* g_dispatcher = nullptr;
+constexpr std::uint32_t kNativeScrThreadWait = 0x7715C03Bu;
+}
+
+bool GameThreadDispatcher::attach(NativeInvoker& invoker, std::string& error) {
+    if (attached_) return true;
+    if (g_dispatcher != nullptr) {
+        error = "another game-thread dispatcher is already attached";
+        return false;
+    }
+
+    NativeInvoker::NativeHandler original = nullptr;
+    if (!invoker.hook_native(kNativeScrThreadWait, &GameThreadDispatcher::wait_hook, original, &error)) {
+        return false;
+    }
+
+    invoker_ = &invoker;
+    originalWait_ = original;
+    attached_ = true;
+    gameThreadKnown_ = false;
+    g_dispatcher = this;
+    return true;
+}
+
+void GameThreadDispatcher::detach() {
+    if (!attached_) return;
+
+    if (g_dispatcher == this) g_dispatcher = nullptr;
+
+    std::deque<PendingTask*> cancelled;
+    {
+        std::lock_guard lock(queueMutex_);
+        cancelled.swap(queue_);
+    }
+
+    for (auto* task : cancelled) {
+        {
+            std::lock_guard taskLock(task->mutex);
+            task->cancelled = true;
+            task->completed = true;
+        }
+        task->cv.notify_one();
+    }
+
+    if (invoker_) {
+        invoker_->unhook_native(kNativeScrThreadWait, &GameThreadDispatcher::wait_hook, originalWait_);
+    }
+
+    invoker_ = nullptr;
+    originalWait_ = nullptr;
+    attached_ = false;
+    gameThreadKnown_ = false;
+    gameThreadId_ = {};
+}
+
+bool GameThreadDispatcher::submit_and_wait(std::function<void()> task,
+                                           std::uint32_t timeoutMs,
+                                           std::string& error) {
+    error.clear();
+    if (!attached_) {
+        error = "game-thread dispatcher not attached";
+        return false;
+    }
+    if (!task) {
+        error = "empty game-thread task";
+        return false;
+    }
+    if (is_game_thread()) {
+        task();
+        return true;
+    }
+
+    PendingTask pending{};
+    pending.fn = std::move(task);
+
+    {
+        std::lock_guard lock(queueMutex_);
+        if (!attached_) {
+            error = "game-thread dispatcher detached";
+            return false;
+        }
+        queue_.push_back(&pending);
+    }
+
+    std::unique_lock taskLock(pending.mutex);
+    const bool signalled = pending.cv.wait_for(
+        taskLock,
+        std::chrono::milliseconds(timeoutMs),
+        [&pending] { return pending.completed; });
+
+    if (!signalled) {
+        {
+            std::lock_guard queueLock(queueMutex_);
+            for (auto it = queue_.begin(); it != queue_.end(); ++it) {
+                if (*it == &pending) {
+                    queue_.erase(it);
+                    break;
+                }
+            }
+        }
+
+        if (!pending.completed) {
+            pending.cancelled = true;
+            error = "game-thread task timed out";
+            return false;
+        }
+    }
+
+    if (pending.cancelled) {
+        error = "game-thread task cancelled";
+        return false;
+    }
+
+    return true;
+}
+
+std::size_t GameThreadDispatcher::pump(std::size_t maxTasks) {
+    if (!attached_ || maxTasks == 0) return 0;
+
+    if (!gameThreadKnown_) {
+        gameThreadId_ = std::this_thread::get_id();
+        gameThreadKnown_ = true;
+    }
+
+    std::size_t processed = 0;
+    while (processed < maxTasks) {
+        PendingTask* task = nullptr;
+        {
+            std::lock_guard lock(queueMutex_);
+            if (queue_.empty()) break;
+            task = queue_.front();
+            queue_.pop_front();
+        }
+
+        bool cancelled = false;
+        {
+            std::lock_guard taskLock(task->mutex);
+            cancelled = task->cancelled;
+        }
+
+        if (!cancelled) {
+            try {
+                task->fn();
+            } catch (...) {
+                // The task owns its result/error channel. A thrown exception must
+                // not escape into the game's native dispatch path.
+            }
+        }
+
+        {
+            std::lock_guard taskLock(task->mutex);
+            task->completed = true;
+        }
+        task->cv.notify_one();
+        ++processed;
+    }
+
+    return processed;
+}
+
+bool GameThreadDispatcher::is_game_thread() const {
+    return gameThreadKnown_ && std::this_thread::get_id() == gameThreadId_;
+}
+
+void GameThreadDispatcher::wait_hook(void* context) {
+    auto* dispatcher = g_dispatcher;
+    if (dispatcher) {
+        dispatcher->pump();
+        if (dispatcher->originalWait_) {
+            dispatcher->originalWait_(context);
+        }
+        return;
+    }
+}
+
+} // namespace frontier::game
