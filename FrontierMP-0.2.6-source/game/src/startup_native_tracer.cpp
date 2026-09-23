@@ -1519,9 +1519,6 @@ void StartupNativeTracer::create_player_actor_in_layout_hook(void* context) {
     const bool resultOk = false;
 #endif
 
-    char actorName[160]{};
-    const bool actorNameOk = read_c_string_pointer(preA1, actorName, sizeof(actorName));
-
     const auto posXYLow = static_cast<std::uint32_t>(preA3);
     const auto posXYHigh = static_cast<std::uint32_t>(preA3 >> 32u);
     const auto posZRaw = static_cast<std::uint32_t>(preA4);
