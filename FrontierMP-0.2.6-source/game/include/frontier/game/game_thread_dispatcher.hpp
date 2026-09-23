@@ -41,6 +41,8 @@ private:
 
     NativeInvoker* invoker_{};
     std::atomic<Handler> originalWait_{};
+    std::atomic<Handler> getThisScriptId_{};
+    std::atomic<Handler> getScriptName_{};
     std::atomic<bool> attached_{false};
     mutable std::mutex queueMutex_;
     std::deque<std::shared_ptr<PendingTask>> queue_;
