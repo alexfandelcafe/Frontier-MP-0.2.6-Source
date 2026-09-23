@@ -5,6 +5,10 @@
 #include <chrono>
 #include <atomic>
 #include <cstdio>
+#include <cstring>
+#ifdef _WIN32
+#include <intrin.h>
+#endif
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -15,6 +19,36 @@ namespace {
 std::atomic<GameThreadDispatcher*> g_dispatcher{nullptr};
 std::atomic<std::uint32_t> g_waitTraceCount{0};
 constexpr std::uint32_t kNativeScrThreadWait = 0x7715C03Bu;
+constexpr std::uint32_t kNativeGetThisScriptId = 0x9C424E0Du;
+
+struct NativeTraceContext final {
+    void* returnBuffer{};
+    std::uint32_t argumentCount{};
+    void* argumentBuffer{};
+    std::uint32_t dataCount{};
+    void* outputVectors[4]{};
+    std::uint8_t inputVectors[0x30]{};
+    std::uintptr_t stack[32]{};
+};
+
+void write_script_trace_line(const char* message) {
+    std::fprintf(stderr, "%s\n", message);
+}
+
+#ifdef _WIN32
+bool read_u32_return(void* context, std::uint32_t& out) noexcept {
+    out = 0;
+    if (!context) return false;
+    const auto* call = reinterpret_cast<const NativeTraceContext*>(context);
+    if (!call->returnBuffer) return false;
+    __try {
+        std::memcpy(&out, call->returnBuffer, sizeof(out));
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+#endif
 }
 
 bool GameThreadDispatcher::attach(NativeInvoker& invoker, std::string& error) {
@@ -30,8 +64,15 @@ bool GameThreadDispatcher::attach(NativeInvoker& invoker, std::string& error) {
         return false;
     }
 
+    NativeInvoker::NativeHandler originalGetThisScriptId = nullptr;
+    if (!invoker.current_handler(kNativeGetThisScriptId, originalGetThisScriptId)) {
+        error = "GET_THIS_SCRIPT_ID handler not found";
+        return false;
+    }
+
     invoker_ = &invoker;
     originalWait_.store(original, std::memory_order_release);
+    originalGetThisScriptId_.store(originalGetThisScriptId, std::memory_order_release);
     attached_.store(true, std::memory_order_release);
     gameThreadKnown_.store(false, std::memory_order_release);
     g_dispatcher.store(this, std::memory_order_release);
@@ -43,6 +84,7 @@ bool GameThreadDispatcher::attach(NativeInvoker& invoker, std::string& error) {
         attached_.store(false, std::memory_order_release);
         invoker_ = nullptr;
         originalWait_.store(nullptr, std::memory_order_release);
+        originalGetThisScriptId_.store(nullptr, std::memory_order_release);
         return false;
     }
 
@@ -52,7 +94,32 @@ bool GameThreadDispatcher::attach(NativeInvoker& invoker, std::string& error) {
         attached_.store(false, std::memory_order_release);
         invoker_ = nullptr;
         originalWait_.store(nullptr, std::memory_order_release);
+        originalGetThisScriptId_.store(nullptr, std::memory_order_release);
         error = "scrThread::Wait handler changed during hook installation";
+        return false;
+    }
+
+    NativeInvoker::NativeHandler installedScriptId = nullptr;
+    if (!invoker.hook_native(kNativeGetThisScriptId, &GameThreadDispatcher::get_this_script_id_hook,
+                             installedScriptId, &error)) {
+        invoker.unhook_native(kNativeScrThreadWait, &GameThreadDispatcher::wait_hook, original);
+        g_dispatcher.store(nullptr, std::memory_order_release);
+        attached_.store(false, std::memory_order_release);
+        invoker_ = nullptr;
+        originalWait_.store(nullptr, std::memory_order_release);
+        originalGetThisScriptId_.store(nullptr, std::memory_order_release);
+        return false;
+    }
+
+    if (installedScriptId != originalGetThisScriptId) {
+        invoker.unhook_native(kNativeGetThisScriptId, &GameThreadDispatcher::get_this_script_id_hook, installedScriptId);
+        invoker.unhook_native(kNativeScrThreadWait, &GameThreadDispatcher::wait_hook, original);
+        g_dispatcher.store(nullptr, std::memory_order_release);
+        attached_.store(false, std::memory_order_release);
+        invoker_ = nullptr;
+        originalWait_.store(nullptr, std::memory_order_release);
+        originalGetThisScriptId_.store(nullptr, std::memory_order_release);
+        error = "GET_THIS_SCRIPT_ID handler changed during hook installation";
         return false;
     }
 
@@ -81,6 +148,8 @@ void GameThreadDispatcher::detach() {
     }
 
     if (invoker_) {
+        invoker_->unhook_native(kNativeGetThisScriptId, &GameThreadDispatcher::get_this_script_id_hook,
+                                originalGetThisScriptId_.load(std::memory_order_acquire));
         invoker_->unhook_native(kNativeScrThreadWait, &GameThreadDispatcher::wait_hook,
                                 originalWait_.load(std::memory_order_acquire));
     }
@@ -91,6 +160,7 @@ void GameThreadDispatcher::detach() {
 
     invoker_ = nullptr;
     originalWait_.store(nullptr, std::memory_order_release);
+    originalGetThisScriptId_.store(nullptr, std::memory_order_release);
     attached_.store(false, std::memory_order_release);
     gameThreadKnown_.store(false, std::memory_order_release);
     gameThreadId_ = {};
@@ -215,10 +285,16 @@ void GameThreadDispatcher::wait_hook(void* context) {
 #ifdef _WIN32
         const auto traceIndex = g_waitTraceCount.fetch_add(1, std::memory_order_relaxed);
         if (traceIndex < 32) {
-            std::fprintf(stderr, "[FrontierNative] scrThread::Wait trace=%lu context=0x%llX thread=%lu\\n",
-                         static_cast<unsigned long>(traceIndex),
-                         static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(context)),
-                         static_cast<unsigned long>(GetCurrentThreadId()));
+            char line[192]{};
+            std::snprintf(line, sizeof(line),
+                          "[FrontierNative] scrThread::Wait trace=%lu context=0x%llX thread=%lu ret=0x%llX",
+                          static_cast<unsigned long>(traceIndex),
+                          static_cast<unsigned long long>(
+                              reinterpret_cast<std::uintptr_t>(context)),
+                          static_cast<unsigned long>(GetCurrentThreadId()),
+                          static_cast<unsigned long long>(
+                              reinterpret_cast<std::uintptr_t>(_ReturnAddress())));
+            write_script_trace_line(line);
         }
 #endif
         dispatcher->pump();
@@ -228,6 +304,39 @@ void GameThreadDispatcher::wait_hook(void* context) {
         }
         return;
     }
+}
+
+void GameThreadDispatcher::get_this_script_id_hook(void* context) {
+    auto* dispatcher = g_dispatcher.load(std::memory_order_acquire);
+    if (!dispatcher) return;
+
+    const auto original =
+        dispatcher->originalGetThisScriptId_.load(std::memory_order_acquire);
+    if (original) {
+        original(context);
+    }
+
+#ifdef _WIN32
+    const auto traceIndex = g_waitTraceCount.fetch_add(1, std::memory_order_relaxed);
+    if (traceIndex < 32) {
+        std::uint32_t scriptId = 0;
+        const bool ok = read_u32_return(context, scriptId);
+
+        char line[224]{};
+        std::snprintf(line, sizeof(line),
+                      "[FrontierNative] GET_THIS_SCRIPT_ID trace=%lu context=0x%llX "
+                      "thread=%lu id=%s%u ret=0x%llX",
+                      static_cast<unsigned long>(traceIndex),
+                      static_cast<unsigned long long>(
+                          reinterpret_cast<std::uintptr_t>(context)),
+                      static_cast<unsigned long>(GetCurrentThreadId()),
+                      ok ? "" : "?",
+                      ok ? scriptId : 0u,
+                      static_cast<unsigned long long>(
+                          reinterpret_cast<std::uintptr_t>(_ReturnAddress())));
+        write_script_trace_line(line);
+    }
+#endif
 }
 
 } // namespace frontier::game
