@@ -16,6 +16,7 @@ class RdrBridge final {
 public:
     bool initialize(const ExecutableFingerprint& fingerprint, KnownBuild build);
     bool read_local_player_state(PlayerState& outState, std::string& error) const;
+    std::string local_player_chain_diagnostic() const;
     bool local_player_pointer_available() const;
     bool try_initialize_native_invoker();
     bool try_initialize_game_thread_dispatcher();
@@ -60,6 +61,8 @@ private:
     mutable std::mutex runtimeSnapshotMutex_;
     mutable RuntimeSnapshot runtimeSnapshot_{};
     mutable bool runtimeRefreshPending_{};
+    mutable std::mutex localPlayerDiagnosticMutex_;
+    mutable std::string localPlayerChainDiagnostic_;
 };
 
 } // namespace frontier::game
