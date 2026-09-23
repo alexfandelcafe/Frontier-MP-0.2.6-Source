@@ -35,6 +35,10 @@ private:
     static void create_player_actor_in_layout_hook(void* context);
     static void get_player_actor_hook(void* context);
     static void get_actor_enum_hook(void* context);
+    static void get_actor_slot_hook(void* context);
+    static void get_slot_actor_hook(void* context);
+    static void get_local_slot_hook(void* context);
+    static void is_slot_valid_hook(void* context);
     static void create_actor_in_layout_hook(void* context);
     static void create_layout_hook(void* context);
     static void find_named_layout_hook(void* context);
@@ -65,6 +69,10 @@ private:
     NativeInvoker::NativeHandler originalCreatePlayerActorInLayout_{};
     NativeInvoker::NativeHandler originalGetPlayerActor_{};
     NativeInvoker::NativeHandler originalGetActorEnum_{};
+    NativeInvoker::NativeHandler originalGetActorSlot_{};
+    NativeInvoker::NativeHandler originalGetSlotActor_{};
+    NativeInvoker::NativeHandler originalGetLocalSlot_{};
+    NativeInvoker::NativeHandler originalIsSlotValid_{};
     NativeInvoker::NativeHandler originalCreateActorInLayout_{};
     NativeInvoker::NativeHandler originalCreateLayout_{};
     NativeInvoker::NativeHandler originalFindNamedLayout_{};
