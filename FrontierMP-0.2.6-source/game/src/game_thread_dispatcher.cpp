@@ -257,6 +257,31 @@ void GameThreadDispatcher::detach() {
     gameThreadId_ = {};
 }
 
+bool GameThreadDispatcher::submit(std::function<void()> task, std::string& error) {
+    error.clear();
+    if (!attached_.load(std::memory_order_acquire)) {
+        error = "game-thread dispatcher not attached";
+        return false;
+    }
+    if (!task) {
+        error = "empty game-thread task";
+        return false;
+    }
+
+    auto pending = std::make_shared<PendingTask>();
+    pending->fn = std::move(task);
+
+    {
+        std::lock_guard lock(queueMutex_);
+        if (!attached_.load(std::memory_order_acquire)) {
+            error = "game-thread dispatcher detached";
+            return false;
+        }
+        queue_.push_back(std::move(pending));
+    }
+    return true;
+}
+
 bool GameThreadDispatcher::submit_and_wait(std::function<void()> task,
                                            std::uint32_t timeoutMs,
                                            std::string& error) {
