@@ -1,3 +1,6 @@
+## 0.2.55
+- Keep the remote player creation probe in the live Player script context and fix helper declarations so the tracer compiles cleanly.
+
 ## 0.2.54
 - Remove the invalid out-of-script CREATE_PLAYER_ACTOR_IN_LAYOUT probe from RdrBridge.
 - Keep RdrBridge limited to arming the remote layout and requesting MPPLAYER01.
