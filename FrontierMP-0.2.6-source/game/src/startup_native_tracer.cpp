@@ -19,10 +19,13 @@ namespace frontier::game {
 
 namespace {
 StartupNativeTracer* g_tracer = nullptr;
-std::int32_t g_scriptHandles[32]{};
-char g_scriptHandlePaths[32][96]{};
-bool g_scriptHandleValid[32]{};
-bool g_scriptHandleValidKnown[32]{};
+constexpr std::size_t kObservedScriptCapacity = 128;
+std::int32_t g_scriptHandles[kObservedScriptCapacity]{};
+char g_scriptHandlePaths[kObservedScriptCapacity][96]{};
+std::uint32_t g_scriptHandleOwners[kObservedScriptCapacity]{};
+bool g_scriptHandleOwnerKnown[kObservedScriptCapacity]{};
+bool g_scriptHandleValid[kObservedScriptCapacity]{};
+bool g_scriptHandleValidKnown[kObservedScriptCapacity]{};
 std::size_t g_scriptHandleCount = 0;
 
 void append_execution_identity(char* buffer, std::size_t capacity, std::size_t& used, void* context) {
@@ -50,38 +53,39 @@ int find_remembered_script_handle(std::int32_t handle) {
     return -1;
 }
 
-bool is_traced_script_path(const char* path) {
-    if (!path || !*path) return false;
-    return std::strcmp(path, "scripting/DesignerDefined/Player") == 0 ||
-           std::strcmp(path, "$/content/frontier/pr_frontier") == 0 ||
-           std::strcmp(path, "$/content/frontier/hennigans_stead/hennigansstead") == 0 ||
-           std::strcmp(path, "$/content/frontier/hennigans_stead/hennigans_ranch/hennigansranch") == 0 ||
-           std::strcmp(path, "$/content/init/pop/hen_population") == 0 ||
-           std::strcmp(path, "HennigansSteadVol") == 0 ||
-           std::strcmp(path, "HennigansRanchVol") == 0;
-}
+void remember_script_handle(const char* path,
+                            std::int32_t handle,
+                            bool ownerKnown,
+                            std::uint32_t ownerScriptId) {
+    if (handle <= 0) return;
 
-void remember_traced_script_handle(const char* path, std::int32_t handle) {
-    if (!is_traced_script_path(path) || handle <= 0) return;
+    const auto capacity = sizeof(g_scriptHandles) / sizeof(g_scriptHandles[0]);
     for (std::size_t i = 0; i < g_scriptHandleCount; ++i) {
-        if (g_scriptHandles[i] == handle) return;
+        if (g_scriptHandles[i] != handle) continue;
+
+        if (path && *path) {
+            std::snprintf(g_scriptHandlePaths[i], sizeof(g_scriptHandlePaths[i]), "%s", path);
+        }
+        g_scriptHandleOwnerKnown[i] = ownerKnown;
+        g_scriptHandleOwners[i] = ownerKnown ? ownerScriptId : 0u;
+        g_scriptHandleValidKnown[i] = false;
+        return;
     }
-    if (g_scriptHandleCount < (sizeof(g_scriptHandles) / sizeof(g_scriptHandles[0]))) {
-        const auto slot = g_scriptHandleCount;
-        g_scriptHandles[slot] = handle;
-        std::snprintf(g_scriptHandlePaths[slot], sizeof(g_scriptHandlePaths[slot]), "%s", path);
-        g_scriptHandleValid[slot] = false;
-        g_scriptHandleValidKnown[slot] = false;
-        ++g_scriptHandleCount;
-    }
+
+    if (g_scriptHandleCount >= capacity) return;
+
+    const auto slot = g_scriptHandleCount++;
+    g_scriptHandles[slot] = handle;
+    std::snprintf(g_scriptHandlePaths[slot], sizeof(g_scriptHandlePaths[slot]), "%s",
+                  (path && *path) ? path : "<unknown>");
+    g_scriptHandleOwnerKnown[slot] = ownerKnown;
+    g_scriptHandleOwners[slot] = ownerKnown ? ownerScriptId : 0u;
+    g_scriptHandleValid[slot] = false;
+    g_scriptHandleValidKnown[slot] = false;
 }
 
 bool is_remembered_script_handle(std::int32_t handle) {
-    if (handle <= 0) return false;
-    for (std::size_t i = 0; i < g_scriptHandleCount; ++i) {
-        if (g_scriptHandles[i] == handle) return true;
-    }
-    return false;
+    return find_remembered_script_handle(handle) >= 0;
 }
 
 constexpr std::uint32_t kSetStartPos = 0x0CB93120u;
@@ -402,6 +406,8 @@ bool StartupNativeTracer::attach(NativeInvoker& invoker, std::string& error) {
 
     g_scriptHandleCount = 0;
     std::memset(g_scriptHandlePaths, 0, sizeof(g_scriptHandlePaths));
+    std::memset(g_scriptHandleOwners, 0, sizeof(g_scriptHandleOwners));
+    std::memset(g_scriptHandleOwnerKnown, 0, sizeof(g_scriptHandleOwnerKnown));
     std::memset(g_scriptHandleValid, 0, sizeof(g_scriptHandleValid));
     std::memset(g_scriptHandleValidKnown, 0, sizeof(g_scriptHandleValidKnown));
     attached_ = true;
@@ -514,12 +520,15 @@ void StartupNativeTracer::launch_new_script_hook(void* context) {
     }
 #endif
 
-    if (resultReadable && pathReadable) {
-        remember_traced_script_handle(path, static_cast<std::int32_t>(result));
-    }
-
     std::uint32_t ownerScriptId = 0;
     const bool hasOwnerScriptId = lookup_script_context_id(context, ownerScriptId);
+
+    if (resultReadable) {
+        remember_script_handle(pathReadable ? path : nullptr,
+                               static_cast<std::int32_t>(result),
+                               hasOwnerScriptId,
+                               ownerScriptId);
+    }
 
     char buffer[352]{};
     const std::uint32_t supplied = context
@@ -627,12 +636,15 @@ void StartupNativeTracer::launch_new_script_with_args_hook(void* context) {
     }
 #endif
 
-    if (resultReadable) {
-        remember_traced_script_handle(path, result);
-    }
-
     std::uint32_t ownerScriptId = 0;
     const bool hasOwnerScriptId = lookup_script_context_id(context, ownerScriptId);
+
+    if (resultReadable) {
+        remember_script_handle(pathReadable ? path : nullptr,
+                               result,
+                               hasOwnerScriptId,
+                               ownerScriptId);
+    }
 
     if (used + 80u < sizeof(buffer)) {
         const int n = std::snprintf(buffer + used, sizeof(buffer) - used,
@@ -697,11 +709,16 @@ void StartupNativeTracer::is_script_valid_hook(void* context) {
         : "";
 
     char buffer[320]{};
+    const bool ownerKnown = g_scriptHandleOwnerKnown[slot];
+    const std::uint32_t ownerScriptId = g_scriptHandleOwners[slot];
+
     std::snprintf(buffer, sizeof(buffer),
-                  "[FrontierNativeTrace] IS_SCRIPT_VALID id=%d path=%s result=%u transition",
+                  "[FrontierNativeTrace] IS_SCRIPT_VALID id=%d path=%s result=%u transition ownerScriptId=%s%u",
                   scriptId,
                   path && *path ? path : "<unknown>",
-                  result);
+                  result,
+                  ownerKnown ? "" : "?",
+                  ownerKnown ? ownerScriptId : 0u);
     std::size_t usedIdentity = std::strlen(buffer);
     append_execution_identity(buffer, sizeof(buffer), usedIdentity, context);
     log(buffer);
@@ -746,16 +763,16 @@ void StartupNativeTracer::terminate_script_hook(void* context) {
     g_scriptHandleValid[slot] = false;
 
     const char* path = g_scriptHandlePaths[slot];
-    std::uint32_t ownerScriptId = 0;
-    const bool hasOwnerScriptId = lookup_script_context_id(context, ownerScriptId);
+    const bool ownerKnown = g_scriptHandleOwnerKnown[slot];
+    const std::uint32_t ownerScriptId = g_scriptHandleOwners[slot];
 
-    char buffer[352]{};
+    char buffer[384]{};
     std::snprintf(buffer, sizeof(buffer),
-                  "[FrontierNativeTrace] TERMINATE_SCRIPT id=%d path=%s ownerScriptId=%s%u",
+                  "[FrontierNativeTrace] TERMINATE_SCRIPT id=%d path=%s launchOwnerScriptId=%s%u",
                   scriptId,
                   path && *path ? path : "<unknown>",
-                  hasOwnerScriptId ? "" : "?",
-                  hasOwnerScriptId ? ownerScriptId : 0u);
+                  ownerKnown ? "" : "?",
+                  ownerKnown ? ownerScriptId : 0u);
     std::size_t usedIdentity = std::strlen(buffer);
     append_execution_identity(buffer, sizeof(buffer), usedIdentity, context);
     log(buffer);
