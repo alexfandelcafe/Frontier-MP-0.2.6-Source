@@ -23,6 +23,7 @@ public:
     void detach();
     bool attached() const { return attached_; }
 
+    bool submit(std::function<void()> task, std::string& error);
     bool submit_and_wait(std::function<void()> task, std::uint32_t timeoutMs, std::string& error);
     std::size_t pump(std::size_t maxTasks = 32);
 
