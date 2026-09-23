@@ -630,9 +630,6 @@ bool RdrBridge::spawn_remote_actor(
     std::string dispatchError;
     const bool completed = gameThreadDispatcher_.submit_and_wait(
         [this, remotePlayerId, spawnState, &outActor, &error]() {
-            constexpr const char* kAmbientLayoutName = "AmbientMissions_Layout";
-            constexpr const char* kFallbackLayoutName = "FrontierRemoteLayout";
-
             char ambientLayoutName[] = "AmbientMissions_Layout";
             char fallbackLayoutName[] = "FrontierRemoteLayout";
 
