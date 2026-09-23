@@ -1,3 +1,7 @@
+## 0.2.47
+- Remove the broad raw-memory `GeneralManagerSlots` scan from the live remote-actor test after confirming it can locate the created actor as `sagGuid=0x0003`.
+- Stop using `ACTOR_PLAYER=0` with `CREATE_ACTOR_IN_LAYOUT`; use `ACTOR_MPPLAYER01=837`, matching the game's multiplayer actor family.
+- Request and verify the multiplayer actor asset is streamed before attempting creation; defer creation while the model is still loading.
 ## 0.2.46
 - Replace the old ActorHandle-based manager lookup experiment with a non-destructive `sagGuid`-indexed `GeneralManagerSlots` scan.
 - After remote actor creation, correlate the new actor by its `sagActor::m_Guid` at `+0x08` and transform position, logging whether the actor was actually registered in the actor manager.
