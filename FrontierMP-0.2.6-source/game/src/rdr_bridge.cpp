@@ -71,7 +71,87 @@ struct MinimalSagActorComponent final {
 struct MinimalMatrix34 final {
     std::byte padding0[0x30];
     Vec3 position;
+};\n\nstruct ActorManagerMatch final {
+    bool found{};
+    std::uint16_t guid{};
+    std::uintptr_t actor{};
+    std::uintptr_t actorComponent{};
+    std::uintptr_t transform{};
+    float distanceSq{999999999.0f};
 };
+
+bool scan_actor_manager_for_position(
+    std::uintptr_t managerSlots,
+    const Vec3& target,
+    ActorManagerMatch& out) {
+#ifdef _WIN32
+    if (managerSlots == 0) return false;
+
+    constexpr std::uint32_t kPrimaryGuidLimit = 0x2000u;
+    constexpr std::uint32_t kFullGuidLimit = 0x10000u;
+    constexpr float kPositionMatchToleranceSq = 0.75f * 0.75f;
+
+    auto scan_range = [&](std::uint32_t limit) {
+        for (std::uint32_t guidValue = 1; guidValue < limit; ++guidValue) {
+            const auto guid = static_cast<std::uint16_t>(guidValue);
+            const auto slotAddress =
+                managerSlots + (static_cast<std::uintptr_t>(guid) * 0x10u);
+
+            std::uintptr_t actor = 0;
+            if (!guarded_read_pointer(slotAddress, actor) || actor == 0) continue;
+            if (!guarded_read_pointer(actor + offsetof(MinimalSagActor, actorComponent),
+                                      out.actorComponent)) {
+                out.actorComponent = 0;
+                continue;
+            }
+            if (out.actorComponent == 0) continue;
+
+            std::uint32_t actorGuid = 0;
+            if (!guarded_read_u32(actor + 0x08u, actorGuid)) continue;
+            if (static_cast<std::uint16_t>(actorGuid) != guid) continue;
+
+            if (!guarded_read_pointer(
+                    out.actorComponent + offsetof(MinimalSagActorComponent, transform),
+                    out.transform)) {
+                out.transform = 0;
+                continue;
+            }
+            if (out.transform == 0) continue;
+
+            Vec3 position{};
+            if (!guarded_read_position(out.transform, position)) continue;
+
+            const float dx = position.x - target.x;
+            const float dy = position.y - target.y;
+            const float dz = position.z - target.z;
+            const float distanceSq = (dx * dx) + (dy * dy) + (dz * dz);
+
+            if (distanceSq < out.distanceSq) {
+                out.found = true;
+                out.guid = guid;
+                out.actor = actor;
+                out.distanceSq = distanceSq;
+            }
+        }
+    };
+
+    scan_range(kPrimaryGuidLimit);
+    if (!out.found || out.distanceSq > kPositionMatchToleranceSq) {
+        out = {};
+        out.distanceSq = 999999999.0f;
+        scan_range(kFullGuidLimit);
+    }
+
+    return out.found && out.distanceSq <= kPositionMatchToleranceSq;
+#else
+    (void)managerSlots;
+    (void)target;
+    (void)out;
+    return false;
+#endif
+}
+
+
 
 #ifdef _WIN32
 bool guarded_read_u32(std::uintptr_t address, std::uint32_t& out) {
@@ -547,6 +627,41 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                             write_bridge_log_line(buffer);
                         }
 
+                        // The verified actor-manager layout is indexed by sagGuid, not ActorHandle.
+                        // Search it non-destructively for the newly created actor using its known
+                        // spawn position and the sagActor::m_Guid field at +0x08.
+                        std::uintptr_t managerSlots = 0;
+                        if (read_pointer(actorManagerSlotsStorage_, managerSlots)) {
+                            ActorManagerMatch match{};
+                            const Vec3 targetPosition{x, y, z};
+                            const bool matched =
+                                scan_actor_manager_for_position(managerSlots, targetPosition, match);
+
+                            char buffer[448]{};
+                            if (matched) {
+                                std::snprintf(
+                                    buffer,
+                                    sizeof(buffer),
+                                    "[FrontierRemoteActor] manager-scan match=1 manager=0x%llX guid=0x%04X actor=0x%llX component=0x%llX transform=0x%llX distance=%.4f",
+                                    static_cast<unsigned long long>(managerSlots),
+                                    static_cast<unsigned int>(match.guid),
+                                    static_cast<unsigned long long>(match.actor),
+                                    static_cast<unsigned long long>(match.actorComponent),
+                                    static_cast<unsigned long long>(match.transform),
+                                    std::sqrt(match.distanceSq));
+                            } else {
+                                std::snprintf(
+                                    buffer,
+                                    sizeof(buffer),
+                                    "[FrontierRemoteActor] manager-scan match=0 manager=0x%llX target=(%.3f,%.3f,%.3f)",
+                                    static_cast<unsigned long long>(managerSlots),
+                                    x, y, z);
+                            }
+                            write_bridge_log_line(buffer);
+                        } else {
+                            write_bridge_log_line(
+                                "[FrontierRemoteActor] manager-scan unavailable: manager slots pointer read failed");
+                        }
                     }
                 }
             } else {
