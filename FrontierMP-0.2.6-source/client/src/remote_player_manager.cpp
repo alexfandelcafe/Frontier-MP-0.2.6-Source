@@ -8,7 +8,23 @@ namespace frontier::client {
 
 namespace {
 constexpr std::uint64_t kRemotePlayerGraceMs = 750;
+constexpr float kPositionUpdateThreshold = 0.02f;
 
+float distance_squared(const Vec3& a, const Vec3& b) {
+    const float dx = a.x - b.x;
+    const float dy = a.y - b.y;
+    const float dz = a.z - b.z;
+    return dx * dx + dy * dy + dz * dz;
+}
+
+float yaw_delta(float a, float b) {
+    constexpr float kFullTurnDegrees = 360.0f;
+    constexpr float kHalfTurnDegrees = 180.0f;
+    float delta = std::fmod(a - b, kFullTurnDegrees);
+    if (delta > kHalfTurnDegrees) delta -= kFullTurnDegrees;
+    if (delta < -kHalfTurnDegrees) delta += kFullTurnDegrees;
+    return std::fabs(delta);
+}
 } // namespace
 
 void RemotePlayerManager::set_local_player_id(std::uint16_t playerId) {
@@ -96,17 +112,22 @@ void RemotePlayerManager::update(std::uint64_t nowMs, frontier::game::RdrBridge&
         const auto sampled = interpolator_.sample(player.playerId, latestServerTick_);
         const PlayerState desired = sampled.has_value() ? sampled->state : player.targetState;
 
-        // Locomotion must be refreshed even when the network position delta is
-        // below the old teleport threshold. ClientRuntime drives this loop at 20 Hz.
-        std::string error;
-        if (bridge.update_remote_actor_motion(player.actor.actorHandle, desired, error)) {
-            player.renderedState = desired;
-        } else {
-            std::fprintf(stderr,
-                         "[FrontierRemotePlayer] motion update failed playerId=%u actor=0x%08X error=%s\n",
-                         static_cast<unsigned>(player.playerId),
-                         player.actor.actorHandle,
-                         error.c_str());
+
+        const bool moved = distance_squared(player.renderedState.position, desired.position) >
+                           kPositionUpdateThreshold * kPositionUpdateThreshold;
+        const bool rotated = yaw_delta(player.renderedState.yaw, desired.yaw) > 1.0f;
+
+        if (moved || rotated) {
+            std::string error;
+            if (bridge.update_remote_actor_transform(player.actor.actorHandle, desired, error)) {
+                player.renderedState = desired;
+            } else {
+                std::fprintf(stderr,
+                             "[FrontierRemotePlayer] update failed playerId=%u actor=0x%08X error=%s\n",
+                             static_cast<unsigned>(player.playerId),
+                             player.actor.actorHandle,
+                             error.c_str());
+            }
         }
 
         ++it;
