@@ -7,6 +7,7 @@
 #include "frontier/types.hpp"
 
 #include <cstdint>
+#include <mutex>
 #include <string>
 
 namespace frontier::game {
@@ -36,6 +37,17 @@ private:
     bool readable(std::uintptr_t address, std::size_t size) const;
     bool read_pointer(std::uintptr_t address, std::uintptr_t& out) const;
 
+    struct RuntimeSnapshot final {
+        bool gameStateKnown{};
+        std::int32_t gameState{-1};
+        bool worldLoadedKnown{};
+        bool worldLoaded{};
+        bool simulateStartMultiplayerKnown{};
+        bool simulateStartMultiplayer{};
+        bool startPosCommandLineKnown{};
+        bool startPosCommandLine{};
+    };
+
     bool initialized_{};
     KnownBuild build_{KnownBuild::Unknown};
     std::uintptr_t moduleBase_{};
@@ -45,6 +57,9 @@ private:
     mutable GameThreadDispatcher gameThreadDispatcher_{};
     std::string gameThreadDispatcherError_;
     StartupNativeTracer startupNativeTracer_{};
+    mutable std::mutex runtimeSnapshotMutex_;
+    mutable RuntimeSnapshot runtimeSnapshot_{};
+    mutable bool runtimeRefreshPending_{};
 };
 
 } // namespace frontier::game
