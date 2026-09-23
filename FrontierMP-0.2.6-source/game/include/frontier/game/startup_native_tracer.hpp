@@ -28,6 +28,7 @@ private:
     static void net_enable_multiplayer_hook(void* context);
     static void net_is_in_session_hook(void* context);
     static void net_is_session_client_hook(void* context);
+    static void net_session_quick_join_hook(void* context);
     static void net_session_start_gameplay_hook(void* context);
     static void net_session_end_gameplay_hook(void* context);
     static void net_session_is_gameplay_started_hook(void* context);
@@ -50,6 +51,7 @@ private:
     NativeInvoker::NativeHandler originalNetEnableMultiplayer_{};
     NativeInvoker::NativeHandler originalNetIsInSession_{};
     NativeInvoker::NativeHandler originalNetIsSessionClient_{};
+    NativeInvoker::NativeHandler originalNetSessionQuickJoin_{};
     NativeInvoker::NativeHandler originalNetSessionStartGameplay_{};
     NativeInvoker::NativeHandler originalNetSessionEndGameplay_{};
     NativeInvoker::NativeHandler originalNetSessionIsGameplayStarted_{};
