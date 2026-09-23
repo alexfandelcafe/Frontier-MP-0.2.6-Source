@@ -181,8 +181,6 @@ void ClientRuntime::update() {
 
                     bridgeStateReady_ = true;
                 }
-            }
-
             } else if (lastBridgeLogMs_ == 0 || now - lastBridgeLogMs_ >= 1000) {
                 log_line("[FrontierClient] local-player read pending: " + bridgeError);
                 lastBridgeLogMs_ = now;
