@@ -94,6 +94,7 @@ constexpr std::uint32_t kIsLaunchRetail = 0x7CE2C2E1u;
 constexpr std::uint32_t kIsSimulateStartPress = 0xD8E31D42u;
 constexpr std::uint32_t kIsScriptValid = 0x45F7D589u;
 constexpr std::uint32_t kTerminateScript = 0x60A7FF09u;
+constexpr std::uint32_t kTerminateThisScript = 0x245B6AB6u;
 
 struct NativeTraceContext final {
     void* returnBuffer{};
@@ -355,6 +356,26 @@ bool StartupNativeTracer::attach(NativeInvoker& invoker, std::string& error) {
         originalWasLastResetForMultiplayer_ = nullptr; originalIsLaunchRetail_ = nullptr;
         originalIsSimulateStartPress_ = nullptr; originalWasLastResetForMultiplayer_ = nullptr;
         originalIsScriptValid_ = nullptr;
+        return false;
+    }
+
+    if (!invoker.hook_native(kTerminateThisScript, &StartupNativeTracer::terminate_this_script_hook,
+                             originalTerminateThisScript_, &error)) {
+        invoker.unhook_native(kIsScriptValid, &StartupNativeTracer::is_script_valid_hook, originalIsScriptValid_);
+        invoker.unhook_native(kIsSimulateStartPress, &StartupNativeTracer::is_simulate_start_press_hook, originalIsSimulateStartPress_);
+        invoker.unhook_native(kIsLaunchRetail, &StartupNativeTracer::is_launch_retail_hook, originalIsLaunchRetail_);
+        invoker.unhook_native(kWasLastResetForMultiplayer, &StartupNativeTracer::was_last_reset_for_multiplayer_hook, originalWasLastResetForMultiplayer_);
+        invoker.unhook_native(kSetMissionInfo, &StartupNativeTracer::set_mission_info_hook, originalSetMissionInfo_);
+        invoker.unhook_native(kLaunchNewScriptWithArgs, &StartupNativeTracer::launch_new_script_with_args_hook, originalLaunchNewScriptWithArgs_);
+        invoker.unhook_native(kLaunchNewScript, &StartupNativeTracer::launch_new_script_hook, originalLaunchNewScript_);
+        invoker.unhook_native(kClearMissionInfo, &StartupNativeTracer::clear_mission_info_hook, originalClearMissionInfo_);
+        invoker.unhook_native(kScriptDoneLoading, &StartupNativeTracer::script_done_loading_hook, originalScriptDoneLoading_);
+        invoker.unhook_native(kSetStartPos, &StartupNativeTracer::set_start_pos_hook, originalSetStartPos_);
+        g_tracer = nullptr; invoker_ = nullptr;
+        originalSetStartPos_ = nullptr; originalScriptDoneLoading_ = nullptr; originalClearMissionInfo_ = nullptr;
+        originalLaunchNewScript_ = nullptr; originalLaunchNewScriptWithArgs_ = nullptr; originalSetMissionInfo_ = nullptr;
+        originalWasLastResetForMultiplayer_ = nullptr; originalIsLaunchRetail_ = nullptr;
+        originalIsSimulateStartPress_ = nullptr; originalIsScriptValid_ = nullptr; originalTerminateThisScript_ = nullptr;
         return false;
     }
 
@@ -673,6 +694,22 @@ void StartupNativeTracer::is_script_valid_hook(void* context) {
                   scriptId,
                   path && *path ? path : "<unknown>",
                   result);
+    std::size_t usedIdentity = std::strlen(buffer);
+    append_execution_identity(buffer, sizeof(buffer), usedIdentity, context);
+    log(buffer);
+}
+
+void StartupNativeTracer::terminate_this_script_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    if (tracer->originalTerminateThisScript_) {
+        tracer->originalTerminateThisScript_(context);
+    }
+
+    char buffer[256]{};
+    std::snprintf(buffer, sizeof(buffer),
+                  "[FrontierNativeTrace] TERMINATE_THIS_SCRIPT()");
     std::size_t usedIdentity = std::strlen(buffer);
     append_execution_identity(buffer, sizeof(buffer), usedIdentity, context);
     log(buffer);
