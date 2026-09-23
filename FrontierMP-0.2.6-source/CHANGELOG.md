@@ -1,3 +1,7 @@
+## 0.2.52
+- Ensure the mutable native invocation returns the separate native return value instead of the argument buffer.
+- This preserves CREATE_PLAYER_ACTOR_IN_LAYOUT's PlayerId return while also exposing its post-call ActorRef in argument 0.
+
 ## 0.2.51
 - Keep mutable native arguments and native return storage separate to match the live RDR native call context.
 - Validate remote CREATE_PLAYER_ACTOR_IN_LAYOUT by comparing its returned PlayerId with GET_PLAYER_ACTOR(PlayerId) and IS_ACTOR_PLAYER on the created Actor.
