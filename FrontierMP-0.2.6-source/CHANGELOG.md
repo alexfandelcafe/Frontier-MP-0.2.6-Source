@@ -1,3 +1,9 @@
+## 0.2.34
+
+- Treat `GUID=0` as a pending local-player identity state before actor-slot lookup.
+- Preserve the existing actor/component/transform resolution for non-zero GUIDs.
+- This removes probing of the placeholder slot 0 while the local-player identity is still uninitialized.
+
 ## 0.2.33
 
 - Fixed MSVC C2712 by moving all local-player guarded SEH reads out of the C++ member function and into trivial helper functions.
