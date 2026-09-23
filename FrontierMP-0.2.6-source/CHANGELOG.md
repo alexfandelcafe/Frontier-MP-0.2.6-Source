@@ -1,3 +1,7 @@
+## 0.2.57
+- Use the live PlayerLayout for the in-context remote CREATE_PLAYER_ACTOR_IN_LAYOUT experiment.
+- Keep the remote actor name/model/position test unchanged so the layout dependency is isolated.
+
 ## 0.2.56
 - Execute the in-context remote CREATE_PLAYER_ACTOR_IN_LAYOUT probe once the remote layout is valid instead of gating it on STREAMING_IS_ACTOR_LOADED.
 - Use the canonical one-argument STREAMING_IS_ACTOR_LOADED probe and keep its result diagnostic-only.
