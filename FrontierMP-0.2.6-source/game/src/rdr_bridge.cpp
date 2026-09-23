@@ -544,18 +544,19 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
 
                         // Validate the plain Actor handle through scalar actor natives.
                         // This avoids depending on Slot registration or Vector3 output ABI.
-                        bool actorArgs[2]{};
+                        bool actorIsPlayer = false;
+                        bool actorIsLocal = false;
                         args[0] = static_cast<std::uintptr_t>(actorHandle);
                         result = 0;
                         const bool isActorPlayerInvoked =
                             nativeInvoker_.invoke_raw(kNativeIsActorPlayer, args, 1u, result);
-                        actorArgs[0] = isActorPlayerInvoked && result != 0u;
+                        actorIsPlayer = isActorPlayerInvoked && result != 0u;
 
                         args[0] = static_cast<std::uintptr_t>(actorHandle);
                         result = 0;
                         const bool isActorLocalInvoked =
                             nativeInvoker_.invoke_raw(kNativeIsActorLocalPlayer, args, 1u, result);
-                        actorArgs[1] = isActorLocalInvoked && result != 0u;
+                        actorIsLocal = isActorLocalInvoked && result != 0u;
 
                         args[0] = static_cast<std::uintptr_t>(actorHandle);
                         result = 0;
@@ -584,8 +585,8 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                                       "getZ=%u z=%.3f getHeading=%u heading=%.3f",
                                       static_cast<unsigned long long>(actorRef),
                                       actorHandle,
-                                      actorArgs[0] ? 1u : 0u,
-                                      actorArgs[1] ? 1u : 0u,
+                                      actorIsPlayer ? 1u : 0u,
+                                      actorIsLocal ? 1u : 0u,
                                       xInvoked ? 1u : 0u,
                                       nativeX,
                                       yInvoked ? 1u : 0u,
@@ -598,6 +599,7 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
 
                         // Internal actor offsets and manager slots are intentionally not used as
                         // authoritative evidence until the scalar actor-native validation succeeds.
+                    }
             } else {
                 std::fprintf(stderr,
                              "[FrontierRemoteActor] layout invalid name=%s id=0x%08X\\n",
