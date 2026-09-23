@@ -5,6 +5,7 @@
 #include <atomic>
 #include "frontier/game/rdr_bridge.hpp"
 #include "frontier/game/frontier_session.hpp"
+#include "frontier/client/remote_player_manager.hpp"
 
 namespace frontier::client {
 
@@ -28,6 +29,8 @@ private:
     frontier::game::FrontierSession session_{};
     std::uint64_t lastSessionUpdateMs_{};
     std::string sessionMode_{"freeroam"};
+    RemotePlayerManager remotePlayers_{};
+    std::uint16_t localPlayerId_{};
 };
 
 } // namespace frontier::client
