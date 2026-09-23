@@ -36,6 +36,9 @@ constexpr std::uint32_t kNativeTeleportActorWithHeading = 0xE4DE507C;
 constexpr std::uint32_t kNativeCreatePlayerActorInLayout = 0x6A307D5F;
 constexpr std::uint32_t kNativeGetPlayerActor = 0xE8CFDD53;
 constexpr std::uint32_t kNativeIsActorPlayer = 0xB27E91E7;
+constexpr std::uint32_t kNativeIsActorLocalPlayer = 0x6542CF26;
+constexpr std::uint32_t kNativeGetActorSlot = 0xAABF3356;
+constexpr std::uint32_t kNativeGetActorUpdatePriority = 0x6D322CD3;
 constexpr std::uint32_t kNativeIsActorValid = 0xBA6C3E92u;
 constexpr std::uint32_t kNativeIsActorenumInstalled = 0x9B903F45;
 constexpr std::uint32_t kNativeGetActorEnum = 0x0B28E9EC;
@@ -559,6 +562,39 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                 actorHandle != 0u &&
                 nativeInvoker_.invoke_raw(kNativeIsActorPlayer, actorArgs, 1u, isPlayerResult);
 
+            std::uint32_t actorSlot = 0xFFFFFFFFu;
+            bool actorSlotOk = false;
+            bool localPlayerActor = false;
+            bool localPlayerActorOk = false;
+            std::uint32_t updatePriority = 0xFFFFFFFFu;
+            bool updatePriorityOk = false;
+
+            if (actorHandle != 0u) {
+                std::uintptr_t diagnosticArgs[1]{
+                    static_cast<std::uintptr_t>(actorHandle)};
+                std::uintptr_t diagnosticResult = 0u;
+
+                actorSlotOk = nativeInvoker_.invoke_raw(
+                    kNativeGetActorSlot, diagnosticArgs, 1u, diagnosticResult);
+                if (actorSlotOk) {
+                    actorSlot = static_cast<std::uint32_t>(diagnosticResult);
+                }
+
+                diagnosticResult = 0u;
+                localPlayerActorOk = nativeInvoker_.invoke_raw(
+                    kNativeIsActorLocalPlayer, diagnosticArgs, 1u, diagnosticResult);
+                if (localPlayerActorOk) {
+                    localPlayerActor = diagnosticResult != 0u;
+                }
+
+                diagnosticResult = 0u;
+                updatePriorityOk = nativeInvoker_.invoke_raw(
+                    kNativeGetActorUpdatePriority, diagnosticArgs, 1u, diagnosticResult);
+                if (updatePriorityOk) {
+                    updatePriority = static_cast<std::uint32_t>(diagnosticResult);
+                }
+            }
+
             const bool spawned =
                 createOk && actorHandle != 0u && validOk && validResult != 0u;
 
@@ -576,7 +612,9 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                 "[FrontierRemotePlayer] generic actor test layout=0x%08X "
                 "streamOk=%u streamResult=0x%llX createOk=%u "
                 "actorRef=0x%llX actorHandle=0x%08X actorValid=%u "
-                "actorEnum=%u isActorPlayer=%u position=(%.3f,%.3f,%.3f)",
+                "actorEnum=%u isActorPlayer=%u actorSlot=%s%u "
+                "isLocalPlayer=%s%u updatePriority=%s%u "
+                "position=(%.3f,%.3f,%.3f)",
                 layoutId,
                 streamOk ? 1u : 0u,
                 static_cast<unsigned long long>(streamResult),
@@ -586,6 +624,12 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                 validOk ? static_cast<unsigned>(validResult) : 0u,
                 enumOk ? static_cast<unsigned>(enumResult) : 0u,
                 isPlayerOk ? static_cast<unsigned>(isPlayerResult) : 0u,
+                actorSlotOk ? "" : "<unreadable>",
+                actorSlotOk ? actorSlot : 0u,
+                localPlayerActorOk ? "" : "<unreadable>",
+                localPlayerActorOk ? static_cast<unsigned>(localPlayerActor) : 0u,
+                updatePriorityOk ? "" : "<unreadable>",
+                updatePriorityOk ? updatePriority : 0u,
                 x, y, z);
             write_bridge_log_line(buffer);
         },
