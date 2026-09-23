@@ -1,3 +1,7 @@
+## 0.2.58
+- Reuse the exact PlayerLayout handle captured from the game's local CREATE_PLAYER_ACTOR_IN_LAYOUT call.
+- Avoid synthetic FIND_NAMED_LAYOUT/CREATE_LAYOUT resolution in the remote player probe, which previously created a duplicate layout and invalidated the PlayerLayout experiment.
+
 ## 0.2.57
 - Use the live PlayerLayout for the in-context remote CREATE_PLAYER_ACTOR_IN_LAYOUT experiment.
 - Keep the remote actor name/model/position test unchanged so the layout dependency is isolated.
