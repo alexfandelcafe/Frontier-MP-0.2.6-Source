@@ -15,6 +15,11 @@ namespace frontier::game {
 
 class NativeInvoker;
 
+// Best-effort correlation between a live native context and the most recently
+// observed GET_THIS_SCRIPT_ID result for that context.
+void record_script_context_id(void* context, std::uint32_t scriptId);
+bool lookup_script_context_id(void* context, std::uint32_t& scriptId);
+
 class GameThreadDispatcher final {
 public:
     using Handler = void(*)(void* context);
