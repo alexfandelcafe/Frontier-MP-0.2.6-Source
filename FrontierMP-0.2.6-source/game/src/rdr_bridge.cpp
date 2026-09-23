@@ -31,9 +31,12 @@ constexpr std::uint32_t kNativeCreateLayout = 0x6CA53214;
 constexpr std::uint32_t kNativeIsLayoutRefValid = 0xFC8E55ED;
 constexpr std::uint32_t kNativeCreateActorInLayout = 0x8D67F397;
 constexpr std::uint32_t kNativeGetActorEnum = 0x0B28E9EC;
-constexpr std::uint32_t kNativeGetActorSlot = 0xAABF3356;
-constexpr std::uint32_t kNativeGetSlotActor = 0xDB9B49D8;
-constexpr std::uint32_t kNativeGetActorPosition = 0x99BD9D6F;
+constexpr std::uint32_t kNativeIsActorPlayer = 0xB27E91E7;
+constexpr std::uint32_t kNativeIsActorLocalPlayer = 0x6542CF26;
+constexpr std::uint32_t kNativeGetActorX = 0x436CE75A;
+constexpr std::uint32_t kNativeGetActorY = 0x0B0FF6A1;
+constexpr std::uint32_t kNativeGetActorZ = 0x25A02BC1;
+constexpr std::uint32_t kNativeGetActorHeading = 0x42DE39F0;
 constexpr std::uintptr_t kTaggedLayoutRef = 0x100000000ull;
 constexpr std::int32_t kRemoteTestActorEnum = 0;
 
@@ -406,6 +409,14 @@ std::uintptr_t float_bits(float value) {
     return bits;
 }
 
+float float_from_bits(std::uintptr_t value) {
+    std::uint32_t raw = static_cast<std::uint32_t>(value);
+    float out = 0.0f;
+    std::memcpy(&out, &raw, sizeof(out));
+    return out;
+}
+
+
 std::uintptr_t pack_vec2(float x, float y) {
     return float_bits(x) | (float_bits(y) << 32u);
 }
@@ -531,43 +542,58 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                             write_bridge_log_line(buffer);
                         }
 
-                        // Validate the returned handle through public actor/slot natives.
-                        // These natives use the plain 32-bit Actor handle.
+                        // Validate the plain Actor handle through scalar actor natives.
+                        // This avoids depending on Slot registration or Vector3 output ABI.
+                        bool actorArgs[2]{};
                         args[0] = static_cast<std::uintptr_t>(actorHandle);
                         result = 0;
-                        const bool slotNativeOk =
-                            nativeInvoker_.invoke_raw(kNativeGetActorSlot, args, 1u, result);
-                        const std::uint32_t nativeSlot = static_cast<std::uint32_t>(result);
+                        const bool isActorPlayerInvoked =
+                            nativeInvoker_.invoke_raw(kNativeIsActorPlayer, args, 1u, result);
+                        actorArgs[0] = isActorPlayerInvoked && result != 0u;
 
-                        std::uintptr_t slotActorRef = 0;
-                        bool slotActorNativeOk = false;
-                        if (slotNativeOk) {
-                            args[0] = static_cast<std::uintptr_t>(nativeSlot);
-                            slotActorNativeOk =
-                                nativeInvoker_.invoke_raw(kNativeGetSlotActor, args, 1u, slotActorRef);
-                        }
-
-                        Vec3 nativePosition{};
                         args[0] = static_cast<std::uintptr_t>(actorHandle);
-                        args[1] = reinterpret_cast<std::uintptr_t>(&nativePosition);
-                        const bool positionNativeInvoked =
-                            nativeInvoker_.invoke_raw(kNativeGetActorPosition, args, 2u, result);
+                        result = 0;
+                        const bool isActorLocalInvoked =
+                            nativeInvoker_.invoke_raw(kNativeIsActorLocalPlayer, args, 1u, result);
+                        actorArgs[1] = isActorLocalInvoked && result != 0u;
+
+                        args[0] = static_cast<std::uintptr_t>(actorHandle);
+                        result = 0;
+                        const bool xInvoked = nativeInvoker_.invoke_raw(kNativeGetActorX, args, 1u, result);
+                        const float nativeX = float_from_bits(result);
+
+                        args[0] = static_cast<std::uintptr_t>(actorHandle);
+                        result = 0;
+                        const bool yInvoked = nativeInvoker_.invoke_raw(kNativeGetActorY, args, 1u, result);
+                        const float nativeY = float_from_bits(result);
+
+                        args[0] = static_cast<std::uintptr_t>(actorHandle);
+                        result = 0;
+                        const bool zInvoked = nativeInvoker_.invoke_raw(kNativeGetActorZ, args, 1u, result);
+                        const float nativeZ = float_from_bits(result);
+
+                        args[0] = static_cast<std::uintptr_t>(actorHandle);
+                        result = 0;
+                        const bool headingInvoked = nativeInvoker_.invoke_raw(kNativeGetActorHeading, args, 1u, result);
+                        const float nativeHeading = float_from_bits(result);
 
                         char nativeBuffer[520]{};
                         std::snprintf(nativeBuffer, sizeof(nativeBuffer),
                                       "[FrontierRemoteActor] native-check actorRef=0x%llX actorHandle=0x%08X "
-                                      "getActorSlot=%u slot=0x%08X getSlotActor=%u slotActor=0x%llX "
-                                      "getPositionInvoked=%u position=(%.3f,%.3f,%.3f)",
+                                      "isActorPlayer=%u isActorLocal=%u getX=%u x=%.3f getY=%u y=%.3f "
+                                      "getZ=%u z=%.3f getHeading=%u heading=%.3f",
                                       static_cast<unsigned long long>(actorRef),
                                       actorHandle,
-                                      slotNativeOk ? 1u : 0u,
-                                      nativeSlot,
-                                      slotActorNativeOk ? 1u : 0u,
-                                      static_cast<unsigned long long>(slotActorRef),
-                                      positionNativeInvoked ? 1u : 0u,
-                                      nativePosition.x,
-                                      nativePosition.y,
-                                      nativePosition.z);
+                                      actorArgs[0] ? 1u : 0u,
+                                      actorArgs[1] ? 1u : 0u,
+                                      xInvoked ? 1u : 0u,
+                                      nativeX,
+                                      yInvoked ? 1u : 0u,
+                                      nativeY,
+                                      zInvoked ? 1u : 0u,
+                                      nativeZ,
+                                      headingInvoked ? 1u : 0u,
+                                      nativeHeading);
                         write_bridge_log_line(nativeBuffer);
 
                         // First hypothesis for ActorRef -> internal actor mapping:
