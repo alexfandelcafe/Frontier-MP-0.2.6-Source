@@ -148,7 +148,6 @@ constexpr std::uint32_t kGetLocalSlot = 0xAD68A22Eu;
 constexpr std::uint32_t kIsSlotValid = 0xD04480FEu;
 constexpr std::uint32_t kStreamingRequestActor = 0xB0A79FEEu;
 constexpr std::uint32_t kStreamingIsActorLoaded = 0x7DF72579u;
-constexpr std::uint32_t kIsActorPlayer = 0xB27E91E7u;
 
 struct NativeTraceContext final {
     void* returnBuffer{};
@@ -2154,9 +2153,6 @@ void StartupNativeTracer::create_actor_in_layout_hook(void* context) {
 #else
     (void)actorEnumOk;
 #endif
-
-    char actorName[160]{};
-    const bool actorNameOk = read_c_string_pointer(preA1, actorName, sizeof(actorName));
 
     char buffer[960]{};
     std::size_t used = static_cast<std::size_t>(std::snprintf(
