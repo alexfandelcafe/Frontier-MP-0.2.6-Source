@@ -596,72 +596,8 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                                       nativeHeading);
                         write_bridge_log_line(nativeBuffer);
 
-                        // First hypothesis for ActorRef -> internal actor mapping:
-                        // use the low 16 bits as the actor-manager slot index, matching
-                        // the verified local-player GUID -> manager slot relationship.
-                        std::uintptr_t managerSlots = 0;
-                        if (!read_pointer(actorManagerSlotsStorage_, managerSlots)) {
-                            char buffer[256]{};
-                            std::snprintf(buffer, sizeof(buffer),
-                                          "[FrontierRemoteActor] manager slots unreadable storage=0x%llX",
-                                          static_cast<unsigned long long>(actorManagerSlotsStorage_));
-                            write_bridge_log_line(buffer);
-                        } else {
-                            const auto managerIndex = static_cast<std::uint16_t>(actorHandle);
-                            const auto actorSlotAddress =
-                                managerSlots + (static_cast<std::uintptr_t>(managerIndex) * 0x10u);
-                            std::uintptr_t actor = 0;
-                            if (!read_pointer(actorSlotAddress, actor) || actor == 0) {
-                                char buffer[352]{};
-                                std::snprintf(buffer, sizeof(buffer),
-                                              "[FrontierRemoteActor] manager-slot unresolved actorHandle=0x%08X index=0x%04X manager=0x%llX slot=0x%llX actor=0x%llX",
-                                              actorHandle,
-                                              static_cast<unsigned int>(managerIndex),
-                                              static_cast<unsigned long long>(managerSlots),
-                                              static_cast<unsigned long long>(actorSlotAddress),
-                                              static_cast<unsigned long long>(actor));
-                                write_bridge_log_line(buffer);
-                            } else if (!readable(actor, sizeof(MinimalSagActor))) {
-                                char buffer[352]{};
-                                std::snprintf(buffer, sizeof(buffer),
-                                              "[FrontierRemoteActor] manager-slot actor unreadable actorHandle=0x%08X slot=0x%llX actor=0x%llX",
-                                              actorHandle,
-                                              static_cast<unsigned long long>(actorSlotAddress),
-                                              static_cast<unsigned long long>(actor));
-                                write_bridge_log_line(buffer);
-                            } else {
-                                std::uintptr_t actorComponent = 0;
-                                const bool componentOk =
-                                    guarded_read_pointer(actor + offsetof(MinimalSagActor, actorComponent), actorComponent);
-                                std::uintptr_t transform = 0;
-                                const bool transformOk = componentOk && actorComponent != 0 &&
-                                    readable(actorComponent, sizeof(MinimalSagActorComponent)) &&
-                                    guarded_read_pointer(actorComponent + offsetof(MinimalSagActorComponent, transform), transform);
-                                Vec3 internalPosition{};
-                                const bool positionOk = transformOk && transform != 0 &&
-                                    readable(transform, sizeof(MinimalMatrix34)) &&
-                                    guarded_read_position(transform, internalPosition);
-
-                                char buffer[520]{};
-                                std::snprintf(buffer, sizeof(buffer),
-                                              "[FrontierRemoteActor] manager-slot resolved actorRef=0x%llX handle=0x%08X index=0x%04X manager=0x%llX slot=0x%llX actor=0x%llX component=0x%llX transform=0x%llX positionOk=%u position=(%.3f,%.3f,%.3f)",
-                                              static_cast<unsigned long long>(actorRef),
-                                              actorHandle,
-                                              static_cast<unsigned int>(managerIndex),
-                                              static_cast<unsigned long long>(managerSlots),
-                                              static_cast<unsigned long long>(actorSlotAddress),
-                                              static_cast<unsigned long long>(actor),
-                                              static_cast<unsigned long long>(actorComponent),
-                                              static_cast<unsigned long long>(transform),
-                                              positionOk ? 1u : 0u,
-                                              internalPosition.x,
-                                              internalPosition.y,
-                                              internalPosition.z);
-                                write_bridge_log_line(buffer);
-                            }
-                        }
-                    }
-                }
+                        // Internal actor offsets and manager slots are intentionally not used as
+                        // authoritative evidence until the scalar actor-native validation succeeds.
             } else {
                 std::fprintf(stderr,
                              "[FrontierRemoteActor] layout invalid name=%s id=0x%08X\\n",
