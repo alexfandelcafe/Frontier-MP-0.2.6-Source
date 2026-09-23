@@ -518,17 +518,21 @@ void StartupNativeTracer::launch_new_script_hook(void* context) {
         remember_traced_script_handle(path, static_cast<std::int32_t>(result));
     }
 
-    char buffer[288]{};
+    std::uint32_t ownerScriptId = 0;
+    const bool hasOwnerScriptId = lookup_script_context_id(context, ownerScriptId);
+
+    char buffer[352]{};
     const std::uint32_t supplied = context
         ? reinterpret_cast<const NativeTraceContext*>(context)->argumentCount
         : 0u;
     std::snprintf(buffer, sizeof(buffer),
-                  "[FrontierNativeTrace] LAUNCH_NEW_SCRIPT path=%s ptr=0x%llX arg1=%s%d supplied=%u result=%s%u",
+                  "[FrontierNativeTrace] LAUNCH_NEW_SCRIPT path=%s ptr=0x%llX arg1=%s%d supplied=%u result=%s%u ownerScriptId=%s%u",
                   pathReadable ? path : "<unreadable>",
                   static_cast<unsigned long long>(scriptPtr),
                   hasArg1 ? "" : "?", hasArg1 ? arg1 : 0,
                   supplied,
-                  resultReadable ? "" : "?", resultReadable ? result : 0u);
+                  resultReadable ? "" : "?", resultReadable ? result : 0u,
+                  hasOwnerScriptId ? "" : "?", hasOwnerScriptId ? ownerScriptId : 0u);
     std::size_t usedIdentity = std::strlen(buffer);
     append_execution_identity(buffer, sizeof(buffer), usedIdentity, context);
     log(buffer);
@@ -627,11 +631,14 @@ void StartupNativeTracer::launch_new_script_with_args_hook(void* context) {
         remember_traced_script_handle(path, result);
     }
 
-    if (used + 48u < sizeof(buffer)) {
+    std::uint32_t ownerScriptId = 0;
+    const bool hasOwnerScriptId = lookup_script_context_id(context, ownerScriptId);
+
+    if (used + 80u < sizeof(buffer)) {
         const int n = std::snprintf(buffer + used, sizeof(buffer) - used,
-                                    " result=%s%d",
-                                    resultReadable ? "" : "?",
-                                    resultReadable ? result : 0);
+                                    " result=%s%d ownerScriptId=%s%u",
+                                    resultReadable ? "" : "?", resultReadable ? result : 0,
+                                    hasOwnerScriptId ? "" : "?", hasOwnerScriptId ? ownerScriptId : 0u);
         (void)n;
     }
     std::size_t usedIdentity = std::strlen(buffer);
