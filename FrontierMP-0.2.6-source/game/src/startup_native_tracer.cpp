@@ -30,6 +30,7 @@ std::size_t g_scriptHandleCount = 0;
 std::uint32_t gCreatePlayerActorTraceCount = 0;
 std::uint32_t gGetPlayerActorTraceCount = 0;
 std::uint32_t gCreateActorInLayoutTraceCount = 0;
+std::uint32_t gIsActorInitedTraceCount = 0;
 std::uint32_t gIsActorValidTraceCount = 0;
 std::uint32_t gIsActorPlayerTraceCount = 0;
 std::uint32_t gIsActorLocalPlayerTraceCount = 0;
@@ -125,6 +126,7 @@ constexpr std::uint32_t kCreatePlayerActorInLayout = 0x6A307D5Fu;
 constexpr std::uint32_t kGetPlayerActor = 0xE8CFDD53u;
 constexpr std::uint32_t kCreateActorInLayout = 0x8D67F397u;
 constexpr std::uint32_t kGetActorEnum = 0x0B28E9ECu;
+constexpr std::uint32_t kIsActorInited = 0x24F4DAB2u;
 constexpr std::uint32_t kIsActorValid = 0xBA6C3E92u;
 constexpr std::uint32_t kIsActorPlayer = 0xB27E91E7u;
 constexpr std::uint32_t kIsActorLocalPlayer = 0x6542CF26u;
@@ -577,6 +579,10 @@ bool StartupNativeTracer::attach(NativeInvoker& invoker, std::string& error) {
                      &StartupNativeTracer::get_actor_enum_hook,
                      originalGetActorEnum_,
                      "GET_ACTOR_ENUM");
+    install_optional(kIsActorInited,
+                     &StartupNativeTracer::is_actor_inited_hook,
+                     originalIsActorInited_,
+                     "IS_ACTOR_INITED");
     install_optional(kIsActorValid,
                      &StartupNativeTracer::is_actor_valid_hook,
                      originalIsActorValid_,
@@ -1566,6 +1572,13 @@ void trace_actor_bool_native(void* context,
     append_execution_identity(buffer, sizeof(buffer), used, context);
     log(buffer);
 }
+}
+
+void StartupNativeTracer::is_actor_inited_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+    const auto traceIndex = gIsActorInitedTraceCount++;
+    trace_actor_bool_native(context, tracer->originalIsActorInited_, traceIndex, 256u, "IS_ACTOR_INITED", true);
 }
 
 void StartupNativeTracer::is_actor_valid_hook(void* context) {
