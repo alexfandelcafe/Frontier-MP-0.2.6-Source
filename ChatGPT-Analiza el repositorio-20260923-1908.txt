@@ -1,0 +1,1535 @@
+Analiza el repositorio
+
+User: Anonymous
+Created: 9/23/2026 8:20:44
+Updated: 9/23/2026 19:01:22
+Exported: 9/23/2026 19:08:52
+Link: https://chatgpt.com/c/6ab3b60b-8208-83e9-be34-70d7948b92e8
+
+## Prompt:
+23/9/2026, 8:20:43
+
+analiza el repo  https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/tree/game-thread/remote-actor-spawn-test-0.2.41y lee el chat del archivo ChatGPT-Analiza el repositorio remoto-20260923-0816.txt para saber como continuar
+
+## Response:
+23/9/2026, 8:20:46
+
+Voy a reconstruir el estado de esa rama, localizar los cambios del experimento remote-actor-spawn-test-0.2.41y y leer el chat adjunto para convertirlo en una ruta concreta de continuación.
+
+Ya está reconstruido el punto de partida real: la rama existe como game-thread/remote-actor-spawn-test-0.2.41 (el enlace trae un sufijo y, pero el ref válido no). Ahora estoy comprobando el log actual contra el código para detectar qué falta antes de convertir la prueba en sincronización real.
+
+Inspeccioné la rama y el chat local del repositorio
+
+Inspeccionando archivos locales del repositorio
+
+Inspeccionó los archivos locales del repositorio
+
+Revisé la prueba de generación remota de actores
+
+Buscando en la web
+
+Comprobando acceso al repositorio GitHub
+
+Comprobado el acceso al repositorio de GitHub
+
+Buscando en la web
+
+Evaluando el siguiente paso
+
+Estoy revisando el resultado ya obtenido para decidir si conviene implementar directamente el flujo de pruebas. Primero comprobaría el registro y el ciclo de vida de sesión; después propondría una integración mínima, con limpieza explícita y validación contra instantáneas reales.
+
+Evaluado el siguiente paso
+
+Inspeccioné repositorios, protocolos y snapshots para implementar RemotePlayerManager
+
+Analizada la sincronización remota y comparados cambios de commits
+
+Precisando la implementación
+
+Estoy comprobando cómo se crean y mueven los actores remotos, además de cómo se incluyen los nuevos archivos en la compilación. Así evitaré diseñar una solución que dependa de funciones nativas inexistentes o deje entidades activas tras reiniciar la sesión.
+
+Se ha buscado en 5 sitios web
+
+Inspeccionó nativos de movimiento y posición de movimiento.actor en RDR1
+
+Contrastando hallazgos
+
+Estoy integrando el contexto del repositorio y del chat previo: la rama ya contiene la prueba de aparición del actor y el registro confirma la carga del modelo. Ahora revisaré movimiento, limpieza y compilación antes de modificar nada.
+
+Confirmando la prueba
+
+La prueba valida que un actor genérico visible funciona con el modelo correcto, pero no es un jugador nativo. Ahora orientarí­a la siguiente fase hacia una capa propia de jugadores remotos, incluyendo sincronización de transformaciones, identificación de entidades y limpieza segura.
+
+Contrastaste hallazgos y confirmaste la prueba
+
+Se ha buscado en 2 sitios web
+
+Implementada la gestión completa de jugadores remotos
+
+Ha pensado durante 2m 33s
+
+Ya reconstruí el estado de la rama y el contexto del chat. El punto de partida es bastante claro: la investigación de Native Player ya cumplió su función y no conviene seguir por ahí ahora.
+
+Estado actual
+
+La referencia válida es:
+
+game-thread/remote-actor-spawn-test-0.2.41
+
+El y del enlace que pasaste no forma parte del nombre real de la rama.
+
+La punta actual de la rama es 0d526c14240f350c10b6943abc03aa5ba675c817, pero ese último commit sólo actualiza el archivo de chat. La última modificación de código relevante es 2293590be25c995f46a5c9683ada60d5384694e9, que arregló la constante IS_ACTOR_VALID.
+
+El chat termina con una prueba que ya está resuelta:
+
+[FrontierRemotePlayer] generic actor test
+layout=0x00000339
+streamOk=1
+streamResult=0x345
+createOk=1
+actorRef=0x10000033A
+actorHandle=0x0000033A
+actorValid=1
+actorEnum=837
+isActorPlayer=0
+position=(-837.760,92.547,2372.670)
+
+Eso demuestra tres cosas importantes:
+
+STREAMING_REQUEST_ACTOR(837)
+        ↓
+modelo disponible
+        ↓
+CREATE_ACTOR_IN_LAYOUT
+        ↓
+Actor válido
+        ↓
+GET_ACTOR_ENUM = 837
+        ↓
+MPPLAYER01
+
+y:
+
+IS_ACTOR_PLAYER = 0
+
+No es un Native Player, pero sí es un Actor real y utilizable.
+
+El problema actual ya es otro
+
+El código actual todavía es una prueba aislada, no un sistema de jugadores remotos.
+
+En rdr_bridge.cpp, request_remote_actor_test():
+
+crea un único actor;
+
+lo coloca a +2m;
+
+usa un único estado global remoteActorTestSpawned_;
+
+no está asociado a ningún NetworkPlayerId;
+
+no actualiza posición;
+
+no actualiza orientación;
+
+no destruye el actor;
+
+no reemplaza el actor si deja de ser válido.
+
+Y en client_runtime.cpp hay otro hueco todavía más importante:
+
+g_network->set_on_snapshot([](const auto& snapshot) {
+    ...
+});
+
+El snapshot se recibe y se tira. Sólo se registra:
+
+snapshot tick=... players=...
+
+No se utiliza para crear ni actualizar entidades.
+
+Además ya tenemos RemoteEntityInterpolator, pero actualmente nadie lo usa.
+
+Por eso el siguiente salto correcto es:
+
+Network Snapshot
+       ↓
+RemoteEntityInterpolator
+       ↓
+RemotePlayerManager
+       ↓
+RemotePlayer
+       ↓
+ActorHandle
+       ↓
+RDR1 Actor
+
+Arquitectura que implementaría
+
+No haría que RdrBridge sea el dueño de los jugadores.
+
+Separaría responsabilidades así:
+
+ClientRuntime
+│
+├── NetworkClient
+│
+├── RemoteEntityInterpolator
+│
+├── RemotePlayerManager
+│      │
+│      ├── RemotePlayer #1
+│      ├── RemotePlayer #2
+│      ├── RemotePlayer #N
+│      │
+│      └── playerId → ActorHandle
+│
+└── RdrBridge
+       └── ejecución segura de natives en game-thread
+
+Un RemotePlayer debería representar al jugador de Frontier, no al Actor de RDR1:
+
+struct RemotePlayer {
+    std::uint16_t playerId{};
+    std::uintptr_t actorRef{};
+    std::uint32_t actorHandle{};
+
+    PlayerState targetState{};
+    PlayerState renderedState{};
+
+    std::uint32_t lastServerTick{};
+    std::uint64_t lastSeenMs{};
+
+    bool spawnPending{};
+    bool spawned{};
+};
+
+La identidad real sería siempre:
+
+NetworkPlayerId
+
+y no:
+
+ActorHandle
+
+Así, si el Actor cambia:
+
+playerId 17
+   ↓
+actor 0x33A
+
+respawn
+
+playerId 17
+   ↓
+actor 0x41F
+
+el jugador sigue siendo el mismo.
+
+Primer cambio que haría
+
+Crearía:
+
+client/include/frontier/client/remote_player_manager.hpp
+client/src/remote_player_manager.cpp
+
+y añadiría los .cpp al frontier_client en CMakeLists.txt.
+
+Ese manager tendría básicamente:
+
+class RemotePlayerManager {
+public:
+    void on_snapshot(const protocol::Snapshot& snapshot,
+                     std::uint16_t localPlayerId);
+
+    void update(std::uint64_t nowMs,
+                std::uint32_t renderTick,
+                RdrBridge& bridge);
+
+    void clear(RdrBridge& bridge);
+
+private:
+    std::unordered_map<std::uint16_t, RemotePlayer> players_;
+    RemoteEntityInterpolator interpolator_;
+};
+
+Flujo de recepción
+
+En NetworkClient podemos conservar el callback actual.
+
+En ClientRuntime:
+
+Snapshot
+   ↓
+interpolator.push_snapshot(snapshot)
+   ↓
+para cada player
+   ↓
+¿es mi playerId?
+   ├── sí → ignorar
+   └── no → asegurar RemotePlayer
+
+Es importante ignorar el jugador local porque el servidor actualmente incluye también al propio jugador en los snapshots.
+
+Así:
+
+snapshot.players
+ ├── player 1 ← local → ignorar
+ ├── player 7 ← remoto
+ ├── player 12 ← remoto
+ └── player 19 ← remoto
+
+Spawn remoto real
+
+El test actual debe dejar de ser algo del estilo:
+
+x = local.x + 2.0f;
+
+y pasar a:
+
+RemotePlayer.playerId
+       ↓
+PlayerState.position
+PlayerState.yaw
+       ↓
+spawn actor
+
+El método del bridge debería acabar conceptualmente así:
+
+bool spawn_remote_actor(
+    std::uint16_t playerId,
+    const PlayerState& state,
+    RemoteActorHandle& out,
+    std::string& error);
+
+Y dentro del bridge se reutiliza exactamente la ruta que ya demostramos que funciona:
+
+ensure layout
+      ↓
+STREAMING_REQUEST_ACTOR(837)
+      ↓
+CREATE_ACTOR_IN_LAYOUT
+      ↓
+IS_ACTOR_VALID
+      ↓
+GET_ACTOR_ENUM == 837
+
+La diferencia es que ahora el resultado se devuelve al RemotePlayerManager.
+
+Hay una cuestión importante para varios jugadores
+
+Ahora mismo el test usa:
+
+char actorName[] = "FrontierRemoteMPActor";
+
+No asumiría todavía que podemos crear N actores con exactamente el mismo nombre dentro del mismo layout.
+
+Para la implementación real usaría nombres únicos:
+
+FrontierRemote_1
+FrontierRemote_7
+FrontierRemote_12
+
+Esto además simplifica muchísimo la depuración.
+
+La primera prueba que haría después del manager sería crear dos actores simultáneamente, ambos con 837, para comprobar que:
+
+player 1 → actor A
+player 2 → actor B
+
+no se pisan.
+
+Actualización de posición
+
+Aquí es donde RemoteEntityInterpolator pasa a ser importante.
+
+El flujo debería ser:
+
+snapshot servidor
+       ↓
+buffer
+       ↓
+interpolación
+       ↓
+estado renderizado
+       ↓
+actor
+
+No movería el actor directamente al último snapshot recibido.
+
+Ya existe esta lógica:
+
+interpolator_.sample(playerId, renderTick);
+
+por lo que no necesitamos inventar otro sistema de interpolación.
+
+Hay, no obstante, una corrección que conviene hacer antes o durante esta integración:
+
+Interpolación de yaw
+
+Actualmente:
+
+result.yaw = lerp(a.state.yaw, b.state.yaw, t);
+
+Eso puede producir un giro largo al cruzar el límite angular.
+
+Por ejemplo:
+
+359° → 1°
+
+puede interpretarse como:
+
+359 → 1 = -358°
+
+cuando debería ser:
+
+359 → 361 = +2°
+
+Para un personaje esto se va a notar.
+
+Cómo actualizar el Actor
+
+Yo no llamaría natives directamente desde el callback de red.
+
+La ruta debe seguir siendo:
+
+Network thread
+      ↓
+RemotePlayerManager
+      ↓
+estado pendiente
+      ↓
+GameThreadDispatcher
+      ↓
+RDR native
+
+Esto es especialmente importante porque ya comprobamos que la creación remota funciona correctamente cuando pasa por el dispatcher.
+
+El dispatcher existente ya proporciona exactamente esa infraestructura:
+
+gameThreadDispatcher_.submit(...)
+
+Por tanto, no hace falta introducir otro mecanismo.
+
+Destrucción
+
+Cuando un jugador desaparezca, necesitamos:
+
+RemotePlayer
+      ↓
+destroy actor
+      ↓
+actorHandle = 0
+      ↓
+spawned = false
+
+La base pública de natives de RDR1 expone DESTROY_ACTOR(Actor) y SET_ACTOR_HEADING(Actor, ...), que son precisamente del tipo de operaciones que necesitaremos para esa capa de control del Actor. (GitHub)
+
+Pero yo no metería todavía hashes nuevos a ciegas en RdrBridge. Primero los incorporaría como métodos encapsulados y verificables, igual que hicimos con la creación.
+
+Desaparición de jugadores
+
+Aquí hay un detalle del protocolo actual.
+
+El servidor no manda:
+
+PlayerRemoved
+
+El snapshot simplemente deja de incluir jugadores que ya no son relevantes.
+
+Y server.cpp aplica:
+
+interestRadius
+
+Por tanto:
+
+player remoto fuera de rango
+
+y:
+
+player desconectado
+
+pueden verse iguales desde el cliente.
+
+No destruiría inmediatamente.
+
+Haría algo como:
+
+último snapshot visto
+      ↓
+250-500 ms de gracia
+      ↓
+si sigue ausente
+      ↓
+destroy actor
+
+Cuando vuelva a aparecer:
+
+snapshot vuelve a incluir playerId
+       ↓
+RemotePlayer existente
+       ↓
+actor no válido
+       ↓
+respawn
+
+Eso también sirve para los casos de respawn.
+
+El ClientRuntime quedaría mucho más limpio
+
+Hoy tiene:
+
+local state
+      ↓
+request_remote_actor_test()
+
+Eso lo reemplazaría por:
+
+local state
+      ↓
+NetworkClient
+
+y en paralelo:
+
+Snapshot
+   ↓
+RemotePlayerManager
+   ↓
+spawn/update/destroy
+
+Entonces el runtime deja de saber cómo crear un Actor individual.
+
+Estado final que buscamos
+
+La primera implementación completa debería llegar a esto:
+
+CLIENT A
+  local player = 1
+
+CLIENT B
+  local player = 7
+
+Servidor:
+
+Snapshot
+  player 1 -> position A
+  player 7 -> position B
+
+Cliente A:
+
+player 1 = local
+player 7 = RemotePlayer
+               ↓
+            Actor 0x...
+               ↓
+           enum 837
+
+Cliente B:
+
+player 7 = local
+player 1 = RemotePlayer
+               ↓
+            Actor 0x...
+               ↓
+           enum 837
+
+Después:
+
+B se mueve
+   ↓
+snapshot
+   ↓
+A recibe
+   ↓
+interpolator
+   ↓
+RemotePlayer 7
+   ↓
+Actor 0x...
+   ↓
+posición actualizada
+
+Y al desconectar:
+
+player 7 desaparece del snapshot
+       ↓
+grace period
+       ↓
+DESTROY_ACTOR
+       ↓
+RemotePlayer 7 queda sin actor
+
+Orden exacto que seguiría
+
+1. Implementar RemotePlayerManager.
+
+2. Conectar SnapshotCallback con el interpolador y el manager.
+
+3. Convertir request_remote_actor_test() en una primitive reutilizable de spawn_remote_actor().
+
+4. Añadir actualización de transform del Actor desde PlayerState.
+
+5. Añadir destroy_remote_actor().
+
+6. Sustituir completamente el spawn hardcodeado de +2m.
+
+7. Probar dos jugadores simultáneos.
+
+8. Probar movimiento A → B y B → A.
+
+9. Probar desconexión/reaparición.
+
+10. Cuando todo eso funcione, limpiar del bridge los restos de las pruebas de CREATE_PLAYER_ACTOR_IN_LAYOUT, GET_PLAYER_ACTOR y promoción nativa.
+
+Mi diagnóstico
+
+Estamos en un punto bueno para dejar de investigar el motor y empezar a construir la capa multiplayer real.
+
+La evidencia acumulada ya permite tomar esta decisión arquitectónica:
+
+Native Player
+   └── sólo jugador local
+
+Frontier RemotePlayer
+   └── Actor normal ACTOR_MPPLAYER01
+
+El mayor trabajo pendiente ya no está en CREATE_ACTOR_IN_LAYOUT. Está en conectar el protocolo existente con una colección de RemotePlayer y controlar el ciclo de vida de esos Actors mediante el game-thread dispatcher.
+
+Y hay una ventaja concreta: buena parte de la infraestructura necesaria ya existe en el repositorio (Snapshot, PlayerState, RemoteEntityInterpolator, GameThreadDispatcher, NativeInvoker). Lo que falta es unirlas.
+
+Sources:
+
+RDR-PC-Natives-DB/Natives.h at main · K3rhos/RDR-PC-Natives-DB · GitHub
+
+## Prompt:
+23/9/2026, 18:23:06
+
+okey, descartamos poder hacer actores remotos player de manera nativa, y empezamos con esto que vos propusiste
+
+## Response:
+23/9/2026, 18:23:09
+
+Sí. Tomo como decisión arquitectónica que los remotos serán RemotePlayer propios respaldados por ACTOR_MPPLAYER01, y voy a implementar primero el ciclo de vida básico sin reabrir la investigación de Native Player.
+
+Voy a hacer la primera integración en una sola capa: RemotePlayerManager recibirá snapshots, creará Actors 837 por playerId, interpolará su estado y eliminará los que desaparezcan. El bridge seguirá siendo el único lugar que invoque natives.
+
+El primer intento de escritura fue rechazado por el conector antes de modificar archivos; no hubo cambios parciales de ese lote. Corrijo el payload y sigo con la misma implementación.
+
+Diseñando actores remotos
+
+Estoy planteando una arquitectura donde las operaciones se ejecuten en el hilo del juego y devuelvan resultados de forma síncrona, evitando conflictos con tareas asíncronas. También estoy considerando prevenir bloqueos al invocar estas funciones desde el propio hilo del juego.
+
+Diseñó actores remotos
+
+Implementado ajuste nativo de posición e inspeccionados Natives
+
+Implementado gestor remoto con interpolación, validación y reintentos seguros
+
+Ajustando la integración
+
+Estoy comprobando la sincronización del puente con el hilo del juego, la gestión de actores remotos y la limpieza durante el cierre. También revisaré posibles condiciones de carrera y actualizaré la documentación de cambios si la implementación queda estable.
+
+Ajustaste la integración
+
+Actualizado e integrado el sistema multijugador de actores remotos
+
+Implementaste y validaste jugadores remotos, sincronización, cooldown y desconexión
+
+Corregí errores de sintaxis y escape en cadenas de plantilla
+
+Revisé e implementé actores remotos, interpolación, sincronización y compilación
+
+Ha pensado durante 2m 56s
+
+Hecho. Ya pasamos de la prueba aislada a la primera implementación real de RemotePlayer.
+
+Lo que quedó implementado
+
+En game-thread/remote-actor-spawn-test-0.2.41:
+
+RemotePlayerManager nuevo, identificado por NetworkPlayerId.
+
+Los Snapshot del servidor ahora alimentan ese manager.
+
+Cada jugador remoto obtiene su propio ACTOR_MPPLAYER01.
+
+Los nombres de Actor son únicos (FrontierRemote_<playerId>).
+
+Spawn, actualización de transform y destrucción pasan por GameThreadDispatcher.
+
+Se reutiliza RemoteEntityInterpolator.
+
+Cada jugador tiene 750 ms de gracia antes de destruirse por ausencia del snapshot.
+
+Los intentos de spawn fallidos se limitan a uno cada 250 ms.
+
+Al desconectarse el cliente se destruyen los Actors remotos activos.
+
+El antiguo request_remote_actor_test() dejó de ser llamado desde ClientRuntime; queda en RdrBridge solamente como referencia experimental.
+
+Se añadió eliminación individual del estado del interpolador cuando desaparece un jugador.
+
+La arquitectura ahora es:
+
+Snapshot
+   ↓
+RemotePlayerManager
+   ↓
+NetworkPlayerId
+   ↓
+RemotePlayer
+   ↓
+ActorHandle
+   ↓
+ACTOR_MPPLAYER01
+
+Y ya no:
+
+NetworkPlayerId
+   ↓
+Native PlayerId
+
+Punto actual
+
+La punta de la rama quedó en:
+
+75c56fe8faf3062cbea751b79cbb0225565e5c8a
+
+El diff desde el último estado del chat afecta CMakeLists.txt, ClientRuntime, interpolación, RdrBridge y los dos nuevos archivos de RemotePlayerManager.
+
+Hice una validación estructural adicional y corregí un error de llaves que apareció durante la integración. La estructura actual de ClientRuntime::update() ya está balanceada y no llama al viejo test remoto.
+
+No pude ejecutar la DLL con MSVC/RDR1 desde este entorno, así que el siguiente paso es compilar esta punta con Visual Studio 2026 y ejecutar dos clientes. El primer client.log nos tiene que permitir comprobar:
+
+player remoto detectado
+        ↓
+RemotePlayer creado
+        ↓
+ACTOR_MPPLAYER01 creado
+        ↓
+actorHandle válido
+        ↓
+movimiento del remoto
+        ↓
+desaparición/destrucción
+
+Después de esa ejecución, el client.log será la siguiente evidencia para ajustar el movimiento, la rotación y el ciclo de respawn.
+
+## Prompt:
+23/9/2026, 18:28:23
+
+error al buildear frontier_client.obj : error LNK2019: símbolo externo "public: __cdecl frontier::client::RemoteEntityInterpolator::Remot
+eEntityInterpolator(unsigned int,unsigned int)" (??0RemoteEntityInterpolator@client@frontier@@QEAA@II@Z) sin resolver a
+l que se hace referencia en la función "public: __cdecl frontier::client::RemotePlayerManager::RemotePlayerManager(void
+)" (??0RemotePlayerManager@client@frontier@@QEAA@XZ) [C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote
+-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\frontier_client.vcxproj]
+remote_player_manager.obj : error LNK2019: símbolo externo "public: void __cdecl frontier::client::RemoteEntityInterpol
+ator::push_snapshot(struct frontier::protocol::Snapshot const &)" (?push_snapshot@RemoteEntityInterpolator@client@front
+ier@@QEAAXAEBUSnapshot@protocol@3@@Z) sin resolver al que se hace referencia en la función "public: void __cdecl fronti
+er::client::RemotePlayerManager::on_snapshot(struct frontier::protocol::Snapshot const &,unsigned __int64)" (?on_snapsh
+ot@RemotePlayerManager@client@frontier@@QEAAXAEBUSnapshot@protocol@3@_K@Z) [C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Sou
+rce-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\frontier_client.vcxproj]
+remote_player_manager.obj : error LNK2019: símbolo externo "public: class std::optional__cdecl frontier::client::RemoteEntityInterpolator::sample(unsigned short,unsigned int)const " (?sample@Re
+moteEntityInterpolator@client@frontier@@QEBA?AV?$optional@UInterpolatedState@client@frontier@@@std@@GI@Z) sin resolver
+al que se hace referencia en la función "public: void __cdecl frontier::client::RemotePlayerManager::update(unsigned __
+int64,class frontier::game::RdrBridge &)" (?update@RemotePlayerManager@client@frontier@@QEAAX_KAEAVRdrBridge@game@3@@Z)
+ [C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\bui
+ld\vs2026-x64\frontier_client.vcxproj]
+remote_player_manager.obj : error LNK2019: símbolo externo "public: void __cdecl frontier::client::RemoteEntityInterpol
+ator::remove_player(unsigned short)" (?remove_player@RemoteEntityInterpolator@client@frontier@@QEAAXG@Z) sin resolver a
+l que se hace referencia en la función "private: void __cdecl frontier::client::RemotePlayerManager::remove_player(clas
+s std::_List_iterator<class std::_List_val<struct std::_List_simple_types<struct std::pair<unsigned short const ,struct
+ frontier::client::RemotePlayer> > > >,class frontier::game::RdrBridge &)" (?remove_player@RemotePlayerManager@client@f
+rontier@@AEAAXV?$_List_iterator@V?$_List_val@U?$_List_simple_types@U?$pair@$$CBGURemotePlayer@client@frontier@@@std@@@s
+td@@@std@@@std@@AEAVRdrBridge@game@3@@Z) [C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn
+-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\frontier_client.vcxproj]
+remote_player_manager.obj : error LNK2019: símbolo externo "public: void __cdecl frontier::client::RemoteEntityInterpol
+ator::clear(void)" (?clear@RemoteEntityInterpolator@client@frontier@@QEAAXXZ) sin resolver al que se hace referencia en
+ la función "public: void __cdecl frontier::client::RemotePlayerManager::clear(class frontier::game::RdrBridge &)" (?cl
+ear@RemotePlayerManager@client@frontier@@QEAAXAEAVRdrBridge@game@3@@Z) [C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-
+game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\frontier_client.vcxproj]
+C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build
+\vs2026-x64\bin\Release\FrontierClient.dll : fatal error LNK1120: 5 externos sin resolver [C:\Users\Alex\Desktop\Fronti
+er-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\frontier_client.
+vcxproj]
+
+## Response:
+23/9/2026, 18:28:25
+
+El error no está en RemotePlayerManager: el linker encuentra el header y el .obj, pero frontier_client no está enlazando la implementación de RemoteEntityInterpolator. Voy a verificar cómo está declarado y qué fuentes entran al target CMake, y corregirlo en la rama.
+
+Confirmado: client/src/interpolation.cpp está en los tests, pero quedó fuera de add_library(frontier_client SHARED ...). Por eso faltan exactamente los cinco símbolos que muestra LNK2019. Voy a añadir ese .cpp al target y dejar el commit en la rama.
+
+Inspeccionó y corrigió rutas de interpolación y configuración CMake
+
+Actualicé y verifiqué CMake para incluir interpolation.cpp
+
+Ha pensado durante 15s
+
+La causa quedó identificada y corregida.
+
+El LNK2019 no era un problema de implementación de RemoteEntityInterpolator. remote_player_manager.cpp la estaba usando correctamente, pero client/src/interpolation.cpp no estaba incluido en el target frontier_client del CMakeLists.txt. Por eso el linker no encontraba:
+
+RemoteEntityInterpolator::RemoteEntityInterpolator
+
+push_snapshot
+
+sample
+
+remove_player
+
+clear
+
+Añadí:
+
+client/src/interpolation.cpp
+
+al add_library(frontier_client SHARED ...).
+
+Commit aplicado en la rama:
+
+de72897f0c6db1f0c1dfbc86a96187b986ddd19f
+
+El bloque de CMake ahora contiene:
+
+add_library(frontier_client SHARED
+    client/src/frontier_client.cpp
+    client/src/client_runtime.cpp
+    client/src/network_client.cpp
+    client/src/interpolation.cpp
+    client/src/remote_player_manager.cpp
+    ...
+)
+
+Ahora deberías regenerar/rebuildar frontier_client con Visual Studio 2026. Ese LNK2019/LNK1120 concreto debería desaparecer.
+
+Puedo seguir con el siguiente error de compilación/link si aparece y corregirlo directamente en la rama.
+
+## Prompt:
+23/9/2026, 18:37:38
+
+ya buildeó https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.log
+
+Mirá acá te dejo un EJEMPLO EN LUA, de un resource que hice para RDRMP que incluye la CREACION DE UN ACTOR, QUIZAS algo te sirva, VOS MISMO MIRA SI ES UTIL PARA SABER ALGO O NO
+
+-- RDRMP Bounty Hunter Tester - client side
+
+-- Flow:
+--   /bounty_start [actor enum]
+--       -> spawn target near player
+--       -> target blip + sheriff blip
+--       -> target must actually be lassoed/hogtied
+--       -> return target alive to Armadillo Sheriff
+--       -> alive = full reward, dead = half reward
+
+-- Tester economy is local to the client and resets on resource restart.
+
+local TARGET_ENUM = 202 -- ACTOR_CAUCASIAN_MALE_TownFolk02
+local TARGET_NAME = "rdrmp_bounty_target"
+
+local FULL_REWARD = 1000
+local DEAD_REWARD = 500
+
+-- Armadillo Sheriff area used by RDRMP's stock freeroam resource.
+local SHERIFF_POS = vector3(-2175.0, 16.3, 2600.5)
+local SHERIFF_RADIUS = 45.0
+
+local SPAWN_DISTANCE = 15.0
+local SPAWN_SIDE_OFFSET = 3.0
+
+local bounty_actor = 0
+local bounty_blip = 0
+local sheriff_blip = 0
+local bounty_enum = nil
+
+local bounty_active = false
+local bounty_captured = false
+local bounty_finished = false
+local bounty_balance = 0
+
+local function valid_actor(actor)
+    return actor ~= nil and actor ~= 0 and natives.entity.is_actor_valid(actor)
+end
+
+local function local_message(text)
+    print("[rdrmp_bounty] " .. tostring(text))
+
+-- Use the game's own HUD text rather than depending on a server callback.
+natives.hud.print_small_b(tostring(text), 5000, true, 0, 0, 0, 0)
+
+end
+
+local function remove_blips()
+    if sheriff_blip ~= 0 and natives.hud.is_blip_valid(sheriff_blip) then
+        natives.hud.remove_blip(sheriff_blip)
+    end
+
+if bounty_blip ~= 0 and natives.hud.is_blip_valid(bounty_blip) then
+    natives.hud.remove_blip(bounty_blip)
+end
+
+sheriff_blip = 0
+bounty_blip = 0
+
+end
+
+local function destroy_bounty_actor()
+    if valid_actor(bounty_actor) then
+        natives.object.destroy_actor(bounty_actor)
+    end
+
+if bounty_enum ~= nil then
+    natives.stream.streaming_evict_actor(bounty_enum, -1)
+end
+
+bounty_actor = 0
+bounty_enum = nil
+
+end
+
+local function clear_bounty_local()
+    remove_blips()
+    destroy_bounty_actor()
+    bounty_active = false
+    bounty_captured = false
+    bounty_finished = false
+end
+
+local function create_target_blip(actor)
+    if not valid_actor(actor) then
+        return
+    end
+
+if bounty_blip ~= 0 and natives.hud.is_blip_valid(bounty_blip) then
+    natives.hud.remove_blip(bounty_blip)
+end
+
+bounty_blip = natives.hud.add_blip_for_actor(actor, 356, 0.0, 0, 0)
+
+natives.extended.ui_add_string("RDRMP_BOUNTY_TARGET", "Bounty Target")
+natives.hud.set_blip_name(bounty_blip, "RDRMP_BOUNTY_TARGET")
+natives.hud.set_blip_scale(bounty_blip, 0.9)
+
+end
+
+local function create_sheriff_blip()
+    if sheriff_blip ~= 0 and natives.hud.is_blip_valid(sheriff_blip) then
+        natives.hud.remove_blip(sheriff_blip)
+    end
+
+sheriff_blip = natives.hud.add_blip_for_coord(SHERIFF_POS, 396, 0.0, 2, 0)
+
+natives.extended.ui_add_string("RDRMP_BOUNTY_SHERIFF", "Armadillo Sheriff")
+natives.hud.set_blip_name(sheriff_blip, "RDRMP_BOUNTY_SHERIFF")
+natives.hud.set_blip_scale(sheriff_blip, 0.9)
+
+end
+
+local function spawn_position_from_player(player_actor)
+    local player_pos = natives.object.get_object_position(player_actor)
+    local player_heading = natives.object.get_object_heading(player_actor)
+    local radians = player_heading * (math.pi / 180.0)
+
+local forward = vector3(
+    -math.cos(radians),
+    0.0,
+    math.sin(radians)
+)
+
+local right = vector3(
+    math.sin(radians),
+    0.0,
+    math.cos(radians)
+)
+
+return player_pos + (forward * SPAWN_DISTANCE) + (right * SPAWN_SIDE_OFFSET)
+
+end
+
+local function spawn_target(actor_enum)
+    actor_enum = tonumber(actor_enum) or TARGET_ENUM
+
+clear_bounty_local()
+
+local player_actor = natives.actor.get_player_actor(-1)
+if not valid_actor(player_actor) then
+    local_message("El player actor todavía no es válido.")
+    return false
+end
+
+local enum_name = natives.object.get_actor_enum_string_from_enum(actor_enum)
+local_message("Generando objetivo " .. tostring(actor_enum) .. " (" .. tostring(enum_name) .. ").")
+
+if not natives.object.is_actorenum_installed(actor_enum) then
+    local_message("El actor enum no está instalado: " .. tostring(actor_enum))
+    return false
+end
+
+natives.stream.streaming_request_actor(actor_enum, true, false)
+
+local timeout = 10000
+local elapsed = 0
+
+while not natives.stream.streaming_is_actor_loaded(actor_enum, -1) and elapsed < timeout do
+    thread.wait(0)
+    elapsed = elapsed + 1
+end
+
+if not natives.stream.streaming_is_actor_loaded(actor_enum, -1) then
+    local_message("El asset del objetivo no terminó de cargar.")
+    return false
+end
+
+local position = spawn_position_from_player(player_actor)
+local heading = natives.object.get_object_heading(player_actor)
+local rotation = vector3(0.0, heading + 180.0, 0.0)
+
+local layout = natives.object.get_ambient_layout()
+bounty_actor = natives.object.create_actor_in_layout(
+    layout,
+    TARGET_NAME,
+    actor_enum,
+    position,
+    rotation
+)
+
+bounty_enum = actor_enum
+
+if not valid_actor(bounty_actor) then
+    local_message("create_actor_in_layout devolvió un actor inválido.")
+    clear_bounty_local()
+    return false
+end
+
+-- Target must remain killable so the dead payout can be tested.
+natives.tasks.task_stand_still(bounty_actor, -1.0, 0, 0)
+
+create_target_blip(bounty_actor)
+create_sheriff_blip()
+
+bounty_active = true
+bounty_captured = false
+bounty_finished = false
+
+local_message("Objetivo creado cerca del jugador.")
+local_message("Capturalo con el LASSO. La proximidad sola NO cuenta.")
+local_message("Llevalo al Sheriff de Armadillo.")
+local_message("Vivo: $" .. tostring(FULL_REWARD) .. " | Muerto: $" .. tostring(DEAD_REWARD))
+
+return true
+
+end
+
+local function target_is_lassoed_by_player(player_actor, target_actor)
+    if not valid_actor(player_actor) or not valid_actor(target_actor) then
+        return false
+    end
+
+local lasso_target = natives.lasso.get_lasso_target(player_actor)
+if lasso_target == target_actor then
+    return true
+end
+
+local lasso_user = natives.lasso.get_lasso_user(target_actor)
+if lasso_user == player_actor then
+    return true
+end
+
+local hogtie_master = natives.lasso.get_hogtied_master(target_actor)
+if hogtie_master == player_actor then
+    return true
+end
+
+return false
+
+end
+
+local function target_and_player_at_sheriff(player_actor, target_actor)
+    if not valid_actor(player_actor) or not valid_actor(target_actor) then
+        return false
+    end
+
+local player_pos = natives.object.get_object_position(player_actor)
+local target_pos = natives.object.get_object_position(target_actor)
+
+return vector3.distance(player_pos, SHERIFF_POS) <= SHERIFF_RADIUS
+   and vector3.distance(target_pos, SHERIFF_POS) <= SHERIFF_RADIUS
+
+end
+
+local function finish_bounty(outcome)
+    if not bounty_active or bounty_finished then
+        return
+    end
+
+bounty_finished = true
+bounty_active = false
+
+local amount = 0
+
+if outcome == "alive" then
+    if not bounty_captured then
+        bounty_finished = false
+        bounty_active = true
+        return
+    end
+
+    amount = FULL_REWARD
+elseif outcome == "dead" then
+    amount = DEAD_REWARD
+else
+    bounty_finished = false
+    bounty_active = true
+    return
+end
+
+bounty_balance = bounty_balance + amount
+
+if outcome == "alive" then
+    local_message("ENTREGA COMPLETADA: +$" .. tostring(amount) .. ".")
+else
+    local_message("OBJETIVO MUERTO: +$" .. tostring(amount) .. " (50%).")
+end
+
+local_message("Saldo tester: $" .. tostring(bounty_balance))
+
+if outcome == "dead" then
+    thread.create(function()
+        thread.wait(3000)
+        clear_bounty_local()
+    end)
+else
+    clear_bounty_local()
+end
+
+end
+
+-- Server command bridge events. These handlers do not rely on any server-local
+-- mission table, global state or function upvalues.
+event.register("rdrmp_bounty:command_start")
+event.add_handler("rdrmp_bounty:command_start", function(_args)
+    spawn_target(_args)
+end)
+
+event.register("rdrmp_bounty:command_clear")
+event.add_handler("rdrmp_bounty:command_clear", function()
+    clear_bounty_local()
+    local_message("Cazarrecompensas cancelado.")
+end)
+
+event.register("rdrmp_bounty:command_balance")
+event.add_handler("rdrmp_bounty:command_balance", function()
+    local_message("Saldo tester de cazarrecompensas: $" .. tostring(bounty_balance))
+end)
+
+event.register("core:on_resource_stop")
+event.add_handler("core:on_resource_stop", function(name)
+    if name == CURRENT_RESOURCE_NAME then
+        clear_bounty_local()
+    end
+end)
+
+thread.create(function()
+    while true do
+        if bounty_active and valid_actor(bounty_actor) and not bounty_finished then
+            local player_actor = natives.actor.get_player_actor(-1)
+
+if valid_actor(player_actor) then
+            -- Dead bounty: immediate half reward, no lasso requirement.
+            if natives.health.is_actor_dead(bounty_actor) then
+                finish_bounty("dead")
+            else
+                -- Alive bounty: first prove the target was actually lassoed.
+                if not bounty_captured and target_is_lassoed_by_player(player_actor, bounty_actor) then
+                    bounty_captured = true
+                    local_message("Objetivo capturado con LASSO.")
+                end
+
+                -- Alive payout requires both player and target inside the sheriff area.
+                if bounty_captured and target_and_player_at_sheriff(player_actor, bounty_actor) then
+                    finish_bounty("alive")
+                end
+            end
+        end
+    end
+
+    thread.wait(0)
+end
+
+end)
+
+[Attachment: Pegado text(20260923-213721).txt]
+
+## Response:
+23/9/2026, 18:37:39
+
+Sí: el Lua es útil, sobre todo porque confirma una secuencia de creación más completa que nuestro C++ actual: comprobar enum instalado, pedir streaming, esperar streaming_is_actor_loaded, usar get_ambient_layout, crear actor y después operar sobre el actor válido. Primero voy a cruzarlo con client.log y con nuestro RdrBridge actual.
+
+Encontré un dato más importante que el streaming: el trace nativo revela cómo se empaqueta la rotación de CREATE_ACTOR_IN_LAYOUT. Nuestro C++ actual está metiendo yaw en args[6], pero el trace de RDRMP muestra que el heading va en el componente Y dentro de args[5]. Eso sí merece corregirse antes de probar dos clientes.
+
+Voy a aplicar solo lo que está respaldado por evidencia concreta del resource/log: validación del enum, espera mediante STREAMING_IS_ACTOR_LOADED, reutilización de AmbientMissions_Layout y corrección del empaquetado de heading. No voy a tocar todavía la lectura de yaw del player porque esa parte aún no está demostrada.
+
+Localizando registros relevantes
+
+Voy a revisar el archivo indicado y filtrar únicamente las líneas relacionadas con actores remotos, manteniendo el análisis centrado en los registros críticos y evitando reproducir información innecesaria.
+
+Localizaste registros relevantes
+
+Inspeccionó registros y código, filtró eventos y mejoró aparición remota
+
+Corregí el empaquetado de rotación y spawn de actores remotos
+
+Implementado y optimizado el spawn remoto de actores
+
+Ha pensado durante 1m 27s
+
+Sí, el ejemplo de Lua fue útil. Y además el client.log nos dio una pista adicional bastante importante.
+
+Qué muestra realmente el client.log
+
+El build cargó correctamente y el cliente llegó a estado activo. También logró leer el actor local y empezar la replicación:
+
+[FrontierClient] local-player state replication active ...
+[FrontierClient] local-player ready chain ...
+[FrontierSession] state=active ... localPlayer=1
+
+Pero este log es de un solo cliente: los 648 snapshots registrados tienen players=1. Por eso aparece siempre:
+
+remoteEntities=0
+
+y no hay ninguna llamada a:
+
+STREAMING_REQUEST_ACTOR
+STREAMING_IS_ACTOR_LOADED
+
+ni ningún [FrontierRemotePlayer] spawned.
+
+O sea: todavía no probamos el camino RemotePlayer real. El runtime llegó correctamente hasta el punto donde debería funcionar, pero no había otro jugador remoto que disparara el spawn.
+
+Qué aprendimos del Lua
+
+El resource hace esta secuencia:
+
+Verifica que el actor enum esté instalado.
+
+STREAMING_REQUEST_ACTOR(...).
+
+Espera hasta STREAMING_IS_ACTOR_LOADED(...).
+
+Obtiene el ambient layout.
+
+Llama CREATE_ACTOR_IN_LAYOUT.
+
+Verifica que el Actor sea válido. Pegado text.txt
+
+Eso confirma que nuestro flujo anterior estaba incompleto: pedíamos el streaming y acto seguido intentábamos crear el actor sin comprobar que el asset hubiese terminado de cargar.
+
+Además, el resource obtiene el heading del actor y construye explícitamente una rotación vector3(0, heading + 180.0, 0). Pegado text.txt Pegado text.txt
+
+Encontré además un detalle importante en nuestro C++
+
+El tracer del juego muestra que CREATE_ACTOR_IN_LAYOUT recibe la rotación como:
+
+orient=(0, -141.848999, 0)
+
+y los argumentos crudos corresponden al heading dentro del componente Y del Vector3.
+
+Nuestro código estaba haciendo conceptualmente:
+
+args[5] = pack_vec2(0.0f, 0.0f);
+args[6] = float_bits(spawnState.yaw);
+
+Eso no correspondía con el layout observado.
+
+Lo corregí a:
+
+args[5] = pack_vec2(spawnState.yaw, 0.0f);
+args[6] = float_bits(0.0f);
+
+Cambios que ya dejé aplicados
+
+En rdr_bridge.cpp ahora el spawn:
+
+IS_ACTORENUM_INSTALLED
+        ↓
+STREAMING_REQUEST_ACTOR
+        ↓
+STREAMING_IS_ACTOR_LOADED
+        ↓
+AmbientMissions_Layout
+        ↓
+CREATE_ACTOR_IN_LAYOUT
+        ↓
+IS_ACTOR_VALID
+        ↓
+GET_ACTOR_ENUM
+
+Además, intenta primero reutilizar AmbientMissions_Layout, que es lo que usa el resource probado, y mantiene el layout dedicado como fallback.
+
+Commit actual:
+
+7bbc7aa8fb868b0c8fb1a0f80b3331876802f448
+
+Una limitación que todavía queda
+
+El PlayerState::yaw todavía no se está obteniendo del actor local. Actualmente la posición sí se lee, pero el yaw no se rellena, por lo que seguirá llegando como 0 hasta que implementemos esa lectura.
+
+No lo toqué todavía porque el ejemplo demuestra que el juego usa heading en grados, pero todavía no tenemos identificada con seguridad la ubicación de ese heading en nuestra cadena de memoria local.
+
+Próxima prueba que corresponde
+
+Ahora sí hay que ejecutar dos clientes simultáneamente. En el log del cliente A deberíamos buscar algo de este estilo:
+
+snapshot ... players=2 remoteEntities=1
+[FrontierRemotePlayer] spawned playerId=2 ...
+
+y después llamadas de actualización del actor. En el cliente B debería ocurrir lo mismo con playerId=1.
+
+Este es el punto donde vamos a saber si CREATE_ACTOR_IN_LAYOUT con ACTOR_MPPLAYER01 produce finalmente el actor remoto visible en pantalla.
+
+## Prompt:
+23/9/2026, 18:45:13
+
+como hago si lo quiero probar yo solo? no pùedo abrir dos clientes
+
+## Response:
+23/9/2026, 18:45:25
+
+No necesitás dos clientes para probar la parte crítica. Podemos agregar un modo de prueba local que inyecte un playerId=2 ficticio en el cliente, usando la posición real del jugador y dejando todo el resto del RemotePlayerManager intacto.
+
+Además, conviene que el modo solo pruebe el mismo camino real: un Snapshot falso con el mismo serverTick, no un spawn separado. Así probamos interpolación, creación, teleport y destrucción sin falsear el flujo del manager.
+
+Diseñando una prueba local
+
+Propongo añadir un modo de depuración activable por variable de entorno que genere un jugador remoto sintético con una posición ligeramente desplazada respecto al jugador local. Así puedo probar interpolación, renderizado, chat y desconexión sin abrir un segundo cliente.
+
+Diseñaste una prueba local
+
+Implementó prueba de actor remoto con definiciones del protocolo Frontier
+
+Decodificando coordenadas del mundo de Red Dead
+
+Afinando el modo de prueba
+
+Voy a generar un actor remoto sintético que orbite cerca del jugador local, ajustando posición, velocidad y orientación. También estoy comprobando las unidades de rotación para evitar saltos al cruzar el límite de 360 grados.
+
+Ajustado el modo de prueba
+
+Decodificadas coordenadas del mundo de Red Dead
+
+Implementada inyección sintética de jugador remoto y corregido el delta de yaw
+
+Ha pensado durante 1m 35s
+
+Sí. Para probarlo solo, agregué un modo de RemotePlayer sintético local que no necesita un segundo cliente.
+
+Cómo activarlo
+
+Después de recompilar la DLL actualizada, definí esta variable antes de lanzar el juego:
+
+PowerShell
+
+$env:FRONTIER_REMOTE_TEST="1"
+.\FrontierMP.exe
+
+CMD
+
+set FRONTIER_REMOTE_TEST=1
+FrontierMP.exe
+
+Si usás Visual Studio, podés poner:
+
+FRONTIER_REMOTE_TEST=1
+
+en las variables de entorno del perfil de Debug/launch. El launcher heredará esa variable al proceso del juego.
+
+Qué hace
+
+Cuando llega un snapshot normal del servidor con tu jugador:
+
+players=1
+
+el cliente agrega localmente un segundo PlayerState ficticio:
+
+playerId = 65000
+
+Ese actor:
+
+aparece a unos 4 metros de tu personaje;
+
+orbita alrededor tuyo;
+
+tiene velocidad sintética;
+
+cambia de heading;
+
+entra por el mismo RemotePlayerManager;
+
+usa el mismo spawn_remote_actor();
+
+pasa por IS_ACTORENUM_INSTALLED;
+
+STREAMING_REQUEST_ACTOR;
+
+STREAMING_IS_ACTOR_LOADED;
+
+CREATE_ACTOR_IN_LAYOUT;
+
+IS_ACTOR_VALID;
+
+GET_ACTOR_ENUM;
+
+luego recibe TELEPORT_ACTOR_WITH_HEADING;
+
+y cuando termina la sesión, se destruye mediante el mismo lifecycle normal.
+
+Además corregí yaw_delta() para tratar el heading como grados 0–360, consistente con el get_object_heading() del resource Lua que mostraste.
+
+Qué deberías ver en client.log
+
+Al activarlo, debería aparecer algo parecido a:
+
+[FrontierClient] solo remote-player test enabled
+[FrontierClient] snapshot tick=... players=2 remoteEntities=1
+[FrontierRemotePlayer] spawned playerId=65000 actorRef=... actorHandle=...
+
+Y después deberían aparecer actualizaciones del actor mientras el fake player orbita.
+
+La prueba distingue muy bien los problemas:
+
+players=2 remoteEntities=1
+
+pero sin spawned → problema en RdrBridge/native creation.
+
+spawned
+
+pero el actor no aparece → problema de creación/asset/layout/render.
+
+spawned + update failed
+
+→ problema de TELEPORT_ACTOR_WITH_HEADING.
+
+Qué NO prueba
+
+Esto no prueba todavía la replicación entre dos clientes. El servidor sigue teniendo un solo jugador real; el player 65000 existe solamente dentro del cliente de prueba.
+
+Sí prueba la parte que ahora necesitamos verificar más urgentemente: que ACTOR_MPPLAYER01 pueda crearse como actor remoto válido y luego moverse correctamente.
+
+Los cambios del modo solo ya quedaron en la rama, junto con la corrección del heading. Necesitás recompilar frontier_client antes de probarlo.
+
+## Prompt:
+23/9/2026, 18:57:57
+
+no entiendo, como debo ejecutar el cliente entonces?
+
+## Response:
+23/9/2026, 18:57:59
+
+Claro. En tu caso no tenés que abrir un programa especial de “cliente”; tenés que lanzar el juego normalmente, pero con FRONTIER_REMOTE_TEST=1 definido. Voy a verificar el launcher del repo para darte los pasos exactos con tu estructura actual.
+
+Inspeccionando la herencia de variables del launcher
+
+Ha pensado durante 6s
+
+Sí. Con tu proyecto actual, hacelo así:
+
+1. Recompilá
+
+En Developer PowerShell for VS 2026:
+
+cd "C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source"
+.\scripts_build_vs2026.bat
+
+Tiene que terminar generando:
+
+build\vs2026-x64\bin\Release\FrontierMP.exe
+build\vs2026-x64\bin\Release\FrontierClient.dll
+
+2. Arrancá el servidor
+
+En otra consola:
+
+cd "C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source"
+.\build\vs2026-x64\bin\Release\frontier_server.exe
+
+Dejalo abierto.
+
+3. Activá el modo de prueba
+
+Abrí otra PowerShell y ejecutá:
+
+$env:FRONTIER_REMOTE_TEST="1"
+
+Esa variable queda activa solamente en esa ventana.
+
+4. Desde esa misma ventana, ejecutá el launcher
+
+.\build\vs2026-x64\bin\Release\FrontierMP.exe
+
+El launcher te va a preguntar:
+
+Enter the full path to RDR.exe:
+
+Poné la ruta de tu RDR.exe, por ejemplo:
+
+C:\...\Red Dead Redemption\RDR.exe
+
+Después:
+
+Player name [Player]:
+
+Poné, por ejemplo:
+
+Alex
+
+y Enter.
+
+El launcher crea el proceso de RDR, inyecta FrontierClient.dll y le pasa las variables de entorno. El launcher actual conserva las demás variables del proceso, así que FRONTIER_REMOTE_TEST=1 llega al cliente. Pegado text.txt
+
+5. Entrá al juego
+
+No necesitás hacer nada especial dentro del juego.
+
+El servidor te asignará tu playerId real.
+
+Cuando el cliente esté activo, el código de prueba genera automáticamente un jugador ficticio:
+
+playerId = 65000
+
+alrededor de tu personaje.
+
+En el client.log deberías empezar a ver:
+
+[FrontierClient] solo remote-player test enabled
+
+después:
+
+[FrontierClient] snapshot ... players=2 remoteEntities=1
+
+y finalmente:
+
+[FrontierRemotePlayer] spawned playerId=65000 ...
+
+6. Dónde mirar el resultado
+
+El log está acá:
+
+%LOCALAPPDATA%\FrontierMP\logs\client.log
+
+Normalmente:
+
+C:\Users\Alex\AppData\Local\FrontierMP\logs\client.log
+
+Después de probarlo, pasame ese client.log. Ahí podemos determinar exactamente si falló:
+
+STREAMING_REQUEST_ACTOR → STREAMING_IS_ACTOR_LOADED → CREATE_ACTOR_IN_LAYOUT → IS_ACTOR_VALID → GET_ACTOR_ENUM → TELEPORT_ACTOR_WITH_HEADING.
+
+Importante: no uses scripts_run_frontier.bat para esta prueba a menos que antes hagas:
+
+set FRONTIER_REMOTE_TEST=1
+
+en esa misma consola. El .bat normal solamente ejecuta FrontierMP.exe; no tiene todavía un menú para activar el modo de prueba.
+
+
+
+Powered by ChatGPT Exporter (https://www.chatgptexporter.com)
