@@ -1646,17 +1646,21 @@ void StartupNativeTracer::get_player_actor_hook(void* context) {
         bool loaded = false;
         std::uint32_t loadedArg = 0u;
         if (streamingIsActorLoaded) {
-            // Public RDR1 native headers expose STREAMING_IS_ACTOR_LOADED
-            // as a single ActorModel argument. Keep this probe to the
-            // canonical one-argument call and do not gate player creation
-            // on it; CREATE_PLAYER_ACTOR_IN_LAYOUT is the actual test.
-            args[0] = 837u;
-            std::uintptr_t loadedResult = 0;
-            if (invoke_handler_in_existing_context(
-                    streamingIsActorLoaded, context, args, 1u, loadedResult) &&
-                loadedResult != 0u) {
-                loaded = true;
-                loadedArg = 0u;
+            // RDR1/RDRMP exposes STREAMING_IS_ACTOR_LOADED(Model, unk).
+            // Probe the known second-argument candidates while keeping the
+            // result diagnostic-only for the player-creation experiment.
+            const std::uint32_t probes[] = {0u, 1u, 0xFFFFFFFFu};
+            for (const auto probeArg : probes) {
+                args[0] = 837u;
+                args[1] = probeArg;
+                std::uintptr_t loadedResult = 0;
+                if (invoke_handler_in_existing_context(
+                        streamingIsActorLoaded, context, args, 2u, loadedResult) &&
+                    loadedResult != 0u) {
+                    loaded = true;
+                    loadedArg = probeArg;
+                    break;
+                }
             }
         }
 
