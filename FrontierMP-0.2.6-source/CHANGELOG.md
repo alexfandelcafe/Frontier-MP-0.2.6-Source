@@ -1,3 +1,10 @@
+## 0.2.32
+
+- Clarified local-player chain diagnostics so null actor-component and transform pointers are reported as pending lifecycle state rather than unreadable memory.
+- Include local-player, actor-manager, GUID, slot, and actor addresses in the pending actor-component diagnostic.
+- Include local-player context in non-null actor-component and transform diagnostics.
+- No local-player resolution criteria or memory offsets were changed.
+
 ## 0.2.6
 
 - Hardened native registration-table discovery: inspect all registration-pattern matches instead of trusting the first hit.
