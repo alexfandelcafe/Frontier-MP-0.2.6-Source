@@ -185,6 +185,32 @@ std::uintptr_t read_u64_arg_value(void* context, std::uint32_t index) {
 
 
 
+bool read_c_string_pointer(std::uintptr_t pointer, char* out, std::size_t capacity) {
+    if (!out || capacity == 0 || pointer == 0) return false;
+    out[0] = '\0';
+
+#ifdef _WIN32
+    __try {
+        const auto* source = reinterpret_cast<const char*>(pointer);
+        for (std::size_t i = 0; i + 1 < capacity; ++i) {
+            const char ch = source[i];
+            if (ch == '\0') return true;
+            if (static_cast<unsigned char>(ch) < 0x20u || static_cast<unsigned char>(ch) > 0x7Eu) {
+                return false;
+            }
+            out[i] = ch;
+        }
+        out[capacity - 1] = '\0';
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        out[0] = '\0';
+        return false;
+    }
+#else
+    return false;
+#endif
+}
+
 bool read_c_string(void* context, std::uint32_t index, char* out, std::size_t capacity) {
     if (!out || capacity == 0) return false;
     out[0] = '\0';
@@ -1475,7 +1501,7 @@ void StartupNativeTracer::create_actor_in_layout_hook(void* context) {
 #endif
 
     char layoutName[160]{};
-    const bool layoutNameOk = read_c_string_value(preA1, layoutName, sizeof(layoutName));
+    const bool layoutNameOk = read_c_string_pointer(preA1, layoutName, sizeof(layoutName));
 
     char buffer[960]{};
     std::size_t used = static_cast<std::size_t>(std::snprintf(
