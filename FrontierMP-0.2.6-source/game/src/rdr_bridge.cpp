@@ -600,6 +600,7 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                         // Internal actor offsets and manager slots are intentionally not used as
                         // authoritative evidence until the scalar actor-native validation succeeds.
                     }
+                }
             } else {
                 std::fprintf(stderr,
                              "[FrontierRemoteActor] layout invalid name=%s id=0x%08X\\n",
