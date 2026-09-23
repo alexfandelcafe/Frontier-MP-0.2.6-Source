@@ -1,5 +1,9 @@
 ## 0.2.33
 
+- Fixed MSVC C2712 by moving all local-player guarded SEH reads out of the C++ member function and into trivial helper functions.
+- Use guarded memcpy for the transform position read.
+- Preserved all local-player diagnostics, offsets, and readiness behavior.
+
 - Record the complete local-player pointer chain when state replication first becomes ready.
 - Log the GUID, actor-manager slot, actor, actor-component, and transform addresses at successful resolution.
 - No local-player offsets, readiness criteria, or runtime-state behavior were changed.
