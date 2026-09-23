@@ -1,3 +1,9 @@
+## 0.2.39
+
+- Added passive tracing for CREATE_LAYOUT, FIND_NAMED_LAYOUT, and IS_LAYOUTREF_VALID.
+- Record layout names and returned layout handles to establish a known-good Layout for remote actor creation.
+- Keep layout tracing optional; no layout or actor is created by Frontier.
+
 ## 0.2.38
 
 - Extend CREATE_ACTOR_IN_LAYOUT tracing with all seven raw arguments.
