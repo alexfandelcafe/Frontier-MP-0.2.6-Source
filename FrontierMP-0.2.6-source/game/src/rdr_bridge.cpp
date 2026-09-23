@@ -31,6 +31,9 @@ constexpr std::uint32_t kNativeCreateLayout = 0x6CA53214;
 constexpr std::uint32_t kNativeIsLayoutRefValid = 0xFC8E55ED;
 constexpr std::uint32_t kNativeCreateActorInLayout = 0x8D67F397;
 constexpr std::uint32_t kNativeGetActorEnum = 0x0B28E9EC;
+constexpr std::uint32_t kNativeGetActorSlot = 0xAABF3356;
+constexpr std::uint32_t kNativeGetSlotActor = 0xDB9B49D8;
+constexpr std::uint32_t kNativeGetActorPosition = 0x99BD9D6F;
 constexpr std::uintptr_t kTaggedLayoutRef = 0x100000000ull;
 constexpr std::int32_t kRemoteTestActorEnum = 0;
 
@@ -525,6 +528,46 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                                           x, y, z);
                             write_bridge_log_line(buffer);
                         }
+
+                        // Validate the returned handle through public actor/slot natives
+                        // before using any internal actor layout assumptions.
+                        args[0] = actorRef;
+                        result = 0;
+                        const bool slotNativeOk =
+                            nativeInvoker_.invoke_raw(kNativeGetActorSlot, args, 1u, result);
+                        const std::uint32_t nativeSlot = static_cast<std::uint32_t>(result);
+
+                        std::uintptr_t slotActorRef = 0;
+                        bool slotActorNativeOk = false;
+                        if (slotNativeOk) {
+                            args[0] = static_cast<std::uintptr_t>(nativeSlot);
+                            slotActorNativeOk =
+                                nativeInvoker_.invoke_raw(kNativeGetSlotActor, args, 1u, slotActorRef);
+                        }
+
+                        Vec3 nativePosition{};
+                        args[0] = actorRef;
+                        args[1] = reinterpret_cast<std::uintptr_t>(&nativePosition);
+                        result = 0;
+                        const bool positionNativeOk =
+                            nativeInvoker_.invoke_raw(kNativeGetActorPosition, args, 2u, result);
+
+                        char nativeBuffer[520]{};
+                        std::snprintf(nativeBuffer, sizeof(nativeBuffer),
+                                      "[FrontierRemoteActor] native-check actorRef=0x%llX actorHandle=0x%08X "
+                                      "getActorSlot=%u slot=0x%08X getSlotActor=%u slotActor=0x%llX "
+                                      "getPosition=%u position=(%.3f,%.3f,%.3f)",
+                                      static_cast<unsigned long long>(actorRef),
+                                      actorHandle,
+                                      slotNativeOk ? 1u : 0u,
+                                      nativeSlot,
+                                      slotActorNativeOk ? 1u : 0u,
+                                      static_cast<unsigned long long>(slotActorRef),
+                                      positionNativeOk ? 1u : 0u,
+                                      nativePosition.x,
+                                      nativePosition.y,
+                                      nativePosition.z);
+                        write_bridge_log_line(nativeBuffer);
 
                         // First hypothesis for ActorRef -> internal actor mapping:
                         // use the low 16 bits as the actor-manager slot index, matching
