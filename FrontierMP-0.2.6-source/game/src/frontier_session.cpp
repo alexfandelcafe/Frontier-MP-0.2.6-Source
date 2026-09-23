@@ -23,6 +23,9 @@ const char* state_name(FrontierSessionState state) {
 void FrontierSession::reset() {
     runtime_ = {};
     lastLogMs_ = 0;
+    worldLoadedTrueStreak_ = 0;
+    worldLoadedFalseStreak_ = 0;
+    worldLoadedStable_ = false;
 }
 
 bool FrontierSession::update(RdrBridge& bridge, std::string& logLine) {
@@ -73,9 +76,32 @@ bool FrontierSession::update(RdrBridge& bridge, std::string& logLine) {
     next.simulateStartMultiplayer = simulateMp;
     next.startPositionFromCommandLine = startPosCommandLine;
 
+    if (worldLoadedKnown) {
+        if (worldLoaded) {
+            ++worldLoadedTrueStreak_;
+            worldLoadedFalseStreak_ = 0;
+            if (!worldLoadedStable_ &&
+                worldLoadedTrueStreak_ >= kWorldLoadedAcquireSamples) {
+                worldLoadedStable_ = true;
+            }
+        } else {
+            ++worldLoadedFalseStreak_;
+            worldLoadedTrueStreak_ = 0;
+            if (worldLoadedStable_ &&
+                worldLoadedFalseStreak_ >= kWorldLoadedLossSamples) {
+                worldLoadedStable_ = false;
+            }
+        }
+    } else {
+        worldLoadedTrueStreak_ = 0;
+        worldLoadedFalseStreak_ = 0;
+    }
+
+    next.worldLoadedStable = worldLoadedStable_;
+
     if (gameState < 0 || !worldLoadedKnown) {
         next.state = FrontierSessionState::RuntimeQueryFailed;
-    } else if (!worldLoaded) {
+    } else if (!worldLoadedStable_) {
         next.state = FrontierSessionState::Frontend;
     } else {
         next.state = FrontierSessionState::WaitingForLocalPlayer;
@@ -92,6 +118,7 @@ bool FrontierSession::update(RdrBridge& bridge, std::string& logLine) {
     const bool changed = next.state != runtime_.state ||
                          next.gameState != runtime_.gameState ||
                          next.worldLoaded != runtime_.worldLoaded ||
+                         next.worldLoadedStable != runtime_.worldLoadedStable ||
                          next.simulateStartMultiplayer != runtime_.simulateStartMultiplayer ||
                          next.startPositionFromCommandLine != runtime_.startPositionFromCommandLine ||
                          next.localPlayerReady != runtime_.localPlayerReady;
@@ -103,6 +130,7 @@ bool FrontierSession::update(RdrBridge& bridge, std::string& logLine) {
         logLine += state_name(runtime_.state);
         logLine += " gameState=" + std::to_string(runtime_.gameState);
         logLine += " worldLoaded=" + std::to_string(runtime_.worldLoaded ? 1 : 0);
+        logLine += " stableWorldLoaded=" + std::to_string(runtime_.worldLoadedStable ? 1 : 0);
         logLine += " simulateStartMultiplayer=" + std::to_string(runtime_.simulateStartMultiplayer ? 1 : 0);
         logLine += " startPosCommandLine=" + std::to_string(runtime_.startPositionFromCommandLine ? 1 : 0);
         logLine += " localPlayer=" + std::to_string(runtime_.localPlayerReady ? 1 : 0);
