@@ -423,7 +423,7 @@ bool NativeInvoker::invoke_u32(std::uint32_t hash, std::uint32_t& out) const {
     context.dataCount = 0;
 
     if (!invoke_handler_guarded(handler, &context)) return false;
-    return guarded_copy(&returnValue, &out, sizeof(out));
+    return guarded_copy(context.stack, &out, sizeof(out));
 #else
     (void)hash;
     out = 0;
