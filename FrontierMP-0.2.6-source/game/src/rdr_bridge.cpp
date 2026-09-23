@@ -407,6 +407,16 @@ bool RdrBridge::read_local_player_state(PlayerState& outState, std::string& erro
         return false;
     }
 
+    if (guid == 0) {
+        char buffer[288]{};
+        std::snprintf(buffer, sizeof(buffer),
+                      "local player identity pending local=0x%llX manager=0x%llX guid=0x00000000",
+                      static_cast<unsigned long long>(localPlayer),
+                      static_cast<unsigned long long>(managerSlots));
+        error = buffer;
+        return false;
+    }
+
     const auto actorSlotAddress = managerSlots +
         (static_cast<std::uintptr_t>(static_cast<std::uint16_t>(guid)) * 0x10u);
     std::uintptr_t actor = 0;
