@@ -44,6 +44,7 @@ std::uint32_t gGetLocalSlotTraceCount = 0;
 std::uint32_t gIsSlotValidTraceCount = 0;
 bool gRemotePlayerProbeSpawned = false;
 bool gRemotePlayerProbeRequested = false;
+std::uint32_t gRemotePlayerProbePlayerLayoutId = 0u;
 float gRemotePlayerProbeX = 0.0f;
 float gRemotePlayerProbeY = 0.0f;
 float gRemotePlayerProbeZ = 0.0f;
@@ -1500,6 +1501,7 @@ void StartupNativeTracer::create_player_actor_in_layout_hook(void* context) {
     if (actorNameOk &&
         std::strcmp(actorName, "player") == 0 &&
         static_cast<std::uint32_t>(preA2) == 0u) {
+        gRemotePlayerProbePlayerLayoutId = static_cast<std::uint32_t>(preA0);
         const auto posXYLow = static_cast<std::uint32_t>(preA3);
         const auto posXYHigh = static_cast<std::uint32_t>(preA3 >> 32u);
         const auto posZRaw = static_cast<std::uint32_t>(preA4);
@@ -1603,27 +1605,15 @@ void StartupNativeTracer::get_player_actor_hook(void* context) {
     log(buffer);
 
     if (!gRemotePlayerProbeSpawned && playerOk && player > 0 && tracer->originalCreatePlayerActorInLayout_) {
-        char layoutName[] = "PlayerLayout";
         char actorName[] = "FrontierRemoteTest";
         std::uintptr_t args[8]{};
         std::uintptr_t nativeResult = 0;
 
-        args[0] = reinterpret_cast<std::uintptr_t>(layoutName);
-        std::uintptr_t layoutResult = 0;
-        bool layoutOk = false;
-        if (tracer->originalFindNamedLayout_) {
-            layoutOk = invoke_handler_in_existing_context(
-                tracer->originalFindNamedLayout_, context, args, 1u, layoutResult);
-        }
-
-        std::uint32_t layoutId = layoutOk ? static_cast<std::uint32_t>(layoutResult) : 0u;
-        if (layoutId == 0u && tracer->originalCreateLayout_) {
-            args[0] = reinterpret_cast<std::uintptr_t>(layoutName);
-            layoutResult = 0;
-            layoutOk = invoke_handler_in_existing_context(
-                tracer->originalCreateLayout_, context, args, 1u, layoutResult);
-            if (layoutOk) layoutId = static_cast<std::uint32_t>(layoutResult);
-        }
+        // Reuse the exact PlayerLayout handle supplied by the game's own
+        // CREATE_PLAYER_ACTOR_IN_LAYOUT call. Do not call FIND/CREATE_LAYOUT
+        // through the synthetic argument buffer here; that path previously
+        // returned 0 and caused a duplicate layout to be created.
+        const std::uint32_t layoutId = gRemotePlayerProbePlayerLayoutId;
 
         bool layoutValid = false;
         if (layoutId != 0u && tracer->originalIsLayoutrefValid_) {
