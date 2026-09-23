@@ -254,23 +254,23 @@ bool RdrBridge::read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bo
         const bool submitted = gameThreadDispatcher_.submit(
             [this]() {
                 RuntimeSnapshot refreshed{};
-                refreshed.gameState = -1;
+                std::uint32_t value = 0;
 
-                if (nativeInvoker_.invoke_u32(kNativeGetGameState,
-                                              reinterpret_cast<std::uint32_t&>(refreshed.gameState))) {
+                if (nativeInvoker_.invoke_u32(kNativeGetGameState, value)) {
                     refreshed.gameStateKnown = true;
+                    refreshed.gameState = static_cast<std::int32_t>(value);
                 }
-                if (nativeInvoker_.invoke_u32(kNativeStreamingIsWorldLoaded,
-                                              reinterpret_cast<std::uint32_t&>(refreshed.worldLoaded))) {
+                if (nativeInvoker_.invoke_u32(kNativeStreamingIsWorldLoaded, value)) {
                     refreshed.worldLoadedKnown = true;
+                    refreshed.worldLoaded = value != 0;
                 }
-                if (nativeInvoker_.invoke_u32(kNativeIsSimulateStartMultiplayer,
-                                              reinterpret_cast<std::uint32_t&>(refreshed.simulateStartMultiplayer))) {
+                if (nativeInvoker_.invoke_u32(kNativeIsSimulateStartMultiplayer, value)) {
                     refreshed.simulateStartMultiplayerKnown = true;
+                    refreshed.simulateStartMultiplayer = value != 0;
                 }
-                if (nativeInvoker_.invoke_u32(kNativeIsStartPosInCommandLine,
-                                              reinterpret_cast<std::uint32_t&>(refreshed.startPosCommandLine))) {
+                if (nativeInvoker_.invoke_u32(kNativeIsStartPosInCommandLine, value)) {
                     refreshed.startPosCommandLineKnown = true;
+                    refreshed.startPosCommandLine = value != 0;
                 }
 
                 std::lock_guard lock(runtimeSnapshotMutex_);
