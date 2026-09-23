@@ -1,3 +1,10 @@
+## 0.2.37
+
+- Added passive tracing for player actor creation and lookup.
+- Trace CREATE_PLAYER_ACTOR_IN_LAYOUT, GET_PLAYER_ACTOR, and CREATE_ACTOR_IN_LAYOUT when those handlers are available.
+- Bound actor-creation tracing to the first 64 calls per process to keep lifecycle logs usable.
+- Preserve the existing external Frontier networking architecture; no Rockstar NET session is started or modified.
+
 ## 0.2.36
 
 - Added passive tracing for the RDR1 NET session lifecycle.
