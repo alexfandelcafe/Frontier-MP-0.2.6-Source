@@ -8,7 +8,7 @@
 - Trace GET_ACTOR_ENUM for the returned ActorRef and probe the verified actor-manager slot mapping for internal actor/component/transform resolution.
 - Validate the spawned ActorRef through GET_ACTOR_SLOT, GET_SLOT_ACTOR, and GET_POSITION before treating internal actor offsets as authoritative.
 - Pass the plain 32-bit Actor handle to actor natives; retain the 0x100000000 tag only on the raw ActorRef returned by CREATE_ACTOR_IN_LAYOUT.
-- Validate remote actor transforms through GET_X, GET_Y, GET_Z, and GET_HEADING; stop treating speculative actor-manager offsets as authoritative.
+- Removed the experimental scalar actor probes after runtime instability; keep remote actor validation limited to the verified CREATE_ACTOR_IN_LAYOUT and GET_ACTOR_ENUM path.
 
 ## 0.2.40
 
