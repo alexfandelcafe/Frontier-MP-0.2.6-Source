@@ -21,6 +21,7 @@ public:
 
     void push_snapshot(const protocol::Snapshot& snapshot);
     std::optional<InterpolatedState> sample(std::uint16_t playerId, std::uint32_t renderTick) const;
+    void remove_player(std::uint16_t playerId);
     void clear();
 
 private:
