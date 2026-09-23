@@ -59,6 +59,8 @@ std::optional<InterpolatedState> RemoteEntityInterpolator::sample(std::uint16_t 
     return InterpolatedState{buffer.front().state, false};
 }
 
+void RemoteEntityInterpolator::remove_player(std::uint16_t playerId) { buffers_.erase(playerId); }
+
 void RemoteEntityInterpolator::clear() { buffers_.clear(); }
 
 } // namespace frontier::client
