@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <sstream>
 #include <cstring>
+#include <intrin.h>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -21,6 +22,23 @@ std::int32_t g_scriptHandles[16]{};
 bool g_scriptHandleValid[16]{};
 bool g_scriptHandleValidKnown[16]{};
 std::size_t g_scriptHandleCount = 0;
+
+void append_execution_identity(char* buffer, std::size_t capacity, std::size_t& used, void* context) {
+    if (!buffer || capacity == 0 || used >= capacity) return;
+#ifdef _WIN32
+    const DWORD tid = GetCurrentThreadId();
+    const auto caller = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    const auto ctx = reinterpret_cast<std::uintptr_t>(context);
+    const int n = std::snprintf(buffer + used, capacity - used,
+                                " tid=%lu ctx=0x%llX ret=0x%llX",
+                                static_cast<unsigned long>(tid),
+                                static_cast<unsigned long long>(ctx),
+                                static_cast<unsigned long long>(caller));
+    if (n > 0) used += static_cast<std::size_t>(n);
+#else
+    (void)context;
+#endif
+}
 
 int find_remembered_script_handle(std::int32_t handle) {
     if (handle <= 0) return -1;
@@ -394,6 +412,8 @@ void StartupNativeTracer::set_start_pos_hook(void* context) {
         if (argc > count && used + 8u < sizeof(buffer)) {
             std::snprintf(buffer + used, sizeof(buffer) - used, ",...");
         }
+        std::size_t usedIdentity = std::strlen(buffer);
+        append_execution_identity(buffer, sizeof(buffer), usedIdentity, context);
         log(buffer);
     }
 
@@ -457,6 +477,8 @@ void StartupNativeTracer::launch_new_script_hook(void* context) {
                   hasArg1 ? "" : "?", hasArg1 ? arg1 : 0,
                   supplied,
                   resultReadable ? "" : "?", resultReadable ? result : 0u);
+    std::size_t usedIdentity = std::strlen(buffer);
+    append_execution_identity(buffer, sizeof(buffer), usedIdentity, context);
     log(buffer);
 }
 
@@ -560,6 +582,8 @@ void StartupNativeTracer::launch_new_script_with_args_hook(void* context) {
                                     resultReadable ? result : 0);
         (void)n;
     }
+    std::size_t usedIdentity = std::strlen(buffer);
+    append_execution_identity(buffer, sizeof(buffer), usedIdentity, context);
     log(buffer);
 }
 
@@ -613,6 +637,8 @@ void StartupNativeTracer::is_script_valid_hook(void* context) {
     std::snprintf(buffer, sizeof(buffer),
                   "[FrontierNativeTrace] IS_SCRIPT_VALID id=%d result=%u transition",
                   scriptId, result);
+    std::size_t usedIdentity = std::strlen(buffer);
+    append_execution_identity(buffer, sizeof(buffer), usedIdentity, context);
     log(buffer);
 }
 
