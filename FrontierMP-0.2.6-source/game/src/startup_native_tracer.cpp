@@ -30,6 +30,13 @@ std::size_t g_scriptHandleCount = 0;
 std::uint32_t gCreatePlayerActorTraceCount = 0;
 std::uint32_t gGetPlayerActorTraceCount = 0;
 std::uint32_t gCreateActorInLayoutTraceCount = 0;
+std::uint32_t gIsActorValidTraceCount = 0;
+std::uint32_t gIsActorPlayerTraceCount = 0;
+std::uint32_t gIsActorLocalPlayerTraceCount = 0;
+std::uint32_t gIsLocalPlayerValidTraceCount = 0;
+std::uint32_t gRespawnPlayerActorTraceCount = 0;
+std::uint32_t gSwitchPlayerToEnumTraceCount = 0;
+std::uint32_t gInitNativeActorenumPlayerTraceCount = 0;
 std::uint32_t gGetActorSlotTraceCount = 0;
 std::uint32_t gGetSlotActorTraceCount = 0;
 std::uint32_t gGetLocalSlotTraceCount = 0;
@@ -118,6 +125,13 @@ constexpr std::uint32_t kCreatePlayerActorInLayout = 0x6A307D5Fu;
 constexpr std::uint32_t kGetPlayerActor = 0xE8CFDD53u;
 constexpr std::uint32_t kCreateActorInLayout = 0x8D67F397u;
 constexpr std::uint32_t kGetActorEnum = 0x0B28E9ECu;
+constexpr std::uint32_t kIsActorValid = 0xBA6C3E92u;
+constexpr std::uint32_t kIsActorPlayer = 0xB27E91E7u;
+constexpr std::uint32_t kIsActorLocalPlayer = 0x6542CF26u;
+constexpr std::uint32_t kIsLocalPlayerValid = 0x0ADC17E9u;
+constexpr std::uint32_t kRespawnPlayerActorInLayout = 0x637E446Bu;
+constexpr std::uint32_t kSwitchPlayerToEnum = 0x95FBA0B0u;
+constexpr std::uint32_t kInitNativeActorenumPlayer = 0xCBA75200u;
 constexpr std::uint32_t kCreateLayout = 0x6CA53214u;
 constexpr std::uint32_t kFindNamedLayout = 0x5699DE7Eu;
 constexpr std::uint32_t kIsLayoutrefValid = 0xFC8E55EDu;
@@ -563,6 +577,34 @@ bool StartupNativeTracer::attach(NativeInvoker& invoker, std::string& error) {
                      &StartupNativeTracer::get_actor_enum_hook,
                      originalGetActorEnum_,
                      "GET_ACTOR_ENUM");
+    install_optional(kIsActorValid,
+                     &StartupNativeTracer::is_actor_valid_hook,
+                     originalIsActorValid_,
+                     "IS_ACTOR_VALID");
+    install_optional(kIsActorPlayer,
+                     &StartupNativeTracer::is_actor_player_hook,
+                     originalIsActorPlayer_,
+                     "IS_ACTOR_PLAYER");
+    install_optional(kIsActorLocalPlayer,
+                     &StartupNativeTracer::is_actor_local_player_hook,
+                     originalIsActorLocalPlayer_,
+                     "IS_ACTOR_LOCAL_PLAYER");
+    install_optional(kIsLocalPlayerValid,
+                     &StartupNativeTracer::is_local_player_valid_hook,
+                     originalIsLocalPlayerValid_,
+                     "IS_LOCAL_PLAYER_VALID");
+    install_optional(kRespawnPlayerActorInLayout,
+                     &StartupNativeTracer::respawn_player_actor_in_layout_hook,
+                     originalRespawnPlayerActorInLayout_,
+                     "RESPAWN_PLAYER_ACTOR_IN_LAYOUT");
+    install_optional(kSwitchPlayerToEnum,
+                     &StartupNativeTracer::switch_player_to_enum_hook,
+                     originalSwitchPlayerToEnum_,
+                     "SWITCH_PLAYER_TO_ENUM");
+    install_optional(kInitNativeActorenumPlayer,
+                     &StartupNativeTracer::init_native_actorenum_player_hook,
+                     originalInitNativeActorenumPlayer_,
+                     "INIT_NATIVE_ACTORENUM_PLAYER");
     install_optional(kGetActorSlot,
                      &StartupNativeTracer::get_actor_slot_hook,
                      originalGetActorSlot_,
@@ -1487,6 +1529,176 @@ void StartupNativeTracer::get_actor_enum_hook(void* context) {
         static_cast<unsigned long long>(result),
         resultOk ? "" : "?",
         resultOk ? static_cast<unsigned int>(static_cast<std::uint32_t>(result)) : 0u));
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+
+namespace {
+void trace_actor_bool_native(void* context,
+                             NativeInvoker::NativeHandler original,
+                             std::uint32_t traceIndex,
+                             std::uint32_t maxTraces,
+                             const char* label,
+                             bool includeActor) {
+    const auto actorRaw = includeActor ? read_u64_arg_value(context, 0) : 0;
+    if (original) original(context);
+    if (traceIndex >= maxTraces) return;
+
+    std::uint32_t resultRaw = 0;
+    const bool resultOk =
+#ifdef _WIN32
+        read_u32_return(context, resultRaw);
+#else
+        false;
+#endif
+
+    char buffer[320]{};
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        buffer, sizeof(buffer),
+        includeActor
+            ? "[FrontierNativeTrace] %s actor=0x%08X result=%s%u"
+            : "[FrontierNativeTrace] %s result=%s%u",
+        label,
+        includeActor ? static_cast<unsigned>(static_cast<std::uint32_t>(actorRaw)) : 0u,
+        resultOk ? "" : "?",
+        resultOk ? resultRaw : 0u));
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+}
+
+void StartupNativeTracer::is_actor_valid_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+    const auto traceIndex = gIsActorValidTraceCount++;
+    trace_actor_bool_native(context, tracer->originalIsActorValid_, traceIndex, 256u, "IS_ACTOR_VALID", true);
+}
+
+void StartupNativeTracer::is_actor_player_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+    const auto traceIndex = gIsActorPlayerTraceCount++;
+    trace_actor_bool_native(context, tracer->originalIsActorPlayer_, traceIndex, 256u, "IS_ACTOR_PLAYER", true);
+}
+
+void StartupNativeTracer::is_actor_local_player_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+    const auto traceIndex = gIsActorLocalPlayerTraceCount++;
+    trace_actor_bool_native(context, tracer->originalIsActorLocalPlayer_, traceIndex, 256u, "IS_ACTOR_LOCAL_PLAYER", true);
+}
+
+void StartupNativeTracer::is_local_player_valid_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+    const auto traceIndex = gIsLocalPlayerValidTraceCount++;
+    trace_actor_bool_native(context, tracer->originalIsLocalPlayerValid_, traceIndex, 128u, "IS_LOCAL_PLAYER_VALID", true);
+}
+
+void StartupNativeTracer::respawn_player_actor_in_layout_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    const auto traceIndex = gRespawnPlayerActorTraceCount++;
+    const auto a0 = read_u64_arg_value(context, 0);
+    const auto a1 = read_u64_arg_value(context, 1);
+    const auto a2 = read_u64_arg_value(context, 2);
+    const auto a3 = read_u64_arg_value(context, 3);
+    const auto a4 = read_u64_arg_value(context, 4);
+    const auto a5 = read_u64_arg_value(context, 5);
+    const auto a6 = read_u64_arg_value(context, 6);
+    const auto a7 = read_u64_arg_value(context, 7);
+    const auto a8 = read_u64_arg_value(context, 8);
+
+    if (tracer->originalRespawnPlayerActorInLayout_) {
+        tracer->originalRespawnPlayerActorInLayout_(context);
+    }
+    if (traceIndex >= 32u) return;
+
+    const auto postA0 = read_u64_arg_value(context, 0);
+    std::uintptr_t result = 0;
+#ifdef _WIN32
+    const bool resultOk = read_u64_return(context, result);
+#else
+    const bool resultOk = false;
+#endif
+
+    char actorName[160]{};
+    const bool nameOk = read_c_string_pointer(a2, actorName, sizeof(actorName));
+
+    char buffer[760]{};
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        buffer, sizeof(buffer),
+        "[FrontierNativeTrace] RESPAWN_PLAYER_ACTOR_IN_LAYOUT trace=%u "
+        "args={a0=0x%llX a1=0x%llX a2=%s%s a3=0x%llX a4=0x%llX a5=0x%llX a6=0x%llX a7=0x%llX a8=0x%llX} "
+        "postA0=0x%llX result=%s0x%llX",
+        traceIndex,
+        static_cast<unsigned long long>(a0),
+        static_cast<unsigned long long>(a1),
+        nameOk ? "" : "?",
+        nameOk ? actorName : "<unreadable>",
+        static_cast<unsigned long long>(a3),
+        static_cast<unsigned long long>(a4),
+        static_cast<unsigned long long>(a5),
+        static_cast<unsigned long long>(a6),
+        static_cast<unsigned long long>(a7),
+        static_cast<unsigned long long>(a8),
+        static_cast<unsigned long long>(postA0),
+        resultOk ? "" : "?",
+        static_cast<unsigned long long>(result)));
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+void StartupNativeTracer::switch_player_to_enum_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    const auto traceIndex = gSwitchPlayerToEnumTraceCount++;
+    const auto model = read_u64_arg_value(context, 0);
+    const auto variation = read_u64_arg_value(context, 1);
+
+    if (tracer->originalSwitchPlayerToEnum_) {
+        tracer->originalSwitchPlayerToEnum_(context);
+    }
+    if (traceIndex >= 32u) return;
+
+    char buffer[320]{};
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        buffer, sizeof(buffer),
+        "[FrontierNativeTrace] SWITCH_PLAYER_TO_ENUM trace=%u model=%u variation=%u",
+        traceIndex,
+        static_cast<unsigned>(static_cast<std::uint32_t>(model)),
+        static_cast<unsigned>(static_cast<std::uint32_t>(variation))));
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+void StartupNativeTracer::init_native_actorenum_player_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    const auto traceIndex = gInitNativeActorenumPlayerTraceCount++;
+    const auto a0 = read_u64_arg_value(context, 0);
+    const auto a1 = read_u64_arg_value(context, 1);
+    const auto a2 = read_u64_arg_value(context, 2);
+    const auto a3 = read_u64_arg_value(context, 3);
+
+    if (tracer->originalInitNativeActorenumPlayer_) {
+        tracer->originalInitNativeActorenumPlayer_(context);
+    }
+    if (traceIndex >= 64u) return;
+
+    char buffer[360]{};
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        buffer, sizeof(buffer),
+        "[FrontierNativeTrace] INIT_NATIVE_ACTORENUM_PLAYER trace=%u args={0x%08X,0x%08X,0x%08X,0x%08X}",
+        traceIndex,
+        static_cast<unsigned>(static_cast<std::uint32_t>(a0)),
+        static_cast<unsigned>(static_cast<std::uint32_t>(a1)),
+        static_cast<unsigned>(static_cast<std::uint32_t>(a2)),
+        static_cast<unsigned>(static_cast<std::uint32_t>(a3))));
     append_execution_identity(buffer, sizeof(buffer), used, context);
     log(buffer);
 }
