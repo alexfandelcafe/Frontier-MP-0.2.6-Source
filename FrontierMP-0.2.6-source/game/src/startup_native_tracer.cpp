@@ -2111,6 +2111,9 @@ void StartupNativeTracer::create_actor_in_layout_hook(void* context) {
     }
     if (traceIndex >= 64) return;
 
+    char actorName[160]{};
+    const bool actorNameOk = read_c_string_pointer(preA1, actorName, sizeof(actorName));
+
     const auto postA0 = read_u64_arg_value(context, 0);
 
     std::uintptr_t result = 0;
