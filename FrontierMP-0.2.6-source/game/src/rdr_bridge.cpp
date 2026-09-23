@@ -34,6 +34,7 @@ constexpr std::uint32_t kNativeCreateActorInLayout = 0x8D67F397;
 constexpr std::uint32_t kNativeCreatePlayerActorInLayout = 0x6A307D5F;
 constexpr std::uint32_t kNativeGetPlayerActor = 0xE8CFDD53;
 constexpr std::uint32_t kNativeIsActorPlayer = 0xB27E91E7;
+constexpr std::uint32_t kNativeIsActorValid = 0xBA6C3E92u;
 constexpr std::uint32_t kNativeIsActorenumInstalled = 0x9B903F45;
 constexpr std::uint32_t kNativeGetActorEnum = 0x0B28E9EC;
 constexpr std::uint32_t kNativeStreamingRequestActor = 0xB0A79FEE;
