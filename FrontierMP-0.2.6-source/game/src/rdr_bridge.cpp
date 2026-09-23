@@ -32,8 +32,10 @@ constexpr std::uint32_t kNativeCreateLayout = 0x6CA53214;
 constexpr std::uint32_t kNativeIsLayoutRefValid = 0xFC8E55ED;
 constexpr std::uint32_t kNativeCreateActorInLayout = 0x8D67F397;
 constexpr std::uint32_t kNativeGetActorEnum = 0x0B28E9EC;
+constexpr std::uint32_t kNativeStreamingRequestActor = 0xB0A79FEE;
+constexpr std::uint32_t kNativeStreamingIsActorLoaded = 0x7DF72579;
 constexpr std::uintptr_t kTaggedLayoutRef = 0x100000000ull;
-constexpr std::int32_t kRemoteTestActorEnum = 0;
+constexpr std::int32_t kRemoteTestActorEnum = 837; // ACTOR_MPPLAYER01
 
 constexpr const char* kActorManagerPattern =
     "48 8B 05 ? ? ? ? 0F B7 CA 48 03 C9 C1 EA 10 66 39 54 C8 ? 75 03 B0 01 C3 32 C0 C3 CC 48 89 5C 24 ?";
@@ -115,88 +117,6 @@ bool guarded_read_vec3(std::uintptr_t address, Vec3& out) {
 }
 #endif
 
-struct ActorManagerMatch final {
-    bool found{};
-    std::uint16_t guid{};
-    std::uintptr_t actor{};
-    std::uintptr_t actorComponent{};
-    std::uintptr_t transform{};
-    float distanceSq{999999999.0f};
-};
-
-bool scan_actor_manager_for_position(
-    std::uintptr_t managerSlots,
-    const Vec3& target,
-    ActorManagerMatch& out) {
-#ifdef _WIN32
-    if (managerSlots == 0) return false;
-
-    constexpr std::uint32_t kPrimaryGuidLimit = 0x2000u;
-    constexpr std::uint32_t kFullGuidLimit = 0x10000u;
-    constexpr float kPositionMatchToleranceSq = 0.75f * 0.75f;
-
-    auto scan_range = [&](std::uint32_t limit) {
-        for (std::uint32_t guidValue = 1; guidValue < limit; ++guidValue) {
-            const auto guid = static_cast<std::uint16_t>(guidValue);
-            const auto slotAddress =
-                managerSlots + (static_cast<std::uintptr_t>(guid) * 0x10u);
-
-            std::uintptr_t actor = 0;
-            if (!guarded_read_pointer(slotAddress, actor) || actor == 0) continue;
-
-            std::uintptr_t actorComponent = 0;
-            if (!guarded_read_pointer(actor + offsetof(MinimalSagActor, actorComponent),
-                                      actorComponent)) {
-                continue;
-            }
-            if (actorComponent == 0) continue;
-
-            std::uint32_t actorGuid = 0;
-            if (!guarded_read_u32(actor + 0x08u, actorGuid)) continue;
-            if (static_cast<std::uint16_t>(actorGuid) != guid) continue;
-
-            std::uintptr_t transform = 0;
-            if (!guarded_read_pointer(
-                    actorComponent + offsetof(MinimalSagActorComponent, transform),
-                    transform)) {
-                continue;
-            }
-            if (transform == 0) continue;
-
-            Vec3 position{};
-            if (!guarded_read_position(transform, position)) continue;
-
-            const float dx = position.x - target.x;
-            const float dy = position.y - target.y;
-            const float dz = position.z - target.z;
-            const float distanceSq = (dx * dx) + (dy * dy) + (dz * dz);
-
-            if (distanceSq < out.distanceSq) {
-                out.found = true;
-                out.guid = guid;
-                out.actor = actor;
-                out.actorComponent = actorComponent;
-                out.transform = transform;
-                out.distanceSq = distanceSq;
-            }
-        }
-    };
-
-    scan_range(kPrimaryGuidLimit);
-    if (!out.found || out.distanceSq > kPositionMatchToleranceSq) {
-        out = {};
-        out.distanceSq = 999999999.0f;
-        scan_range(kFullGuidLimit);
-    }
-
-    return out.found && out.distanceSq <= kPositionMatchToleranceSq;
-#else
-    (void)managerSlots;
-    (void)target;
-    (void)out;
-    return false;
-#endif
-}
 
 } // namespace
 
@@ -579,6 +499,32 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
             }
 
             if (layoutValid) {
+                // Use the same multiplayer actor family used by the game's MP startup
+                // path and request the asset before attempting actor creation.
+                args[0] = static_cast<std::uintptr_t>(kRemoteTestActorEnum);
+                args[1] = 1;
+                args[2] = 0;
+                result = 0;
+                nativeInvoker_.invoke_raw(kNativeStreamingRequestActor, args, 3u, result);
+
+                result = 0;
+                bool actorModelLoaded = false;
+                if (nativeInvoker_.invoke_raw(kNativeStreamingIsActorLoaded, args, 2u, result)) {
+                    actorModelLoaded = result != 0u;
+                }
+
+                if (!actorModelLoaded) {
+                    char buffer[256]{};
+                    std::snprintf(buffer, sizeof(buffer),
+                                  "[FrontierRemoteActor] model not loaded yet enum=%u; request issued, creation deferred",
+                                  static_cast<unsigned int>(kRemoteTestActorEnum));
+                    write_bridge_log_line(buffer);
+
+                    std::lock_guard lock(remoteActorTestMutex_);
+                    remoteActorTestPending_ = false;
+                    return;
+                }
+
                 const float x = spawnOrigin.position.x + 2.0f;
                 const float y = spawnOrigin.position.y;
                 const float z = spawnOrigin.position.z;
@@ -630,41 +576,10 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                             write_bridge_log_line(buffer);
                         }
 
-                        // The verified actor-manager layout is indexed by sagGuid, not ActorHandle.
-                        // Search it non-destructively for the newly created actor using its known
-                        // spawn position and the sagActor::m_Guid field at +0x08.
-                        std::uintptr_t managerSlots = 0;
-                        if (read_pointer(actorManagerSlotsStorage_, managerSlots)) {
-                            ActorManagerMatch match{};
-                            const Vec3 targetPosition{x, y, z};
-                            const bool matched =
-                                scan_actor_manager_for_position(managerSlots, targetPosition, match);
-
-                            char buffer[448]{};
-                            if (matched) {
-                                std::snprintf(
-                                    buffer,
-                                    sizeof(buffer),
-                                    "[FrontierRemoteActor] manager-scan match=1 manager=0x%llX guid=0x%04X actor=0x%llX component=0x%llX transform=0x%llX distance=%.4f",
-                                    static_cast<unsigned long long>(managerSlots),
-                                    static_cast<unsigned int>(match.guid),
-                                    static_cast<unsigned long long>(match.actor),
-                                    static_cast<unsigned long long>(match.actorComponent),
-                                    static_cast<unsigned long long>(match.transform),
-                                    std::sqrt(match.distanceSq));
-                            } else {
-                                std::snprintf(
-                                    buffer,
-                                    sizeof(buffer),
-                                    "[FrontierRemoteActor] manager-scan match=0 manager=0x%llX target=(%.3f,%.3f,%.3f)",
-                                    static_cast<unsigned long long>(managerSlots),
-                                    x, y, z);
-                            }
-                            write_bridge_log_line(buffer);
-                        } else {
-                            write_bridge_log_line(
-                                "[FrontierRemoteActor] manager-scan unavailable: manager slots pointer read failed");
-                        }
+                        // Previous diagnostic scan established that this CREATE_ACTOR_IN_LAYOUT
+                        // path can register the resulting actor in GeneralManagerSlots with a
+                        // sagGuid. Do not rescan the live manager here; keep the spawn experiment
+                        // free of broad raw-memory iteration.
                     }
                 }
             } else {
