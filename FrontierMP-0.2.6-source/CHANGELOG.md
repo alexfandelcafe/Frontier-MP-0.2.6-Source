@@ -1,3 +1,8 @@
+## 0.2.49
+- Switch the isolated remote MPPLAYER01 experiment from CREATE_ACTOR_IN_LAYOUT to CREATE_PLAYER_ACTOR_IN_LAYOUT.
+- Keep the remote layout and streaming lifecycle unchanged so the test isolates player registration from model loading.
+- Record immediate post-create IS_ACTOR_PLAYER and GET_PLAYER_ACTOR checks without broad raw-memory scans.
+
 ## 0.2.48
 - Retry the remote multiplayer actor spawn request on subsequent state ticks when `STREAMING_IS_ACTOR_LOADED` initially reports not loaded.
 - Keep the existing game-thread idempotence guard so repeated retries do not enqueue duplicate work while a spawn attempt is pending.
