@@ -75,6 +75,7 @@ if(WIN32 AND FRONTIER_BUILD_CLIENT)
         client/src/frontier_client.cpp
         client/src/client_runtime.cpp
         client/src/network_client.cpp
+        client/src/interpolation.cpp
         client/src/remote_player_manager.cpp
         client/src/udp_socket.cpp
         game/src/build_fingerprint.cpp
