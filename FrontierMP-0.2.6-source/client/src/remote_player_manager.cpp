@@ -18,11 +18,11 @@ float distance_squared(const Vec3& a, const Vec3& b) {
 }
 
 float yaw_delta(float a, float b) {
-    constexpr float kPi = 3.14159265358979323846f;
-    const float twoPi = 2.0f * kPi;
-    float delta = std::fmod(a - b, twoPi);
-    if (delta > kPi) delta -= twoPi;
-    if (delta < -kPi) delta += twoPi;
+    constexpr float kFullTurnDegrees = 360.0f;
+    constexpr float kHalfTurnDegrees = 180.0f;
+    float delta = std::fmod(a - b, kFullTurnDegrees);
+    if (delta > kHalfTurnDegrees) delta -= kFullTurnDegrees;
+    if (delta < -kHalfTurnDegrees) delta += kFullTurnDegrees;
     return std::fabs(delta);
 }
 } // namespace
@@ -114,7 +114,7 @@ void RemotePlayerManager::update(std::uint64_t nowMs, frontier::game::RdrBridge&
 
         const bool moved = distance_squared(player.renderedState.position, desired.position) >
                            kPositionUpdateThreshold * kPositionUpdateThreshold;
-        const bool rotated = yaw_delta(player.renderedState.yaw, desired.yaw) > 0.01f;
+        const bool rotated = yaw_delta(player.renderedState.yaw, desired.yaw) > 1.0f;
 
         if (moved || rotated) {
             std::string error;
