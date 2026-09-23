@@ -99,6 +99,10 @@ bool FrontierSession::update(RdrBridge& bridge, std::string& logLine) {
 
     next.worldLoadedStable = worldLoadedStable_;
 
+    // localPlayerReady is derived from the current stable-world sample, not
+    // retained from a previous active period. This prevents states such as
+    // "frontend ... stableWorldLoaded=0 localPlayer=1".
+    next.localPlayerReady = false;
     if (gameState < 0 || !worldLoadedKnown) {
         next.state = FrontierSessionState::RuntimeQueryFailed;
     } else if (!worldLoadedStable_) {
@@ -110,8 +114,6 @@ bool FrontierSession::update(RdrBridge& bridge, std::string& logLine) {
         if (bridge.read_local_player_state(state, error)) {
             next.localPlayerReady = true;
             next.state = FrontierSessionState::Active;
-        } else {
-            next.localPlayerReady = false;
         }
     }
 
