@@ -163,7 +163,21 @@ void ClientRuntime::update() {
                         log_line("[FrontierClient] local-player ready chain " + chain);
                     }
 
+                    std::string remoteActorError;
+                    if (gameBridge_.request_remote_actor_test(state, remoteActorError)) {
+                        log_line("[FrontierClient] remote actor test request accepted");
+                    } else {
+                        log_line("[FrontierClient] remote actor test request failed: " + remoteActorError);
+                    }
+
                     bridgeStateReady_ = true;
+                } else {
+                    // The remote actor test may defer while its streamed model is loading.
+                    // Re-submit on subsequent state ticks so RdrBridge can poll/retry until
+                    // the asset becomes available, while its own pending/spawned flags keep
+                    // the game-thread submission idempotent.
+                    std::string ignoredRemoteActorError;
+                    gameBridge_.request_remote_actor_test(state, ignoredRemoteActorError);
                 }
             } else if (lastBridgeLogMs_ == 0 || now - lastBridgeLogMs_ >= 1000) {
                 log_line("[FrontierClient] local-player read pending: " + bridgeError);
