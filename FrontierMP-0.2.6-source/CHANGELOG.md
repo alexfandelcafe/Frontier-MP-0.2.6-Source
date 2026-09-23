@@ -1,3 +1,9 @@
+## 0.2.40
+
+- Capture CREATE_PLAYER_ACTOR_IN_LAYOUT and CREATE_ACTOR_IN_LAYOUT arguments before invoking the original native.
+- Record post-call argument slot 0 to detect engine-side handle/output rewriting.
+- Preserve decoded position/orientation from the caller-supplied pre-call values.
+
 ## 0.2.39
 
 - Added passive tracing for CREATE_LAYOUT, FIND_NAMED_LAYOUT, and IS_LAYOUTREF_VALID.
