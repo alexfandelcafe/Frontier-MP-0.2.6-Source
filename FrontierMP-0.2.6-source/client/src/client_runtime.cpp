@@ -87,7 +87,13 @@ bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, cons
                 << " remoteEntities=" << remotePlayers_.size();
         log_line(message.str());
     });
-    g_network->set_on_disconnect([](const std::string& reason) { log_line("[FrontierClient] " + reason); });
+    g_network->set_on_disconnect([this](const std::string& reason) {
+        if (gameBridge_.initialized()) {
+            remotePlayers_.clear(gameBridge_);
+        }
+        localPlayerId_ = 0;
+        log_line("[FrontierClient] " + reason);
+    });
 
     connected_ = g_network->start(host, port, playerName, frontier::game::build_label(build), fingerprint.textHash);
     if (!connected_) {
@@ -177,13 +183,14 @@ void ClientRuntime::update() {
                 }
             }
 
-            if (gameBridge_.initialized() &&
-                g_network->state() == ConnectionState::Connected) {
-                remotePlayers_.update(now, gameBridge_);
-            }
             } else if (lastBridgeLogMs_ == 0 || now - lastBridgeLogMs_ >= 1000) {
                 log_line("[FrontierClient] local-player read pending: " + bridgeError);
                 lastBridgeLogMs_ = now;
+            }
+
+            if (gameBridge_.initialized() &&
+                g_network->state() == ConnectionState::Connected) {
+                remotePlayers_.update(now, gameBridge_);
             }
         }
     }
