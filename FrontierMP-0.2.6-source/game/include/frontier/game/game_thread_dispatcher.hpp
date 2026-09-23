@@ -39,10 +39,12 @@ private:
 
     static void wait_hook(void* context);
     static void get_this_script_id_hook(void* context);
+    static void get_script_name_hook(void* context);
 
     NativeInvoker* invoker_{};
     std::atomic<Handler> originalWait_{};
     std::atomic<Handler> originalGetThisScriptId_{};
+    std::atomic<Handler> originalGetScriptName_{};
     std::atomic<bool> attached_{false};
     mutable std::mutex queueMutex_;
     std::deque<std::shared_ptr<PendingTask>> queue_;
