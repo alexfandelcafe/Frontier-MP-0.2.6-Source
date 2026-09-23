@@ -1,3 +1,9 @@
+## 0.2.43
+
+- Replace the speculative remote Actor -> manager-slot memory scan with passive tracing of the engine's Actor/Slot natives.
+- Trace GET_ACTOR_SLOT, GET_SLOT_ACTOR, GET_LOCAL_SLOT, and IS_SLOT_VALID without invoking them from Frontier.
+- Keep remote actor creation limited to the verified game-thread CREATE_ACTOR_IN_LAYOUT + GET_ACTOR_ENUM path.
+
 ## 0.2.42
 
 - Add a read-only diagnostic that resolves the spawned Actor handle through the actor-manager backing storage used by the local-player chain.
