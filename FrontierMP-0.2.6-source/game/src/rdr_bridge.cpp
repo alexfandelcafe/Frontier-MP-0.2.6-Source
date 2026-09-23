@@ -462,85 +462,135 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
     std::string dispatchError;
     const bool submitted = gameThreadDispatcher_.submit(
         [this, spawnOrigin]() {
-            bool probeArmed = false;
-            std::uint32_t layoutId = 0;
+            std::uint32_t layoutId = 0u;
             char layoutName[] = "FrontierRemoteLayout";
+            char actorName[] = "FrontierRemoteMPActor";
 
-            std::uintptr_t args[3]{};
-            std::uintptr_t result = 0;
+            std::uintptr_t args[7]{};
+            std::uintptr_t result = 0u;
 
+            // Use a dedicated generic-Actor layout, separate from PlayerLayout.
             args[0] = reinterpret_cast<std::uintptr_t>(layoutName);
+
             if (nativeInvoker_.invoke_raw(kNativeFindNamedLayout, args, 1u, result)) {
                 layoutId = static_cast<std::uint32_t>(result);
             }
 
             bool layoutValid = false;
             if (layoutId != 0u) {
-                args[0] = layoutId;
-                if (nativeInvoker_.invoke_raw(kNativeIsLayoutRefValid, args, 1u, result)) {
-                    layoutValid = result != 0u;
-                }
+                args[0] = static_cast<std::uintptr_t>(layoutId);
+                result = 0u;
+                layoutValid = nativeInvoker_.invoke_raw(
+                    kNativeIsLayoutRefValid, args, 1u, result) && result != 0u;
             }
 
             if (!layoutValid) {
                 args[0] = reinterpret_cast<std::uintptr_t>(layoutName);
-                result = 0;
+                result = 0u;
                 if (nativeInvoker_.invoke_raw(kNativeCreateLayout, args, 1u, result)) {
                     layoutId = static_cast<std::uint32_t>(result);
-                    args[0] = layoutId;
-                    if (nativeInvoker_.invoke_raw(kNativeIsLayoutRefValid, args, 1u, result)) {
-                        layoutValid = result != 0u;
-                    }
+                    args[0] = static_cast<std::uintptr_t>(layoutId);
+                    result = 0u;
+                    layoutValid = nativeInvoker_.invoke_raw(
+                        kNativeIsLayoutRefValid, args, 1u, result) && result != 0u;
                 }
             }
 
-            if (layoutValid) {
-                // The actual CREATE_PLAYER_ACTOR_IN_LAYOUT test now runs from the live
-                // Player script's native context in StartupNativeTracer. Here we only arm
-                // the remote layout and request MPPLAYER01 so the model-loading lifecycle
-                // is established before the in-context probe runs.
-                args[0] = static_cast<std::uintptr_t>(kRemoteTestActorEnum);
-                args[1] = 1u;
-                args[2] = 0u;
-                result = 0;
-                const bool requestOk =
-                    nativeInvoker_.invoke_raw(kNativeStreamingRequestActor, args, 3u, result);
-
-                char buffer[360]{};
-                std::snprintf(
-                    buffer, sizeof(buffer),
-                    "[FrontierRemotePlayer] probe armed layout=0x%08X streamRequestOk=%u "
-                    "streamRequestResult=0x%llX origin=(%.3f,%.3f,%.3f)",
-                    layoutId,
-                    requestOk ? 1u : 0u,
-                    static_cast<unsigned long long>(result),
-                    spawnOrigin.position.x,
-                    spawnOrigin.position.y,
-                    spawnOrigin.position.z);
-                write_bridge_log_line(buffer);
-
-                probeArmed = true;
-            } else {
+            if (!layoutValid) {
+                std::lock_guard lock(remoteActorTestMutex_);
+                remoteActorTestPending_ = false;
                 std::fprintf(stderr,
-                             "[FrontierRemotePlayer] layout invalid name=%s id=0x%08X\\n",
+                             "[FrontierRemotePlayer] generic actor test layout invalid "
+                             "name=%s id=0x%08X\n",
                              layoutName, layoutId);
+                return;
             }
+
+            const float x = spawnOrigin.position.x + 2.0f;
+            const float y = spawnOrigin.position.y;
+            const float z = spawnOrigin.position.z;
+
+            // Request ACTOR_MPPLAYER01 and then create it as a normal Actor.
+            args[0] = static_cast<std::uintptr_t>(kRemoteTestActorEnum);
+            args[1] = 1u;
+            args[2] = 0u;
+            std::uintptr_t streamResult = 0u;
+            const bool streamOk = nativeInvoker_.invoke_raw(
+                kNativeStreamingRequestActor, args, 3u, streamResult);
+
+            args[0] = kTaggedLayoutRef | static_cast<std::uintptr_t>(layoutId);
+            args[1] = reinterpret_cast<std::uintptr_t>(actorName);
+            args[2] = static_cast<std::uintptr_t>(
+                static_cast<std::uint32_t>(kRemoteTestActorEnum));
+            args[3] = pack_vec2(x, y);
+            args[4] = float_bits(z);
+            args[5] = pack_vec2(0.0f, 0.0f);
+            args[6] = float_bits(0.0f);
+
+            result = 0u;
+            const bool createOk = nativeInvoker_.invoke_raw(
+                kNativeCreateActorInLayout, args, 7u, result);
+
+            // For the generic Actor native, result is the ActorRef. This is the same
+            // return convention already observed for normal game-created Actors.
+            const std::uintptr_t actorRef = result;
+            const std::uint32_t actorHandle = static_cast<std::uint32_t>(actorRef);
+
+            std::uintptr_t actorArgs[1]{
+                static_cast<std::uintptr_t>(actorHandle)};
+            std::uintptr_t validResult = 0u;
+            const bool validOk =
+                actorHandle != 0u &&
+                nativeInvoker_.invoke_raw(kNativeIsActorValid, actorArgs, 1u, validResult);
+
+            actorArgs[0] = static_cast<std::uintptr_t>(actorHandle);
+            std::uintptr_t enumResult = 0u;
+            const bool enumOk =
+                actorHandle != 0u &&
+                nativeInvoker_.invoke_raw(kNativeGetActorEnum, actorArgs, 1u, enumResult);
+
+            actorArgs[0] = static_cast<std::uintptr_t>(actorHandle);
+            std::uintptr_t isPlayerResult = 0u;
+            const bool isPlayerOk =
+                actorHandle != 0u &&
+                nativeInvoker_.invoke_raw(kNativeIsActorPlayer, actorArgs, 1u, isPlayerResult);
+
+            const bool spawned =
+                createOk && actorHandle != 0u && validOk && validResult != 0u;
 
             {
                 std::lock_guard lock(remoteActorTestMutex_);
+                remoteActorTestLayout_ = layoutId;
+                remoteActorTestActorRef_ = actorRef;
+                remoteActorTestSpawned_ = spawned;
                 remoteActorTestPending_ = false;
-                if (probeArmed) {
-                    remoteActorTestSpawned_ = true;
-                    remoteActorTestLayout_ = layoutId;
-                }
             }
+
+            char buffer[900]{};
+            std::snprintf(
+                buffer, sizeof(buffer),
+                "[FrontierRemotePlayer] generic actor test layout=0x%08X "
+                "streamOk=%u streamResult=0x%llX createOk=%u "
+                "actorRef=0x%llX actorHandle=0x%08X actorValid=%u "
+                "actorEnum=%u isActorPlayer=%u position=(%.3f,%.3f,%.3f)",
+                layoutId,
+                streamOk ? 1u : 0u,
+                static_cast<unsigned long long>(streamResult),
+                createOk ? 1u : 0u,
+                static_cast<unsigned long long>(actorRef),
+                actorHandle,
+                validOk ? static_cast<unsigned>(validResult) : 0u,
+                enumOk ? static_cast<unsigned>(enumResult) : 0u,
+                isPlayerOk ? static_cast<unsigned>(isPlayerResult) : 0u,
+                x, y, z);
+            write_bridge_log_line(buffer);
         },
         dispatchError);
 
     if (!submitted) {
         std::lock_guard lock(remoteActorTestMutex_);
         remoteActorTestPending_ = false;
-        error = dispatchError.empty() ? "remote player probe enqueue failed" : dispatchError;
+        error = dispatchError.empty() ? "remote actor test enqueue failed" : dispatchError;
         return false;
     }
 
