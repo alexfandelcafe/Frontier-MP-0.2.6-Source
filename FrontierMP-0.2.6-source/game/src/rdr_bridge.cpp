@@ -71,7 +71,9 @@ struct MinimalSagActorComponent final {
 struct MinimalMatrix34 final {
     std::byte padding0[0x30];
     Vec3 position;
-};\n\n#ifdef _WIN32
+};
+
+#ifdef _WIN32
 bool guarded_read_u32(std::uintptr_t address, std::uint32_t& out) {
     __try {
         out = *reinterpret_cast<const std::uint32_t*>(address);
