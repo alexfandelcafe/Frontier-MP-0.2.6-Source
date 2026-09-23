@@ -7,9 +7,11 @@
 
 namespace frontier::game {
 
+class GameThreadDispatcher;
+
 class StartupNativeTracer final {
 public:
-    bool attach(NativeInvoker& invoker, std::string& error);
+    bool attach(NativeInvoker& invoker, GameThreadDispatcher& dispatcher, std::string& error);
     bool attached() const { return attached_; }
 
 private:
@@ -55,6 +57,7 @@ private:
     static void log(const char* message);
 
     NativeInvoker* invoker_{};
+    GameThreadDispatcher* gameThreadDispatcher_{};
     NativeInvoker::NativeHandler originalSetStartPos_{};
     NativeInvoker::NativeHandler originalScriptDoneLoading_{};
     NativeInvoker::NativeHandler originalClearMissionInfo_{};
