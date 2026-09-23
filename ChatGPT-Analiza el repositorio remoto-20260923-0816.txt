@@ -1,0 +1,2063 @@
+Analiza el repositorio remoto
+
+User: Anonymous
+Created: 9/23/2026 5:57:31
+Updated: 9/23/2026 8:16:06
+Exported: 9/23/2026 8:16:52
+Link: https://chatgpt.com/c/6ab3947a-e334-83e9-b0b2-46196c74ba1d
+
+## Prompt:
+23/9/2026, 5:57:42
+
+analiza el repo https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/tree/game-thread/remote-actor-spawn-test-0.2.41y lee el chat para entender el contexto y continuar, el ultimo es https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/ChatGPT-frontiermp%20chat-20260923-0556.txt
+
+## Response:
+23/9/2026, 5:57:44
+
+Voy a reconstruir el estado actual de la rama, leer el chat completo más reciente y después contrastarlo con el código relevante para identificar exactamente dónde quedó el trabajo y cuál es el siguiente paso.
+
+El dato decisivo del log nuevo es que el actor ya no se está creando: la única traza de Frontier es model not loaded yet enum=837; request issued, creation deferred. Eso explica exactamente por qué dejaste de verlo. Ahora estoy verificando la firma real de las natives de streaming y cómo las usa el juego, porque el bloqueo actual está ahí, no en CREATE_ACTOR_IN_LAYOUT.
+
+Encontré un fallo de ciclo de vida concreto en nuestra implementación: el streaming se consulta una sola vez, y después el cliente marca la prueba como iniciada para siempre. Por eso el 837 queda atrapado en “deferred” aunque el asset pudiera cargarse unos frames después.
+
+Voy a corregir solo ese punto: reintentar la solicitud en los siguientes ticks mientras el actor no haya sido creado, sin volver a tocar memoria ni cambiar la ruta nativa de creación.
+
+Analizado repositorio, conversaciones y sincronización de actores
+
+Clonando rama e inspeccionando archivos actuales
+
+Inspeccionando registro de clonación
+
+Analizados cambios recientes de actores remotos
+
+Inspeccionó código, archivos y registros de actores remotos
+
+Buscando en la web
+
+Analizado el historial reciente de Frontier-MP y sus registros de cliente
+
+Analizando el repositorio
+
+Estoy revisando la rama indicada y el historial reciente, incluido el archivo de chat, para reconstruir el contexto técnico y continuar desde el último punto. También estoy relacionando cambios de carga, sincronización y aparición remota de actores.
+
+Reconstruyendo el contexto técnico
+
+Estoy siguiendo la evolución del experimento: la creación remota ya produce un sagActor válido, pero aún falta integrarlo correctamente en el flujo multijugador y confirmar la carga segura del modelo.
+
+Comprobando la carga
+
+Estoy verificando si la solicitud de carga se repite después de devolver “modelo no cargado”. Si solo ocurre una vez, la creación queda aplazada indefinidamente; también revisaré las firmas nativas y los registros actuales.
+
+Analizado el repositorio, reconstruido el contexto y comprobada la carga
+
+Investigada la carga diferida y el flujo remoto de actores
+
+Evaluando el flujo de pruebas de actores remotos
+
+Ha pensado durante 2m 19s
+
+Ya reconstruí el contexto del chat y contrasté la rama con el client.log real. El diagnóstico actual es bastante más concreto.
+
+Estado actual
+
+La rama game-thread/remote-actor-spawn-test-0.2.41 estaba en a9e6d032... cuando añadiste el último export del chat. Después dejé aplicada una corrección y ahora quedó en:
+
+436cce8e69091f08f81e5a5d97a51b02628c4767
+
+La corrección está documentada como 0.2.48.
+
+Qué demuestra realmente el último client.log
+
+El dato importante está en la línea 621:
+
+[FrontierRemoteActor] model not loaded yet enum=837; request issued, creation deferred
+
+Y no hay ninguna creación posterior de FrontierRemoteTest.
+
+Eso significa que en esta ejecución:
+
+837
+ ↓
+STREAMING_REQUEST_ACTOR
+ ↓
+STREAMING_IS_ACTOR_LOADED = false
+ ↓
+return
+ ↓
+NO CREATE_ACTOR_IN_LAYOUT
+
+Por eso desapareció el clon que antes veías a dos metros.
+
+No es que CREATE_ACTOR_IN_LAYOUT(837) haya fallado. Ni siquiera se llegó a ejecutar.
+
+El resto del log sigue estable: el mundo llega a worldLoaded=1, stableWorldLoaded=1, continúa hasta más de 2100 ticks y no aparecen Access violation, Exception ni una caída asociada al actor remoto.
+
+Encontré además el bug que provocaba el comportamiento
+
+En client_runtime.cpp, la prueba remota se lanzaba únicamente cuando bridgeStateReady_ pasaba de false a true.
+
+Eso funcionaba con enum 0 porque el actor se creaba inmediatamente.
+
+Con 837, la primera comprobación de streaming decía "todavía no cargado", RdrBridge cancelaba esa tentativa y ponía:
+
+remoteActorTestPending_ = false;
+
+pero el cliente no volvía a llamar a request_remote_actor_test().
+
+Por tanto, el streaming podía terminar correctamente unos cientos de milisegundos después y Frontier jamás volvía a intentar crear el actor.
+
+Qué cambié
+
+Ahora, después de que el jugador local esté listo, el cliente vuelve a intentar la prueba remota en cada tick de replicación de estado (~50 ms):
+
+gameBridge_.request_remote_actor_test(state, ignoredRemoteActorError);
+
+El propio RdrBridge mantiene:
+
+remoteActorTestPending_
+remoteActorTestSpawned_
+
+así que no se generan trabajos duplicados mientras uno está pendiente, y cuando el modelo todavía no está cargado se puede volver a intentar en el siguiente ciclo.
+
+No cambié:
+
+kRemoteTestActorEnum = 837
+
+ni:
+
+STREAMING_REQUEST_ACTOR
+STREAMING_IS_ACTOR_LOADED
+CREATE_ACTOR_IN_LAYOUT
+
+ni reinstalé el escaneo bruto de memoria.
+
+Esto encaja con tu observación sobre las "skins"
+
+Tu observación sobre que enum=0 y ACTOR_MPPLAYER01=837 afectan el modelo/skin es relevante. El enum que estamos pasando a CREATE_ACTOR_IN_LAYOUT es precisamente el selector de la clase/arquetipo de actor; cambiar de 0 a 837 no es un cambio neutro.
+
+Pero todavía hay que separar dos preguntas:
+
+A) ¿837 se carga correctamente y CREATE_ACTOR_IN_LAYOUT crea el actor?
+B) Una vez creado 837, ¿ese actor tiene la representación visual esperada?
+
+El último log sólo llegó hasta antes de A. Por eso todavía no sabemos qué aspecto tendría el actor 837 en esta ruta.
+
+Además, ya tenemos una evidencia importante de las pruebas anteriores: con enum=0 el actor sí llegó a materializarse y quedó registrado internamente con sagGuid=0x0003. Eso demuestra que la ruta genérica puede crear un sagActor; el problema de "player remoto" es una cuestión posterior a la creación.
+
+Siguiente estado de la investigación
+
+La secuencia ahora queda limpia:
+
+local player ready
+        ↓
+request actor 837
+        ↓
+streaming request
+        ↓
+poll hasta loaded
+        ↓
+CREATE_ACTOR_IN_LAYOUT(837)
+        ↓
+GET_ACTOR_ENUM
+        ↓
+observar visualmente qué actor aparece
+
+Y sólo después de conseguir que 837 atraviese esa cadena tiene sentido volver a investigar CREATE_PLAYER_ACTOR_IN_LAYOUT, sagPlayer y el registro como jugador.
+
+No pude ejecutar MSVC/RDR1 desde este entorno, así que esta iteración queda pendiente de una ejecución real.
+
+La rama ya contiene la corrección; compila este tip 436cce8e... y el próximo client.log debería mostrar si 837 finalmente pasa de model not loaded a CREATE_ACTOR_IN_LAYOUT.
+
+## Prompt:
+23/9/2026, 6:08:57
+
+lee https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.log, ahora aparecio el actor otra vez pero esta vez con la skin mpplayer (837) y no la de jhon (que es la 0)
+
+## Response:
+23/9/2026, 6:09:01
+
+Voy a leer el client.log actualizado y correlacionar el spawn 837 con GET_ACTOR_ENUM, el estado del mundo y cualquier traza posterior del actor.
+
+Analizada descarga GitHub truncada y recuperado el contenido del blob CFE
+
+Se ha buscado en 6 sitios web
+
+Inspeccionados registros y clasificación de actores CFE
+
+Contrastando los actores
+
+Estoy comparando el actor 837 con un jugador real: aparece correctamente, pero solo pasa comprobaciones de actor local y no de jugador. Esto sugiere que está registrado como actor visible, no como jugador controlable.
+
+Contrastaste los actores
+
+Buscando "CREATE_PLAYER_ACTOR_IN_LAYOUT" "ACTOR_MPPLAYER01"
+
+Analizados logs de spawn, referencias de actores y metadatos del commit reciente
+
+Ha pensado durante 39s
+
+Sí. Leí el client.log nuevo, incluido el tramo exacto donde aparece el actor.
+
+El resultado es claro: el cambio a 837 funcionó exactamente como esperábamos respecto de la skin.
+
+En las líneas 4397-4401 aparece:
+
+FIND_NAMED_LAYOUT name=FrontierRemoteLayout result=0x000003C4
+IS_LAYOUTREF_VALID layout=0x000003C4 result=1
+CREATE_ACTOR_IN_LAYOUT ... actorName=FrontierRemoteTest actorEnum=837
+GET_ACTOR_ENUM actor=0xCFE result=0x345 enum=837
+
+[FrontierRemoteActor] spawned
+actorRef=0x100000CFE
+actorHandle=0x00000CFE
+enum=837
+position=(-837.760,92.547,2372.669)
+
+Y 0x345 = 837, así que el engine confirma el enum exacto que pedimos.
+
+Además, inmediatamente después el propio juego consulta:
+
+IS_ACTOR_LOCAL_PLAYER actor=0x00000CFE result=0
+
+tres veces. Eso significa que el actor existe y es visible, pero no es considerado el jugador local. No aparecen GET_PLAYER_ACTOR para 0xCFE, ni una conversión de ese actor a player handle. El único GET_PLAYER_ACTOR sigue siendo:
+
+player=925 result=0x39D
+
+que corresponde al jugador local. (RDR2 Mods)
+
+Esto encaja muy bien con tu observación anterior: la documentación pública de actores de RDR1 identifica ACTOR_PLAYER=0 y ACTOR_MPPLAYER01=837; esos enums corresponden a modelos/actores utilizables como skins y entidades. (RDR2 Mods)
+
+Lo importante que acabamos de demostrar
+
+Tenemos dos experimentos ya separados:
+
+enum 0
+  ↓
+CREATE_ACTOR_IN_LAYOUT
+  ↓
+actor visible
+  ↓
+skin de John
+
+y ahora:
+
+enum 837
+  ↓
+STREAMING_REQUEST_ACTOR
+  ↓
+modelo carga
+  ↓
+CREATE_ACTOR_IN_LAYOUT
+  ↓
+actor visible
+  ↓
+skin MPPLAYER01
+
+Por tanto, el problema de streaming ya está resuelto y también sabemos que el enum controla la identidad visual del actor.
+
+El problema pendiente es otro:
+
+CREATE_ACTOR_IN_LAYOUT
+        ↓
+ActorRef 0x100000CFE
+        ↓
+ActorHandle 0xCFE
+        ↓
+actor jugable/visible
+        ↓
+NO player handle
+
+Mientras que el jugador real sigue teniendo:
+
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+        ↓
+result=925
+        ↓
+GET_PLAYER_ACTOR(925)
+        ↓
+Actor=0x39D
+
+Ese es ahora el dato más valioso de todo el experimento.
+
+Hay otra observación importante
+
+El actor remoto no desaparece ni provoca el crash. El log continúa hasta más de tick=3182, con gameState=4, worldLoaded=1 y localPlayer=1.
+
+Así que 837 + CREATE_ACTOR_IN_LAYOUT es una combinación funcional para crear y visualizar el modelo MP.
+
+No debemos volver a tocar el camino de memoria que investigamos antes.
+
+Siguiente paso
+
+Ahora sí considero que podemos volver a la pregunta original:
+
+¿qué hace CREATE_PLAYER_ACTOR_IN_LAYOUT que CREATE_ACTOR_IN_LAYOUT no hace?
+
+Y tenemos una forma mucho más limpia de investigarlo: comparar la llamada real del jugador local con nuestra llamada 837 y aislar únicamente la diferencia que produce el player handle.
+
+La llamada local observada es:
+
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+  a0=0x10000032A
+  a1=0x16972F701
+  a2=0x0
+  ...
+  result=925
+  postA0=0x10000039D
+
+Mientras nuestra creación remota es:
+
+CREATE_ACTOR_IN_LAYOUT
+  a0=0x1000003C4
+  a1=...
+  a2=0x345
+  ...
+  result=0x100000CFE
+
+Eso nos da una pista muy fuerte: el enum=837 ya funciona como skin; ahora hay que probar 837 dentro de la ruta CREATE_PLAYER_ACTOR_IN_LAYOUT, no seguir intentando convertir artificialmente un actor común en player.
+
+La nueva evidencia, además, permite hacerlo de forma controlada: primero podemos instrumentar mejor esa native y su contexto antes de ejecutarla con un segundo actor, para no volver a introducir un cambio ciego que pueda afectar al jugador local.
+
+Sources:
+
+RDR 1 Actors - Pages - RDR2Mods.com
+
+## Prompt:
+23/9/2026, 6:15:47
+
+Okey avanza
+
+## Response:
+23/9/2026, 6:15:53
+
+Voy a aislar ahora la diferencia entre la ruta de creación de jugador y la de actor genérico: primero comparo el código/trazas actuales y luego añado instrumentación mínima para capturar la secuencia real sin alterar el jugador local.
+
+Encontré un dato importante en la base pública de natives: CREATE_PLAYER_ACTOR_IN_LAYOUT tiene exactamente la firma de 8 parámetros que ya observamos en el log, y devuelve un Actor. Eso permite probar la ruta de jugador directamente, manteniendo el layout remoto.
+
+La siguiente prueba será más directa: sustituiré solo la creación experimental remota por CREATE_PLAYER_ACTOR_IN_LAYOUT, con MPPLAYER01, y registraré inmediatamente si el actor entra en la tabla de jugadores. No tocaré la creación del jugador local.
+
+Investigado el flujo de creación del jugador y el trazador nativo
+
+Analizando la llamada
+
+Estoy interpretando los argumentos empaquetados: parecen incluir coordenadas y orientación, mientras que el primer valor probablemente sea un identificador o hash, no un puntero válido. Voy a contrastarlo con referencias públicas para aclarar la firma.
+
+Analizaste la llamada
+
+Buscando "ACTOR_MPPLAYER01" "CREATE_PLAYER_ACTOR_IN_LAYOUT"
+
+Listando archivos para localizar el trazador get_this_script_id
+
+Planteando una investigación segura
+
+Estoy evitando invocar directamente la creación remota. Primero quiero registrar el contexto de inicialización y relacionarlo con la creación local para determinar si existe una secuencia previa necesaria.
+
+Se buscó en 1 sitio web
+
+Buscó Natives.h y nombres locales en el repositorio GitHub
+
+Actualizado el spawn remoto de jugadores y transformados contenidos a JavaScript
+
+Actualizado changelog y evaluada creación nativa de jugadores remotos
+
+Inspeccioné diferencias y validé la compilación del puente RDR
+
+Ha pensado durante 2m 41s
+
+Avancé y dejé la siguiente prueba directamente en la rama game-thread/remote-actor-spawn-test-0.2.41.
+
+El cambio central es este:
+
+La prueba remota ya no usa CREATE_ACTOR_IN_LAYOUT.
+
+Ahora usa CREATE_PLAYER_ACTOR_IN_LAYOUT (0x6A307D5F) con los 8 parámetros de la firma documentada:
+Layout, ActorName, ActorModel, PositionXY, PositionZ, RotationXY, RotationZ, OutfitVariation.
+
+Se mantiene MPPLAYER01 = 837 y el mismo ciclo de streaming.
+
+La creación del jugador local no fue modificada.
+
+Después de crear el actor remoto, se consulta inmediatamente:
+IS_ACTOR_PLAYER(actor)
+
+GET_PLAYER_ACTOR(actorHandle)
+
+El tracer ahora decodifica nombre, modelo, posición, rotación y outfitVariation.
+
+La prueba que necesitamos del próximo client.log es muy concreta:
+
+[FrontierRemotePlayer] created ... enum=837 isActorPlayer=1 getPlayerActor(handle)=0x....
+
+y, especialmente, que getPlayerActor(handle) coincida con el actorHandle.
+
+Eso nos dirá directamente si CREATE_PLAYER_ACTOR_IN_LAYOUT hace la segunda mitad que nos faltaba: no solo crear el MPPLAYER01, sino registrarlo como Player.
+
+La rama quedó en:
+
+6f8cbfc45f0a8702deda42da932ea7c27f491a6c
+
+con cambios en rdr_bridge.cpp, startup_native_tracer.cpp y CHANGELOG.md.
+
+Ahora el siguiente paso práctico es compilar esta versión, ejecutarla y subir el nuevo client.log.
+
+## Prompt:
+23/9/2026, 6:26:31
+
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.logahora el actor no apareció
+
+## Response:
+23/9/2026, 6:26:36
+
+Voy a revisar el client.log nuevo y localizar exactamente qué devuelve CREATE_PLAYER_ACTOR_IN_LAYOUT: así sabremos si falló el streaming, la creación, o la propia ruta de jugador.
+
+Ya aparece el motivo inmediato: en este client.log la nueva ruta ni siquiera llega a CREATE_PLAYER_ACTOR_IN_LAYOUT. Lleva 75 intentos quedándose en model not loaded yet enum=837, así que todavía no estamos midiendo la ruta de jugador.
+
+Comparando con la ejecución anterior, el flujo de streaming es idéntico pero esta vez nunca alcanza la creación. Voy a medir el retorno de STREAMING_REQUEST_ACTOR, STREAMING_IS_ACTOR_LOADED e IS_ACTORENUM_INSTALLED para ver qué cambió.
+
+Revisando la carga
+
+Estoy comprobando por qué la ruta del jugador no avanza: el modelo sigue sin cargarse y no aparecen las llamadas de creación. Sospecho que la comprobación o el reintento de carga está bloqueando el flujo, así que revisaré esa secuencia.
+
+Revisada la carga
+
+Inspeccionado el cliente remoto y obtenido contenido del blob de GitHub
+
+Inspeccionada la carga diferida y comparadas secuencias remotas
+
+Instrumentó natives de streaming y buscó hashes en Natives.h
+
+Ajustando los reintentos
+
+Estoy valorando cambiar el argumento de comprobación o dejar de esperar indefinidamente. Como la carga funcionó antes con la misma lógica, probaré un límite de reintentos y registraré un intento de creación aunque el modelo siga pendiente.
+
+Comparando rutas de carga
+
+Estoy considerando precargar el mismo modelo mediante la ruta genérica y crear después el jugador, pero eso podría dejar un actor adicional. Primero revisaré si la inicialización específica del jugador cambia la disponibilidad del modelo.
+
+Ajustados los reintentos y comparadas las rutas de carga
+
+Buscando "CREATE_PLAYER_ACTOR_IN_LAYOUT" "6A307D5F" RDR1
+
+Verificada la semántica de retorno de CREATE_PLAYER_ACTOR
+
+Instrumenté streaming e invocación nativa para crear actores
+
+Corregí invocaciones nativas, jugadores remotos, pruebas y compilación
+
+Ha pensado durante 2m 35s
+
+Sí, ya revisé el client.log nuevo.
+
+El problema está claro:
+
+[FrontierRemoteActor] model not loaded yet enum=837
+
+aparece 75 veces, y no aparece ni una sola vez:
+
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+[FrontierRemotePlayer] created
+
+Así que esta ejecución no llegó a intentar crear el actor remoto. Se quedó bloqueada en el chequeo de streaming.
+
+Además encontré un fallo real en la prueba que habíamos preparado: CREATE_PLAYER_ACTOR_IN_LAYOUT devuelve el PlayerId por el buffer de retorno y escribe el ActorRef en a0. En el caso real del jugador local:
+
+result=925
+postA0=0x10000039D
+
+Por eso había que separar ambos buffers en NativeInvoker.
+
+Ya dejé corregido eso en la rama, junto con:
+
+[FrontierRemotePlayer] streaming ...
+
+para registrar installed, loaded y el resultado de la petición, y ahora la prueba no aborta simplemente porque STREAMING_IS_ACTOR_LOADED dé 0.
+
+También corregí la verificación posterior para que sea la correcta:
+
+PlayerId
+   ↓
+GET_PLAYER_ACTOR(PlayerId)
+   ↓
+ActorHandle
+
+y además:
+
+IS_ACTOR_PLAYER(ActorHandle)
+
+La punta actual de la rama quedó en:
+
+f31238e94ce7c00c4c7116ed146c18fe6adaf6c0
+
+Lo que necesito de la próxima ejecución
+
+Con el binario recompilado de esa punta, el log debería darnos una de estas tres respuestas:
+
+[FrontierRemotePlayer] created ... playerId=...
+
+o:
+
+[FrontierRemotePlayer] CREATE_PLAYER_ACTOR_IN_LAYOUT invoke failed ...
+
+o veremos que el modelo está instalado pero el streaming sigue sin completarse.
+
+La parte importante es que ya no estamos confundiendo PlayerId con ActorRef, que era un error de interpretación bastante importante.
+
+No modificaría todavía el CREATE_ACTOR_IN_LAYOUT que funcionaba con 837: esa ruta nos queda como referencia conocida para comparar contra la ruta de jugador.
+
+## Prompt:
+23/9/2026, 6:33:28
+
+error al buildear C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\game\ 
+src\native_invoker.cpp(426,26): error C2065: 'returnValue': identificador no declarado [C:\Users\Alex\Desktop\Frontier-
+MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\frontier_client.vcx
+proj]
+
+## Response:
+23/9/2026, 6:33:31
+
+Sí, es un error mío en el último parche: el returnValue quedó referenciado fuera del alcance donde fue declarado. Lo corrijo directamente en la rama y verifico el bloque completo antes de dejarlo.
+
+Restaurado invoke_u32 y actualizado el changelog tras verificar correcciones
+
+Ha pensado durante 26s
+
+Correcto. El error estaba en el parche anterior: returnValue se había introducido accidentalmente también en invoke_u32(), donde no existe.
+
+Ya está corregido en la rama:
+
+game-thread/remote-actor-spawn-test-0.2.41
+
+Último commit:
+
+1045e2c558019250898247e884e89d759dbae528
+
+invoke_u32() volvió a leer correctamente:
+
+return guarded_copy(context.stack, &out, sizeof(out));
+
+y returnValue queda exclusivamente dentro de invoke_raw_mutable(), donde corresponde.
+
+No hice ningún otro cambio funcional en la prueba del actor.
+
+Puedes volver a compilar.
+
+## Prompt:
+23/9/2026, 6:43:24
+
+listo ya buildeo y este es el client log https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.log
+
+## Response:
+23/9/2026, 6:43:40
+
+El nuevo log sí avanzó y nos da la pista clave: ACTOR_MPPLAYER01 está instalado (installed=1), pero STREAMING_IS_ACTOR_LOADED sigue devolviendo 0. Aun así, CREATE_PLAYER_ACTOR_IN_LAYOUT ya se está ejecutando y devuelve 0, con a0 sin cambiar, así que tenemos dos problemas separados que aislar.
+
+La nueva ejecución revela otra cosa: la ruta de jugador sí acepta la llamada, pero fuera del contexto del script Player devuelve 0. Eso apunta a que esta native depende del contexto de script. Voy a mover la prueba al contexto real del script Player, usando su mismo NativeTraceContext; eso nos permite probar la ruta correcta sin reemplazar la creación del jugador local.
+
+La arquitectura de la prueba ya está aplicada, pero antes de que compiles voy a corregir una dependencia del tracer que quedó apuntando a handlers que no existen como miembros; usaré el handler actual del NativeInvoker en su lugar.
+
+Analizados los nuevos registros del cliente y GitHub
+
+Investigando la creación del jugador
+
+Estoy interpretando el registro: la creación devuelve cero y deja intacto el identificador, así que probablemente falla por el contexto del script, la disposición del jugador o el modelo 837. También revisaré por qué el intento se repite al no marcarse como creado.
+
+Comparando rutas de creación
+
+Estoy contrastando la ruta dedicada del jugador con la creación genérica, porque el mismo modelo funciona como actor normal. También revisaré el contexto original y los datos auxiliares que podrían influir en el resultado cero.
+
+Investigaste y comparaste rutas de creación del jugador
+
+Buscando "RESPAWN_PLAYER_ACTOR_IN_LAYOUT" RDR1
+
+Inspeccionada la cronología y las llamadas nativas
+
+Implementado sondeo de jugadores remotos en el trazador nativo
+
+Actualizaste hooks y RdrBridge, corregiste referencias y actualizaste changelog
+
+Verificadas diferencias entre commits y referencias del invocador nativo
+
+Corrigió declaraciones adelantadas del trazador nativo y changelog
+
+Ha pensado durante 2m 37s
+
+Ya revisé este nuevo client.log. Ahora tenemos una señal mucho más útil.
+
+Qué ocurrió
+
+La secuencia remota muestra:
+
+[FrontierRemotePlayer] streaming enum=837
+requestOk=1
+installedOk=1 installed=1
+loadedCheckOk=1 loaded=0
+
+Es decir:
+
+MPPLAYER01 = 837 está instalado.
+
+STREAMING_REQUEST_ACTOR está siendo aceptado.
+
+Nuestro STREAMING_IS_ACTOR_LOADED sigue dando 0.
+
+Pero lo más importante es que la native de jugador sí llegó a ejecutarse:
+
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+layout=0x100000333
+actorName=FrontierRemoteTest
+model=837
+...
+postA0=0x100000333
+result=0
+
+Y después:
+
+GET_ACTOR_ENUM actor=0x333 result=0xFFFFFFFF
+IS_ACTOR_PLAYER actor=0x333 result=0
+
+Eso demuestra que esa llamada, hecha desde nuestro contexto artificial del dispatcher, no crea ningún actor. a0 tampoco cambia.
+
+Esto confirma la hipótesis importante
+
+La diferencia no es solamente:
+
+CREATE_ACTOR_IN_LAYOUT
+vs.
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+
+La native CREATE_PLAYER_ACTOR_IN_LAYOUT parece depender del contexto real del script Player.
+
+Por eso la llamada directa desde RdrBridge no funciona aunque los 8 argumentos sean correctos.
+
+Ya cambié la prueba
+
+He movido la prueba real a este flujo:
+
+Player script
+   ↓
+GET_PLAYER_ACTOR(...)
+   ↓
+nuestro hook
+   ↓
+usar EL MISMO NativeTraceContext
+   ↓
+FIND_NAMED_LAYOUT
+   ↓
+STREAMING_REQUEST_ACTOR(837)
+   ↓
+STREAMING_IS_ACTOR_LOADED(...)
+   ↓
+CREATE_PLAYER_ACTOR_IN_LAYOUT(...)
+
+Además ahora guardamos por separado:
+
+PlayerId
+ActorRef
+ActorHandle
+
+y verificamos después:
+
+IS_ACTOR_PLAYER(actorHandle)
+GET_PLAYER_ACTOR(playerId)
+
+Eso es mucho más cercano a cómo el juego realmente crea al jugador.
+
+La rama ya tiene la corrección y la última punta es:
+
+72f99ebfc019beee3ba31aef9d6d4245bd6d4504
+
+Hay otro detalle útil: el chequeo de STREAMING_IS_ACTOR_LOADED ahora prueba sus tres posibles segundos argumentos:
+
+0
+1
+0xFFFFFFFF
+
+porque la documentación pública deja ese parámetro sin nombre claro. Así no estamos asumiendo que 0xFFFFFFFF sea necesariamente el valor correcto.
+
+Qué deberíamos ver en el próximo log
+
+La línea que busco ahora es:
+
+[FrontierRemotePlayerProbe] createOk=1
+...
+playerId=0x....
+actorRef=0x100000....
+actorHandle=0x....
+isActorPlayer=1
+
+Ese sería el salto importante: significaría que hemos conseguido que RDR1 cree un Player real adicional usando MPPLAYER01.
+
+Si vuelve a devolver:
+
+createOk=1 ... playerId=0
+
+entonces ya sabremos que incluso dentro del contexto Player hay otra condición interna que falta, y podremos seguir esa condición sin volver a tocar el spawn genérico que ya sabemos que funciona.
+
+## Prompt:
+23/9/2026, 6:50:11
+
+error al buildear C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\game
+src\startup_native_tracer.cpp(151,25): error C2374: 'frontier::game::anonymous-namespace'::kIsActorPlayer': nueva defi nición; inicialización múltiple [C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2 .41\FrontierMP-0.2.6-source\build\vs2026-x64\frontier_client.vcxproj]       C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source   \game\src\startup_native_tracer.cpp(136,25):       vea la declaración de 'frontier::game::anonymous-namespace'::kIsActorPlayer'
+
+C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\game
+src\startup_native_tracer.cpp(151,25): error C2086: 'const uint32_t frontier::game::anonymous-namespace'::kIsActorPlay er': nueva definición [C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\Fronti erMP-0.2.6-source\build\vs2026-x64\frontier_client.vcxproj]       C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source   \game\src\startup_native_tracer.cpp(136,25):       vea la declaración de 'frontier::game::anonymous-namespace'::kIsActorPlayer'
+
+C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\game
+src\startup_native_tracer.cpp(1523,10): error C2374: 'actorName': nueva definición; inicialización múltiple [C:\Users\A
+lex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x6
+4\frontier_client.vcxproj]
+      C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source
+  \game\src\startup_native_tracer.cpp(1499,10):
+      vea la declaración de 'actorName'
+
+C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\game
+src\startup_native_tracer.cpp(1523,10): error C2086: 'char actorName[160]': nueva definición [C:\Users\Alex\Desktop\Fro
+ntier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\frontier_clie
+nt.vcxproj]
+      C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source
+  \game\src\startup_native_tracer.cpp(1499,10):
+      vea la declaración de 'actorName'
+
+C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\game
+src\startup_native_tracer.cpp(1524,16): error C2374: 'actorNameOk': nueva definición; inicialización múltiple [C:\Users
+\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-
+x64\frontier_client.vcxproj]
+      C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source
+  \game\src\startup_native_tracer.cpp(1500,16):
+      vea la declaración de 'actorNameOk'
+
+C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\game
+src\startup_native_tracer.cpp(1524,16): error C2086: 'const bool actorNameOk': nueva definición [C:\Users\Alex\Desktop
+Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\frontier_c
+lient.vcxproj]
+
+## Response:
+23/9/2026, 6:50:18
+
+Sí, son errores de redeclaración introducidos en startup_native_tracer.cpp. Voy a corregir esas duplicaciones directamente en la rama y revisar el diff para evitar dejar otro error de compilación.
+
+Ya encontré las dos causas exactas: kIsActorPlayer aparece dos veces, y actorName/actorNameOk se declaran una segunda vez en el mismo scope. Las elimino sin tocar la lógica del probe.
+
+La corrección quedó aplicada. Estoy haciendo una última revisión del archivo para confirmar que queda una sola constante y una sola declaración de actorName dentro de ese hook.
+
+Recuperado e inspeccionado el trazador de inicio en varias ramas
+
+Corregí declaraciones duplicadas en trazadores y verifiqué el commit
+
+Verificaste duplicados y diferencias entre commits
+
+Ha pensado durante 1m
+
+Corregido directamente en la rama game-thread/remote-actor-spawn-test-0.2.41.
+
+Cambios:
+
+Eliminada la segunda definición de kIsActorPlayer.
+
+Eliminadas las redeclaraciones duplicadas de actorName y actorNameOk dentro de create_player_actor_in_layout_hook.
+
+La lógica del probe en el contexto del script Player no fue modificada.
+
+Commit final:
+af1abbf70f6d4894cad97223543cdb9e1895cf6e
+
+La revisión del archivo confirma:
+
+kIsActorPlayer: 1 definición.
+
+actorName en ese hook: 1 definición.
+
+actorNameOk: 1 definición.
+
+El segundo actorName que queda pertenece a otro hook distinto y es correcto.
+
+No ejecuté el MSBuild de tu instalación local de Windows, así que el siguiente paso es volver a compilar.
+
+## Prompt:
+23/9/2026, 6:53:34
+
+error al buildear C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\game
+src\startup_native_tracer.cpp(2165,9): error C2065: 'actorNameOk': identificador no declarado [C:\Users\Alex\Desktop\Fr
+ontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\frontier_cli
+ent.vcxproj]
+C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\game
+src\startup_native_tracer.cpp(2166,9): error C2065: 'actorNameOk': identificador no declarado [C:\Users\Alex\Desktop\Fr
+ontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\frontier_cli
+ent.vcxproj]
+C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\game
+src\startup_native_tracer.cpp(2166,23): error C2065: 'actorName': identificador no declarado [C:\Users\Alex\Desktop\Fro
+ntier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\frontier_clie
+nt.vcxproj]
+
+## Response:
+23/9/2026, 6:53:37
+
+Ese último cambio eliminó una declaración que sí necesitaba otro bloque del archivo. Voy a restaurarla en el scope correcto, manteniendo eliminadas las redeclaraciones originales.
+
+Inspeccioné y restauré declaraciones actorName, verificando duplicados
+
+Ha pensado durante 16s
+
+Corregido.
+
+El problema era que actorNameOk pertenecía a create_actor_in_layout_hook, pero había quedado eliminado al limpiar la duplicación del hook anterior. Lo restauré exactamente en su scope correcto.
+
+Commit actual:
+f8ac09de9d00fcd481a86dc25a4360264dd79fce
+
+La sección ahora tiene correctamente:
+
+actorName y actorNameOk declarados dentro de create_actor_in_layout_hook.
+
+actorName independiente del otro hook de trazado.
+
+Una sola definición de kIsActorPlayer.
+
+Podés volver a ejecutar el build.
+
+## Prompt:
+23/9/2026, 6:55:56
+
+error al buildear startup_native_tracer.obj : error LNK2019: símbolo externo "unsigned __int64 __cdecl frontier::game::float_bits_for_tra
+cer(float)" (?float_bits_for_tracer@game@frontier@@YA_KM@Z) sin resolver al que se hace referencia en la función "priva
+te: static void __cdecl frontier::game::StartupNativeTracer::get_player_actor_hook(void *)" (?get_player_actor_hook@Sta
+rtupNativeTracer@game@frontier@@CAXPEAX@Z) [C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spa
+wn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\frontier_client.vcxproj]
+startup_native_tracer.obj : error LNK2019: símbolo externo "unsigned __int64 __cdecl frontier::game::pack_vec2_for_trac
+er(float,float)" (?pack_vec2_for_tracer@game@frontier@@YA_KMM@Z) sin resolver al que se hace referencia en la función "
+private: static void __cdecl frontier::game::StartupNativeTracer::get_player_actor_hook(void *)" (?get_player_actor_hoo
+k@StartupNativeTracer@game@frontier@@CAXPEAX@Z) [C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-acto
+r-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\frontier_client.vcxproj]
+C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build
+\vs2026-x64\bin\Release\FrontierClient.dll : fatal error LNK1120: 2 externos sin resolver [C:\Users\Alex\Desktop\Fronti
+er-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\frontier_client.
+vcxproj]
+
+## Response:
+23/9/2026, 6:56:02
+
+Ahora el compilador ya pasó; el fallo es de enlazado. Las funciones helper quedaron declaradas con enlace externo pero definidas dentro del anonymous namespace; voy a unificar su enlace.
+
+Confirmado: las definiciones están en el anonymous namespace, mientras que las declaraciones del probe quedaron en frontier::game. Eso explica exactamente los dos LNK2019.
+
+Revisando ámbitos C++
+
+Estoy comprobando si las declaraciones y definiciones están entrando en espacios de nombres distintos. Varias secciones anónimas del mismo archivo podrían compartir ámbito, pero el error sugiere que las funciones están resolviéndose como frontier::game; necesito verificar cierres y anidamiento antes de mover código.
+
+Revisado ámbitos C++
+
+Corregido el ámbito e inspeccionado el espacio de nombres
+
+Movidas declaraciones y comparado el código de inicialización
+
+Ha pensado durante 24s
+
+Corregido.
+
+El LNK2019 se debía a que:
+
+las declaraciones de float_bits_for_tracer() y pack_vec2_for_tracer() estaban en frontier::game;
+
+las implementaciones estaban dentro del anonymous namespace.
+
+Ahora ambas declaraciones también están dentro del anonymous namespace, por lo que el enlazador encuentra las implementaciones correctas.
+
+Commit actual:
+2cc44a69c3e951762b227aa1f426053b57dae851
+
+Volvé a ejecutar el build. Este error concreto de los dos símbolos externos debería quedar resuelto.
+
+## Prompt:
+23/9/2026, 7:01:28
+
+ya buildeó aca el client log https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.log
+
+## Response:
+23/9/2026, 7:01:32
+
+Voy a leer el client.log recién subido y buscar específicamente el resultado de FrontierRemotePlayerProbe, además de cualquier excepción o señal de que el actor se registró correctamente.
+
+El log da una pista importante: el CREATE_PLAYER_ACTOR_IN_LAYOUT local sí ocurre en ctx=0x14F320, pero el probe nunca llega al create; queda bloqueado por streamLoaded=0. Esto desplaza el problema al streaming, no al constructor de jugador.
+
+Además encontré algo útil en el historial del propio proyecto: la prueba estaba pensada para poder ejecutar CREATE_PLAYER_ACTOR_IN_LAYOUT aun con STREAMING_IS_ACTOR_LOADED=false. En esta versión quedó nuevamente bloqueada por ese chequeo.
+
+Voy a corregir eso y, de paso, consultar STREAMING_IS_ACTOR_LOADED con un solo argumento, que coincide con otra cabecera pública de RDR1.
+
+Analizando la carga
+
+Estoy comprobando por qué la transmisión sigue sin marcarse como cargada. La llamada parece ejecutarse dentro del contexto correcto, pero quizá sus argumentos o el modelo elegido no sean los adecuados; revisaré la firma y el estado devuelto.
+
+Analicé la carga
+
+Analizado client.log y flujo de carga del actor en GitHub
+
+Investigadas solicitudes de streaming y carga de modelos
+
+Contrastando firmas
+
+Estoy comparando la firma y el significado de estas funciones con referencias públicas, porque la discrepancia entre una y dos entradas podría explicar el estado incorrecto. También revisaré el código actual para confirmar cómo se conecta el contexto.
+
+Contrastaste firmas
+
+Verificando referencias
+
+Estoy comprobando si la función requiere una o dos entradas, ya que esa diferencia podría estar provocando el fallo. Después contrastaré la definición local con una referencia pública antes de cambiar el código.
+
+Verificadas las referencias
+
+Se buscó en 1 sitio web
+
+Inspeccionada la firma, instalación 837 y problemas conocidos
+
+Actualizado el registro de carga y creación de actores y changelog
+
+Verificaste cambios y commits finales
+
+Ha pensado durante 1m 24s
+
+Ya revisé el client.log nuevo.
+
+Qué muestra
+
+El flujo llegó correctamente al contexto real del script Player:
+
+CREATE_PLAYER_ACTOR_IN_LAYOUT ... layout=0x10000029F actorName=player model=0
+... postA0=0x100000312 result=786
+GET_PLAYER_ACTOR trace=0 player=786 result=0x312
+ctx=0x14F320 ret=0x1401E4355
+
+Eso confirma que el contexto que estamos reutilizando para el probe es el mismo contexto donde el juego crea al jugador local.
+
+Pero el probe remoto no llegó a ejecutar CREATE_PLAYER_ACTOR_IN_LAYOUT. Se repite:
+
+[FrontierRemotePlayerProbe] waiting layoutValid=1 streamLoaded=0 ...
+
+durante todas las oportunidades disponibles. Por eso no tenemos todavía createOk, playerId, actorRef ni isActorPlayer.
+
+Además encontré una discrepancia importante: una cabecera pública de RDR1 define STREAMING_IS_ACTOR_LOADED como una native de un solo argumento (ActorModel), mientras nuestro probe estaba intentando usar dos. (pastebin.com)
+
+Cambio aplicado
+
+Ya dejé la rama preparada para el siguiente test:
+
+STREAMING_IS_ACTOR_LOADED(837) ahora se consulta con un solo argumento.
+
+El resultado de streaming ya no bloquea el CREATE_PLAYER_ACTOR_IN_LAYOUT.
+
+Una vez que FrontierRemoteLayout sea válido, el probe intenta crear el jugador remoto aunque streamLoaded=0.
+
+El estado de streaming queda como diagnóstico.
+
+Commit principal:
+
+a34658137ddc8f22f2eee0d913ff9be7cc10c051
+
+Changelog:
+
+a819a9b687c4607418bb8afd12ce7e45db25014c
+
+Así que el próximo client.log debería darnos finalmente una línea del tipo:
+
+[FrontierRemotePlayerProbe] createOk=...
+    playerId=...
+    actorRef=...
+    actorHandle=...
+    isActorPlayer=...
+
+Ese es el dato que necesitamos para saber si CREATE_PLAYER_ACTOR_IN_LAYOUT realmente puede generar un segundo jugador desde el contexto Player.
+
+## Prompt:
+23/9/2026, 7:08:31
+
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.log
+
+## Response:
+23/9/2026, 7:08:36
+
+Voy a revisar la versión actual del log y, esta vez, extraeré las primeras apariciones del nuevo FrontierRemotePlayerProbe junto con cualquier llamada de streaming asociada.
+
+Ahora sí tenemos el resultado decisivo: el native ejecutó y devolvió createOk=1, pero PlayerId=0 y IS_ACTOR_PLAYER=0. Voy a correlacionar ese actorHandle=0x30A con las trazas posteriores para ver qué creó realmente.
+
+Hay un dato aún más específico: createOk=1 significa que nuestro wrapper pudo llamar al native, no que el juego haya creado un Player. El a0 tampoco fue reescrito y siguió siendo 0x10000030A, mientras el local sí lo convierte en un ActorRef.
+
+Eso apunta a que el native está rechazando el contexto/argumentos del segundo player. Voy a comparar ahora el PlayerLayout real con nuestro FrontierRemoteLayout y preparar el siguiente experimento usando el mismo layout que usa el jugador local, sin cambiar todavía el resto del flujo.
+
+Revisados registros de replicación remota y contenido del blob
+
+Inspeccionadas trazas nativas tras crear el actor
+
+Analizando la creación remota
+
+Estoy comparando los argumentos antes y después de la llamada. El valor devuelto parece identificar el diseño, no un actor creado, así que cambiaré a un diseño de jugador y revisaré si el nombre o el registro de jugadores están limitando la creación remota.
+
+Analizada la creación remota
+
+Comparados fallos de actores nativos e investigada su creación en layouts
+
+Preparando la siguiente prueba
+
+Estoy buscando documentación pública y referencias para confirmar el comportamiento. Después, probaré el diseño de jugador con argumentos controlados, manteniendo el modelo y comparando cuidadosamente el resultado para distinguir entre rechazo y creación real.
+
+Preparada la siguiente prueba
+
+Aislando el diseño
+
+Voy a probar primero el diseño de jugador con el mismo modelo que ya funciona en la creación genérica. Así podré separar si el fallo proviene del diseño o del modelo, sin mezclar variables.
+
+Aislado el diseño
+
+Buscando en la web
+
+Investigó enums nativos y corrigió PlayerLayout y protección de intentos
+
+Resumiendo el registro y verificando el parche
+
+Ha pensado durante 1m 14s
+
+Ya revisé el log nuevo y tenemos un avance real.
+
+El probe ahora sí ejecuta CREATE_PLAYER_ACTOR_IN_LAYOUT dentro del contexto correcto:
+
+createOk=1
+layout=0x0000030A
+playerId=0x00000000
+actorRef=0x10000030A
+actorHandle=0x0000030A
+isActorPlayer=0
+position=(-837.760,92.547,2372.670)
+
+La diferencia clave es que a0 no fue reescrito. En el jugador local ocurre:
+
+preA0=0x10000028F
+postA0=0x100000302
+result=770
+
+mientras que en el probe remoto:
+
+a0=0x10000030A
+postA0=0x10000030A
+result=0
+
+Por tanto, createOk=1 solo indica que nuestra llamada al handler terminó; el juego no aceptó crear un segundo Player con esos argumentos.
+
+También queda claro que el MPPLAYER01/streaming no era el bloqueo principal: incluso con loaded=0, el native llegó a ejecutarse.
+
+Siguiente experimento aplicado
+
+Cambié únicamente el Layout del probe:
+
+"FrontierRemoteLayout"
+
+→
+
+"PlayerLayout"
+
+El resto queda igual: FrontierRemoteTest, modelo 837, posición +2 m y el mismo contexto Player.
+
+Commit:
+
+763924ba6f49796c33d571948c8e8658478b79ee
+
+Y actualicé el changelog:
+
+d2ac62a7a11be67b35978b89f4b42eb52b2055a8
+
+La modificación es deliberadamente mínima: ahora vamos a comprobar si CREATE_PLAYER_ACTOR_IN_LAYOUT exige específicamente PlayerLayout. Si también devuelve PlayerId=0 y deja a0 intacto, tendremos evidencia fuerte de que ese native está diseñado exclusivamente para el player local y habrá que seguir por la ruta de INIT_NATIVE_ACTORENUM_PLAYER/registro de player, en lugar de insistir con CREATE_PLAYER_ACTOR_IN_LAYOUT.
+
+## Prompt:
+23/9/2026, 7:16:04
+
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.log
+
+## Response:
+23/9/2026, 7:16:23
+
+El nuevo resultado cambia bastante la hipótesis anterior. Voy a comprobar un detalle: nuestro probe dice layout=0x30A, pero el PlayerLayout real del jugador es 0x28F; necesito determinar si FIND_NAMED_LAYOUT falló y terminó creando un layout duplicado.
+
+Confirmé el detalle: el cambio a PlayerLayout no llegó al PlayerLayout real. El helper FIND_NAMED_LAYOUT dentro del contexto capturado devolvió 0; el código cayó en CREATE_LAYOUT y creó 0x30A.
+
+Eso invalida ese ensayo como prueba del layout. Voy a corregirlo capturando directamente el handle 0x28F del CREATE_PLAYER_ACTOR_IN_LAYOUT real y reutilizando ese mismo handle para el probe.
+
+El análisis queda cerrado: el último log no prueba el PlayerLayout, porque 0x30A fue un layout nuevo. Ya corregí eso en el código para reutilizar literalmente el handle del PlayerLayout que el juego usó para el jugador local.
+
+Buscando "INIT_NATIVE_ACTORENUM_PLAYER" Red Dead Redemption
+
+Inspeccionaste las trazas del uso de PlayerLayout existente
+
+Analizando el registro
+
+Estoy viendo que PlayerLayout no se está usando realmente: la búsqueda devuelve cero y el sistema crea un duplicado como alternativa. Propongo capturar el identificador del diseño local y reutilizarlo, manteniendo de momento el modelo y nombre actuales para aislar la causa.
+
+Analizado el registro
+
+Buscando "INIT_NATIVE_ACTORENUM_PLAYER" "PlayerLayout" RDR1
+
+Modificó PlayerLayout, trazas nativas y verificó compilación y changelog
+
+Actualizaste el changelog y corregiste la sonda de ejecución única
+
+Ha pensado durante 53s
+
+Revisé el client.log actual. El resultado del experimento anterior era:
+
+createOk=1
+layout=0x0000030A
+playerId=0
+actorRef=0x10000030A
+actorHandle=0x30A
+isActorPlayer=0
+
+Pero 0x30A no era el PlayerLayout real. El log muestra que el PlayerLayout verdadero era 0x28F; nuestro FIND_NAMED_LAYOUT sintético devolvió 0, y el código creó otro layout con CREATE_LAYOUT.
+
+Por tanto, ese resultado no permitía concluir que CREATE_PLAYER_ACTOR_IN_LAYOUT rechace PlayerLayout.
+
+Corrección aplicada
+
+Ahora el probe captura directamente a0 de la llamada real:
+
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+layout=0x10000028F
+actorName=player
+...
+postA0=0x100000302
+result=770
+
+y reutiliza ese mismo PlayerLayout para el segundo intento. Ya no hace FIND_NAMED_LAYOUT ni CREATE_LAYOUT para el probe.
+
+Commit:
+
+16594335ae2a101a2679880232fb174a4bb11bc1
+
+Changelog:
+
+06955e2d925c5708e87d7ad56c7a51984c76846e
+
+El próximo log nos dará una prueba limpia: mismo PlayerLayout del jugador local + segundo CREATE_PLAYER_ACTOR_IN_LAYOUT. Si vuelve a producir playerId=0 y a0 intacto, entonces podremos descartar definitivamente el problema del layout y concentrarnos en model=837, actorName, o en el registro interno que convierte el actor en Player.
+
+## Prompt:
+23/9/2026, 7:22:26
+
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.log
+
+## Response:
+23/9/2026, 7:22:33
+
+El log nuevo ya está disponible. Voy a comparar el PlayerLayout capturado con la llamada remota y revisar si finalmente hubo reescritura de a0, un PlayerId distinto de cero o clasificación como player.
+
+Este log confirma la prueba importante: ahora usamos exactamente PlayerLayout=0x29F, y aun así el segundo CREATE_PLAYER_ACTOR_IN_LAYOUT deja a0 intacto y devuelve PlayerId=0. El layout queda descartado como causa.
+
+También aparece INIT_NATIVE_ACTORENUM_PLAYER antes de la creación local. Voy a inspeccionar sus argumentos y el orden de las natives alrededor de esa creación para reproducir el ciclo real en el probe.
+
+El nuevo log confirma que PlayerLayout ya es el correcto (0x29F), pero el native sigue devolviendo PlayerId=0. Hay otra pista: INIT_NATIVE_ACTORENUM_PLAYER se ejecuta una vez antes de lanzar el script Player, en otro contexto (0x14F070), así que parece ser inicialización global, no la promoción del actor remoto.
+
+Voy a buscar en la base de natives las rutas de jugador/red que podrían registrar un ACTOR_MPPLAYER01 como Player, en vez de seguir forzando CREATE_PLAYER_ACTOR_IN_LAYOUT.
+
+Inspeccioné el registro más reciente
+
+Inspeccionado el ciclo de creación de jugadores remotos
+
+Aclarando la inicialización
+
+Estoy comprobando si la inicialización global del jugador necesita ejecutarse antes de lanzar el script y cómo interpretar sus argumentos. También estoy comparando los contextos para evitar confundirlos, porque sus direcciones no coinciden.
+
+Probando firmas posibles
+
+Estoy considerando si el nombre del actor o la firma exacta están provocando el resultado inesperado. El siguiente paso lógico es comparar nombres y parámetros en una prueba controlada, sin asumir todavía que el identificador devuelto sea válido.
+
+Aclarada la inicialización y probadas firmas posibles
+
+Buscando "RESPAWN_PLAYER_ACTOR_IN_LAYOUT" "CBA75200" RDR
+
+Investigaste firmas nativas y creación de jugadores remotos
+
+Buscando "NET_GAMER_SET_ACTOR_OVERRIDE" "77D6ABF5" RDR1
+
+Inspeccioné funciones de red y creación de actores remotos del repositorio
+
+Confirmando el resultado
+
+Ya está claro que el valor devuelto corresponde únicamente a la referencia del layout, así que no se ha creado ningún actor. Estoy revisando la condición del modelo y evitando repetir llamadas que puedan acumular efectos no deseados.
+
+Diseñando una prueba segura
+
+Voy a probar un modelo válido y detener los reintentos tras el primer fallo. Así podré distinguir entre una restricción del modelo y otra relacionada con jugadores duplicados, reduciendo efectos secundarios durante la prueba.
+
+Confirmado el resultado y diseñada una prueba segura
+
+Se ha buscado en 10 sitios web
+
+Investigó documentación y renderizado de actores y jugadores remotos en RDRMP
+
+Investigada la API Player y la implementación de player.get en RDRMP
+
+Revisando la siguiente prueba
+
+Dispongo de suficiente información para inspeccionar el código de la prueba actual y ajustar el experimento. Quiero comprobar el comportamiento con un modelo válido, registrar claramente el resultado y evitar ejecuciones repetidas innecesarias.
+
+Revisada la prueba proporcionada
+
+Se buscó en 1 sitio web
+
+Restaurada comprobación RDRMP y actualizado changelog a 0.2.59
+
+Revisé las diferencias de la rama final
+
+Buscando en la web
+
+Ha pensado durante 3m
+
+Revisé el log nuevo. El resultado es consistente con la prueba anterior:
+
+PlayerLayout = 0x29F
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+playerId = 0
+actorRef = 0x10000029F
+actorHandle = 0x29F
+isActorPlayer = 0
+
+Es decir, usar el PlayerLayout real tampoco hace que el segundo actor se convierta en Player. El a0 sigue sin ser reescrito.
+
+También encontré y corregí una cuestión importante en nuestra instrumentación: STREAMING_IS_ACTOR_LOADED tiene dos argumentos (model, unk) en la referencia RDRMP; la prueba anterior de un solo argumento hacía que el valor loaded=0 no fuera fiable. (Nexus Mods)
+
+Ya quedó aplicado en la rama:
+
+0527b8b99912ef300de2d5b2cc436b688da038ff - restaura la llamada de 2 argumentos y prueba 0, 1 y 0xFFFFFFFF.
+
+becc6d42eee2235daa1a0c64f739a3668422fc95 - actualiza el changelog.
+
+Conclusión técnica actual
+
+Tenemos descartados, con las pruebas hechas:
+
+Contexto: el CREATE_PLAYER_ACTOR_IN_LAYOUT se ejecuta dentro del mismo ctx=0x14F320 donde el juego crea al jugador local.
+
+Layout: usamos exactamente el PlayerLayout real creado por el juego.
+
+Resultado: el native termina, pero para el segundo jugador devuelve 0 y no modifica a0.
+
+Esto hace bastante probable que CREATE_PLAYER_ACTOR_IN_LAYOUT sea una ruta ligada al jugador local/estado interno de Player, y no el mecanismo que usa el juego para registrar jugadores remotos.
+
+La referencia RDRMP expone por separado CREATE_PLAYER_ACTOR_IN_LAYOUT, RESPAWN_PLAYER_ACTOR_IN_LAYOUT y INIT_NATIVE_ACTORENUM_PLAYER; no documenta CREATE_PLAYER_ACTOR_IN_LAYOUT como una API de múltiples jugadores. (Nexus Mods)
+
+El siguiente paso que tiene más sentido es volver al camino que ya demostró crear visualmente ACTOR_MPPLAYER01: CREATE_ACTOR_IN_LAYOUT → obtener Actor real → investigar cómo el subsistema multiplayer enlaza ese Actor con su Player, en lugar de seguir intentando crear un segundo PlayerId con CREATE_PLAYER_ACTOR_IN_LAYOUT.
+
+Sources:
+
+RedHook LUA at Red Dead Redemption Nexus - Mods and community
+
+## Prompt:
+23/9/2026, 7:36:04
+
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.log
+
+## Response:
+23/9/2026, 7:36:12
+
+Voy a revisar el log nuevo y centrarme en el estado de MPPLAYER01, el Actor remoto y cualquier llamada de red/registro que aparezca después de la creación.
+
+El log confirma dos cosas: PlayerLayout=0x28F ya es correcto, pero el probe sigue devolviendo PlayerId=0. Ahora quiero aislar si falla por el modelo 837 o por usar el native de creación dentro de GET_PLAYER_ACTOR.
+
+El resultado no muestra crash ni excepción. La prueba de segundo Player es definitivamente negativa: con el PlayerLayout exacto, CREATE_PLAYER_ACTOR_IN_LAYOUT no registra un nuevo Player.
+
+Hay una vía más útil para el objetivo final: crear un ACTOR_MPPLAYER01 con la ruta genérica que ya sabemos que funciona y probar sobre ese actor real RESPAWN_PLAYER_ACTOR_IN_LAYOUT, que es la native diseñada para actuar sobre un actor existente. Voy a preparar esa prueba de forma one-shot para no seguir invocando el constructor fallido cientos de veces.
+
+Analizando el contexto nativo
+
+Estoy examinando por qué la creación remota devuelve cero. La pista principal es que la llamada ocurre dentro de otro manejador nativo, así que podría faltar contexto de ejecución adicional, aunque el registro previo del jugador también merece investigación.
+
+Analizado el contexto nativo
+
+Inspeccionó los registros más recientes del cliente
+
+Diseñando pruebas controladas
+
+Estoy comparando modelo, nombre y disposición para aislar la causa del fallo. Empezaría con una única prueba usando el modelo básico y el mismo diseño local, evitando llamadas repetidas que puedan introducir reentrada o efectos secundarios.
+
+Investigada la creación de actores remotos en callbacks nativos
+
+Buscando "CREATE_PLAYER_ACTOR_IN_LAYOUT" "PlayerLayout" RDRMP
+
+Inspeccionaste excepciones y violaciones de acceso
+
+Verificada la reaparición de actores remotos y la compilación del código
+
+Ha pensado durante 1m 12s
+
+Revisé el client.log nuevo. La conclusión de esta ejecución es clara:
+
+PlayerLayout = 0x0000028F
+
+y el segundo:
+
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+
+sigue fallando como creación de Player:
+
+playerId=0
+actorRef=0x10000028F
+actorHandle=0x28F
+isActorPlayer=0
+
+Además, el log muestra que INIT_NATIVE_ACTORENUM_PLAYER se ejecuta previamente con:
+
+args={0x00000001, ..., ..., 0x00000014}
+ctx=0x14F070
+
+y después se lanza scripting/DesignerDefined/Player. No hay indicios de crash ni excepción.
+
+Cambié la estrategia
+
+Dejé de repetir el CREATE_PLAYER_ACTOR_IN_LAYOUT, porque ya lo probamos con:
+
+contexto real de Player;
+
+PlayerLayout real;
+
+modelo 837.
+
+Y siempre devuelve PlayerId=0.
+
+Ahora la prueba hace:
+
+CREATE_ACTOR_IN_LAYOUT
+        ↓
+ACTOR_MPPLAYER01 real
+        ↓
+RESPAWN_PLAYER_ACTOR_IN_LAYOUT
+        ↓
+IS_ACTOR_PLAYER
+
+Es exactamente el camino que necesitamos comprobar: primero obtener un Actor remoto válido y después comprobar si la native de respawn puede convertirlo/promoverlo a actor de Player.
+
+La prueba es one-shot, para que no vuelva a ejecutar cientos de llamadas fallidas.
+
+Commit:
+
+5f45b8c0e4a846115056601512b17c6866616bed
+
+Changelog:
+
+b03bab2b1b66653eadffb4934d1ee7793e686bd2
+
+En el próximo log buscamos estas dos líneas:
+
+[FrontierRemotePlayerProbe] genericCreateOk=1 ... actorHandle=...
+[FrontierRemotePlayerProbe] respawnOk=1 ... isActorPlayer=...
+
+El primer resultado nos confirma de nuevo la creación del MPPLAYER01; el segundo nos dirá si RESPAWN_PLAYER_ACTOR_IN_LAYOUT es realmente una ruta válida para convertir ese actor en un Player.
+
+## Prompt:
+23/9/2026, 7:41:55
+
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.log
+
+## Response:
+23/9/2026, 7:42:03
+
+Voy a revisar el client.log de esa rama y aislar específicamente el resultado de la prueba genericCreate/respawn, además de cualquier cambio relevante en el flujo de Player.
+
+El log ya da un resultado claro: el CREATE_ACTOR_IN_LAYOUT tampoco creó un actor real. El retorno fue no-cero, pero a0 quedó como PlayerLayout y actorValid=0; por tanto, esta prueba reentrante no llegó a ejecutar una creación válida.
+
+La causa queda acotada a reentrada. El NativeInvoker ya tiene un dispatcher que ejecuta tareas en el mismo hilo del juego; voy a mover la creación/respawn fuera del GET_PLAYER_ACTOR hook y dejar sólo el “armado” dentro del hook.
+
+Recuperado y filtrado el registro relevante de GitHub
+
+Revisando la creación remota
+
+Estoy comprobando cómo programar la creación de un actor sin bloquear el hilo del juego. La tarea debe conservar la disposición y las coordenadas, invocar la función nativa de forma segura y verificar tanto el resultado devuelto como el argumento modificado.
+
+Investigaste trazado nativo y despacho seguro de actores exhaustivamente
+
+Refactoricé la creación y reaparición diferida de actores en el hilo del juego
+
+Buscó referencias de adjuntos y verificó el parche del tracer
+
+Ha pensado durante 3m 20s
+
+Revisé el client.log. El resultado de esta ejecución es concluyente sobre la prueba reentrante, pero no sobre RESPAWN_PLAYER_ACTOR_IN_LAYOUT en sí.
+
+La secuencia relevante fue:
+
+CREATE_LAYOUT PlayerLayout = 0x2E9
+
+El jugador local se creó correctamente:
+PlayerId=860, postA0=0x10000035C, posición (-839.760, 92.547, 2372.670).
+
+Nuestra prueba intentó crear ACTOR_MPPLAYER01, pero devolvió:
+createResult=0x364, actorRef=0x1000002E9, actorHandle=0x2E9, actorValid=0.
+
+Es decir, el actorRef siguió siendo el PlayerLayout, no apareció un Actor válido.
+
+Después, RESPAWN_PLAYER_ACTOR_IN_LAYOUT devolvió respawnResult=0, mantuvo el mismo actorRef, y IS_ACTOR_PLAYER=0.
+
+Por tanto, esa ejecución no demuestra que respawn falle como mecanismo de promoción. Demuestra que llamar CREATE_ACTOR_IN_LAYOUT desde dentro de GET_PLAYER_ACTOR es inválido/reentrante y produce un retorno engañoso sin Actor real.
+
+Ya dejé corregida la rama para que la siguiente prueba ocurra fuera de esa reentrada:
+
+GET_PLAYER_ACTOR sólo captura PlayerLayout + posición.
+
+El trabajo real queda encolado al GameThreadDispatcher.
+
+CREATE_ACTOR_IN_LAYOUT(MPPLAYER01) se ejecutará después, en el hilo del juego.
+
+Se comprobarán actorValid y GET_ACTOR_ENUM.
+
+Sólo sobre un Actor válido se ejecutará RESPAWN_PLAYER_ACTOR_IN_LAYOUT.
+
+Después se comprobarán actorValid, IS_ACTOR_PLAYER y GET_ACTOR_ENUM.
+
+HEAD actual de la rama: 9caf6d327478576a5cfbc586405e490a61c469d4.
+
+El próximo log debería contener, como mínimo:
+
+[FrontierRemotePlayerProbe] deferred probe queued ...
+[FrontierRemotePlayerProbe] deferredCreateOk=...
+[FrontierRemotePlayerProbe] deferredRespawnOk=...
+
+Eso nos dará por primera vez una prueba válida de si RESPAWN_PLAYER_ACTOR_IN_LAYOUT puede convertir un MPPLAYER01 real en un actor reconocido como Player.
+
+## Prompt:
+23/9/2026, 7:54:31
+
+no reescribas ni codifiques nada solo dame el diagnostico https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.log
+
+## Response:
+23/9/2026, 7:54:41
+
+Voy a limitarme al diagnóstico del log actual: sin editar archivos, sin proponer código y separando hechos observados de hipótesis.
+
+La segunda prueba tampoco produjo un Actor válido. Hay, sin embargo, un dato nuevo importante: esta vez la llamada ocurrió en un contexto separado del GET_PLAYER_ACTOR, así que ya no podemos atribuir el fallo simplemente a reentrada.
+
+Analizando el resultado diferido
+
+Estoy comparando el retorno 0x329 con el identificador original y observo que el argumento no se modifica. Esto sugiere que el valor devuelto podría ser un identificador distinto, o que faltan datos en el contexto de invocación.
+
+Analizado el resultado diferido
+
+Inspeccionó registros de cliente, GitHub y coincidencias exactas de sondeos
+
+Analicé el retorno de creación diferida y el identificador 0x329
+
+Verificando la firma nativa
+
+Necesito confirmar si la creación devuelve directamente el identificador del actor o si modifica el argumento por referencia. Mientras tanto, trato 0x329 como un retorno válido pero distinto, no como prueba de que el argumento deba cambiar.
+
+Corrigiendo la validación
+
+El diagnóstico clave es que estoy comprobando el identificador original 0x28F, no el retorno 0x329. La invocación terminó correctamente, pero aún no sé si ese retorno representa realmente al actor creado.
+
+Se buscó en 1 sitio web
+
+Ha pensado durante 47s
+
+Diagnóstico del log actual
+
+Hay un cambio importante respecto de la ejecución anterior: la prueba ya no está fallando por reentrada en GET_PLAYER_ACTOR.
+
+La secuencia relevante es:
+
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+layout=0x10000028F
+postA0=0x100000302
+result=770
+
+Eso confirma que el Player local sigue creándose correctamente.
+
+Después:
+
+[FrontierRemotePlayerProbe] deferred probe queued
+layout=0x0000028F
+position=(-837.760,92.547,2372.670)
+
+La tarea efectivamente fue diferida.
+
+Luego aparece:
+
+CREATE_ACTOR_IN_LAYOUT trace=0
+preLayout=0x10000028F
+actorEnum=837
+...
+postA0=0x10000028F
+result=0x329
+ctx=0x14E700
+
+Y aquí está el dato más importante.
+
+1. CREATE_ACTOR_IN_LAYOUT sí llegó a ejecutarse
+
+El ctx=0x14E700 es distinto del contexto habitual 0x14F320 del Player script.
+
+Por tanto, la llamada ya no es la llamada reentrante anterior.
+
+Además:
+
+deferredCreateOk=1
+createResult=0x00000329
+
+deferredCreateOk=1 sólo significa que la invocación terminó correctamente desde el punto de vista del invocador; no significa automáticamente que el Actor haya sido creado.
+
+2. La prueba está comprobando el identificador equivocado
+
+El código de la prueba tomó:
+
+actorRef=0x10000028F
+actorHandle=0x0000028F
+
+porque a0 no fue modificado.
+
+Pero el native devolvió:
+
+createResult=0x00000329
+
+Y después el log demuestra que la validación se hizo sobre:
+
+IS_ACTOR_VALID actor=0x0000028F result=0
+
+Es decir:
+
+se validó 0x28F, que es el PlayerLayout, no el 0x329 retornado por CREATE_ACTOR_IN_LAYOUT.
+
+Eso invalida la conclusión anterior de que "CREATE_ACTOR_IN_LAYOUT no creó nada".
+
+No podemos afirmar todavía que 0x329 sea definitivamente el Actor creado, pero es el candidato natural que el log dejó sin comprobar.
+
+3. GET_ACTOR_ENUM(0x28F) = 0xFFFFFFFF confirma que 0x28F no era un Actor
+
+El log contiene:
+
+GET_ACTOR_ENUM actor=0x28F result=0xFFFFFFFF enum=4294967295
+
+Esto es coherente con lo anterior.
+
+0x28F corresponde al PlayerLayout capturado, no a un Actor válido. Por eso:
+
+IS_ACTOR_VALID(0x28F) = 0
+GET_ACTOR_ENUM(0x28F) = 0xFFFFFFFF
+
+son resultados esperables.
+
+4. El RESPAWN_PLAYER_ACTOR_IN_LAYOUT ni siquiera llegó a probarse en esta ejecución
+
+Sólo existen dos líneas de FrontierRemotePlayerProbe:
+
+deferred probe queued
+deferredCreateOk=1 ...
+
+No existe:
+
+deferredRespawnOk=...
+
+Por tanto, esta ejecución no nos dice absolutamente nada concluyente sobre RESPAWN_PLAYER_ACTOR_IN_LAYOUT.
+
+La prueba se detuvo antes porque consideró inválido el supuesto Actor.
+
+5. Hay una segunda evidencia interesante
+
+El mismo 0x329 aparece en:
+
+IS_ACTOR_LOCAL_PLAYER actor=0x00000329 result=0
+
+Pero esto no demuestra que sea nuestro Actor remoto. Sólo demuestra que el juego consultó IS_ACTOR_LOCAL_PLAYER(0x329) en algún momento. No hay una correlación suficiente en el log para atribuirlo inequívocamente a nuestra creación.
+
+Conclusión
+
+El diagnóstico correcto de esta ejecución es:
+
+La reentrada está resuelta. El native CREATE_ACTOR_IN_LAYOUT se ejecutó en un contexto separado y devolvió 0x329, pero la instrumentación interpretó a0=0x10000028F como el Actor y validó el identificador equivocado.
+
+Por eso todavía no sabemos si ACTOR_MPPLAYER01 fue creado o no.
+
+Lo que sí sabemos:
+
+Player local                -> confirmado
+Dispatcher                  -> confirmado
+Llamada diferida            -> confirmada
+CREATE_ACTOR_IN_LAYOUT      -> ejecutado
+actorEnum solicitado        -> 837 / MPPLAYER01
+retorno del native          -> 0x329
+a0 después de la llamada    -> sigue siendo PlayerLayout 0x28F
+IS_ACTOR_VALID(0x28F)       -> 0
+GET_ACTOR_ENUM(0x28F)       -> 0xFFFFFFFF
+RESPAWN                     -> no probado
+IS_ACTOR_PLAYER             -> no probado sobre un Actor creado
+
+La pieza que falta para interpretar esta ejecución es determinar qué representa exactamente el 0x329 retornado por CREATE_ACTOR_IN_LAYOUT. Ese es ahora el punto central del diagnóstico. (github.com)
+
+Sources:
+
+RDR-PC-Natives-DB/Natives.h at main · K3rhos/RDR-PC-Natives-DB · GitHub
+
+## Prompt:
+23/9/2026, 7:56:57
+
+y si simplemente no podemos hacer que se detecte como player nativo? que alternativas tendriamos?
+
+## Response:
+23/9/2026, 7:57:03
+
+Se buscó en 1 sitio web
+
+Ha pensado durante 14s
+
+Sí. De hecho, con lo que hemos visto, yo dejaría de hacer depender el proyecto de que IS_ACTOR_PLAYER devuelva 1 para los remotos, al menos como requisito inmediato.
+
+La razón es estructural: RDR1 tiene una separación bastante clara entre Actor y Player. El propio conjunto de natives expone GET_PLAYER_ACTOR(PlayerId) por un lado y IS_ACTOR_PLAYER(Actor) por otro, además de los sistemas de slots (GET_ACTOR_SLOT, GET_SLOT_ACTOR, IS_SLOT_VALID). (GitHub)
+
+RDRMP, además, está diseñado precisamente como una capa multiplayer propia sobre el juego original; su documentación describe el proyecto como un multiplayer alternativo para RDR1, no como una reutilización simple del sistema nativo de Players del juego. (GitHub)
+
+Las alternativas que tendríamos
+
+1. Actor remoto "Player-like"
+
+Esta sería la vía más directa.
+
+Cada jugador remoto tendría un Actor normal, por ejemplo ACTOR_MPPLAYER01, y Frontier-MP mantendría:
+
+NetworkPlayerId
+    ↓
+RemotePlayer
+    ↓
+ActorHandle
+    ↓
+posición / rotación / animación / armas / estado
+
+No sería un PlayerId nativo del juego, pero visualmente y funcionalmente podría comportarse como jugador remoto.
+
+Esto nos permite implementar nosotros:
+
+movimiento
+
+sincronización de posición
+
+heading
+
+animaciones
+
+armas
+
+daño/muerte
+
+montura
+
+nombre/nametag
+
+interpolación
+
+estado de apuntado
+
+aparición/desaparición
+
+Es, conceptualmente, la separación más limpia.
+
+2. Usar el sistema de slots de actores como nuestra "tabla de jugadores"
+
+Esto me parece especialmente interesante porque RDR1 ya expone:
+
+GET_ACTOR_SLOT
+GET_SLOT_ACTOR
+GET_LOCAL_SLOT
+IS_SLOT_VALID
+GET_SLOT_NAME
+GET_SLOT_POSITION
+
+(GitHub)
+
+En vez de:
+
+PlayerId → Actor
+
+podríamos trabajar con:
+
+RemotePlayerId → ActorSlot → Actor
+
+Eso tiene una ventaja importante: seguiríamos utilizando parte de la infraestructura interna que el juego ya utiliza para gestionar actores, sin exigir que el actor sea reconocido como Player.
+
+3. Mantener un Actor real y falsear únicamente las consultas que necesite nuestro multiplayer
+
+Esta es una solución más profunda.
+
+Ejemplo conceptual:
+
+Juego pregunta:
+"¿Este actor es Player?"
+
+        ↓
+
+Interceptor Frontier-MP
+
+        ↓
+
+Actor remoto conocido
+        ↓
+sí, tratarlo como RemotePlayer
+
+Es decir, no convertimos realmente el Actor en un Player interno. En cambio, hacemos que nuestro sistema y determinadas rutas del juego interpreten ese Actor como jugador remoto.
+
+Esto puede ser mucho más flexible, pero tiene un coste: hay que descubrir qué partes del código del juego realmente dependen de IS_ACTOR_PLAYER.
+
+4. Crear nuestro propio "Player layer" encima del Actor
+
+Aquí separaríamos completamente los conceptos:
+
+RDR Native Player
+    └── sólo local
+
+Frontier Player
+    ├── local Player
+    ├── remote Player 1
+    ├── remote Player 2
+    └── remote Player N
+
+Y cada Frontier Player tendría:
+
+networkId
+actor
+position
+rotation
+health
+model
+outfit
+weapon
+mount
+animation
+state
+
+El Player nativo sería simplemente un detalle de implementación del jugador local.
+
+Esto encaja bastante bien con la arquitectura de un mod multiplayer propio como RDRMP. (GitHub)
+
+Hay una alternativa todavía más agresiva
+
+5. Aprovechar un único Player nativo y convertir todos los remotos en Actors especiales
+
+El juego tendría:
+
+Player nativo:
+    local solamente
+
+Actors:
+    remoto 1
+    remoto 2
+    remoto 3
+    ...
+
+Y Frontier-MP se encargaría de toda la semántica multiplayer.
+
+Eso evita completamente intentar registrar múltiples PlayerId donde probablemente el juego no fue diseñado para hacerlo.
+
+Lo que yo concluiría con las pruebas actuales
+
+No asumiría todavía que "es imposible crear un Player nativo remoto".
+
+Pero sí tenemos evidencia suficiente para separar dos problemas:
+
+Crear MPPLAYER01 Actor
+        ≠
+Convertirlo en Native Player
+
+Y nuestro log actual todavía ni siquiera ha demostrado completamente el primero, porque descubrimos que el 0x329 retornado por CREATE_ACTOR_IN_LAYOUT no estaba siendo interpretado como corresponde.
+
+Pero incluso suponiendo que consigamos un Actor válido, no necesitamos resolver necesariamente IS_ACTOR_PLAYER=1 para continuar con Frontier-MP.
+
+De hecho, una arquitectura:
+
+RemotePlayer
+    ↓
+Actor
+
+en lugar de:
+
+RemotePlayer
+    ↓
+Native PlayerId
+    ↓
+Native Actor
+
+probablemente nos daría más control sobre la implementación multiplayer.
+
+Y el sistema de natives de RDR1 ya muestra que muchas capacidades importantes operan directamente sobre Actor, independientemente de que ese Actor sea Player o no: heading, animación, controles específicos, combate, daño, etc. (GitHub)
+
+En resumen: sí, tenemos varias salidas. La más importante es que IS_ACTOR_PLAYER=1 puede convertirse en una optimización o compatibilidad futura, no en el requisito fundamental para tener jugadores remotos funcionales.
+
+Sources:
+
+RDR-PC-Natives-DB/Natives.h at main · K3rhos/RDR-PC-Natives-DB · GitHub
+
+## Prompt:
+23/9/2026, 8:00:55
+
+Entonces cual es la mejor opcion?
+
+## Response:
+23/9/2026, 8:01:04
+
+La mejor opción para Frontier-MP, con lo que hemos comprobado, es crear una capa propia de RemotePlayer respaldada por un Actor normal. No intentaría hacer que los jugadores remotos sean PlayerId nativos.
+
+Arquitectura recomendada
+
+Frontier Player
+│
+├── LocalPlayer
+│   └── Native PlayerId → Native Actor
+│
+└── RemotePlayer
+    └── ActorHandle
+
+Para los remotos:
+
+NetworkPlayerId
+        ↓
+RemotePlayer
+        ↓
+ACTOR_MPPLAYER01
+        ↓
+ActorHandle
+
+Y Frontier controla sobre ese actor:
+
+posición
+rotación
+movimiento
+animación
+modelo/outfit
+arma
+salud
+muerte
+montura
+estado de apuntado
+interpolación
+nametag
+
+Por qué elegiría esta arquitectura
+
+Primero, porque ya sabemos que el juego puede trabajar con Actors independientemente de IS_ACTOR_PLAYER. El problema que estamos encontrando está específicamente en la promoción/registro como Player, no en el concepto de Actor.
+
+Segundo, evita depender de partes que parecen estar profundamente ligadas al Player local:
+
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+GET_PLAYER_ACTOR(PlayerId)
+INIT_NATIVE_ACTORENUM_PLAYER
+SWITCH_PLAYER_TO_ENUM
+
+Si intentamos forzar varios Players nativos, terminamos luchando contra estructuras internas que probablemente fueron diseñadas alrededor del jugador local y/o de la sesión multiplayer original.
+
+Tercero, nos permite avanzar ahora. No necesitamos resolver:
+
+IS_ACTOR_PLAYER(remoteActor) == 1
+
+para implementar el multiplayer.
+
+El punto clave
+
+Yo haría que RemotePlayer no sea simplemente un ActorHandle, sino una entidad propia:
+
+RemotePlayer
+{
+    networkId
+    actorHandle
+    model
+    position
+    rotation
+    velocity
+    health
+    weapon
+    animationState
+    mountState
+    ...
+}
+
+El Actor es la representación física/renderizada en RDR1.
+
+La entidad RemotePlayer es la representación multiplayer.
+
+Eso nos da una separación muy importante:
+
+Red
+ ↓
+RemotePlayer
+ ↓
+Actor
+ ↓
+RDR1
+
+en vez de:
+
+Red
+ ↓
+Native Player system
+ ↓
+RDR1
+
+¿Y los slots?
+
+Los slots de Actor los usaría como mecanismo auxiliar de identificación/seguimiento cuando comprobemos que nos resultan útiles, pero no los convertiría en la identidad principal de Frontier-MP.
+
+La identidad principal debe ser:
+
+NetworkPlayerId
+
+y el Actor puede cambiar:
+
+NetworkPlayerId 17
+    ↓
+Actor 0x329
+
+muere / respawnea
+
+NetworkPlayerId 17
+    ↓
+Actor 0x41F
+
+El jugador sigue siendo el mismo aunque cambie su Actor.
+
+La ventaja estratégica
+
+Esto también deja abierta la posibilidad futura de descubrir cómo funciona el sistema nativo:
+
+RemotePlayer
+   ↓
+Actor
+
+ahora, y eventualmente:
+
+RemotePlayer
+   ↓
+Native Player
+
+si algún día encontramos el mecanismo correcto.
+
+No tendríamos que rehacer la arquitectura.
+
+Mi conclusión
+
+Para Frontier-MP elegiría:
+
+RemotePlayer propio + ACTOR_MPPLAYER01/Actor normal + sincronización y comportamiento controlados por Frontier-MP.
+
+Dejaría Native PlayerId exclusivamente para el jugador local mientras no exista evidencia sólida de que el motor permite registrar Players remotos de forma segura.
+
+Eso nos permite dejar de perseguir una propiedad concreta (IS_ACTOR_PLAYER=1) y centrarnos en conseguir lo realmente importante: tener un segundo personaje plenamente funcional y sincronizable dentro del mundo.
+
+## Prompt:
+23/9/2026, 8:01:55
+
+okey hagamos una prueba de esto entonces
+
+## Response:
+23/9/2026, 8:02:23
+
+Perfecto. Para esta prueba voy a aislar completamente el concepto RemotePlayer: un Actor remoto real, sin intentar convertirlo en Player nativo, y verificar primero que el Actor exista y sea válido.
+
+Hay un detalle técnico adicional en el log actual: la prueba usa invoke_raw_mutable para un native genérico. Eso puede alterar la semántica del buffer de retorno. Para esta prueba no necesitamos RESPAWN ni PlayerId; sólo necesitamos demostrar que un ACTOR_MPPLAYER01 normal puede existir como Actor remoto.
+
+La prueba será más limpia así: reutilizar FrontierRemoteLayout, pedir MPPLAYER01, y hacer CREATE_ACTOR_IN_LAYOUT con el invocador normal, cuyo buffer de retorno ya sabemos que coincide con el patrón de los Actors genéricos del juego.
+
+Analizando la prueba
+
+Estoy revisando el código actual y los resultados previos para entender por qué la creación remota devuelve un valor inesperado. Quiero verificar la disposición correcta de los datos y probar una variante mínima sin alterar todavía el comportamiento existente.
+
+Analizaste la prueba
+
+Investigada la creación y visibilidad de actores mediante commits y logs históricos
+
+Preparando una prueba aislada
+
+Voy a centrar la prueba en crear un actor genérico con una disposición dedicada, solicitar antes sus recursos y registrar el resultado. También evitaré que la sonda anterior interfiera, para distinguir claramente cada comportamiento.
+
+Validando actores remotos y analizando cabeceras del llamador
+
+Actualizaste instrumentación, puente y trazador, restaurando cambios y verificando archivos actuales
+
+Verificaste commits y changelog, actualizaste archivos, pruebas y lógica puente
+
+Actualicé pruebas, trazado, puente y changelog con SHAs corregidos
+
+Verificó el commit 92f y posibles problemas de reintento
+
+Ha pensado durante 3m 30s
+
+Listo. La prueba quedó preparada en la rama:
+
+game-thread/remote-actor-spawn-test-0.2.41
+
+Commit actual:
+
+92f2d41583ed3746723a4a7b762f6227b38996b4
+
+Ahora la prueba hace únicamente esto:
+
+Player local → posición → +2m → FrontierRemoteLayout → CREATE_ACTOR_IN_LAYOUT(MPPLAYER01)
+
+Y registra:
+
+actorRef
+
+actorHandle
+
+actorValid
+
+actorEnum
+
+isActorPlayer
+
+El resultado que queremos encontrar en el próximo client.log es:
+
+[FrontierRemotePlayer] generic actor test ...
+
+La interpretación será sencilla:
+
+actorValid=1
+actorEnum=837
+
+significa que conseguimos un Actor MPPLAYER01 real, aunque:
+
+isActorPlayer=0
+
+Eso sería suficiente para validar la arquitectura RemotePlayer → Actor.
+
+No se intenta ningún PlayerId, RESPAWN_PLAYER_ACTOR_IN_LAYOUT ni promoción nativa en esta prueba.
+
+## Prompt:
+23/9/2026, 8:11:15
+
+error al buildear C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\game
+src\rdr_bridge.cpp(544,43): error C2065: 'kNativeIsActorValid': identificador no declarado [C:\Users\Alex\Desktop\Front
+ier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\frontier_client
+.vcxproj]
+
+## Response:
+23/9/2026, 8:11:24
+
+El error es puntual: en rdr_bridge.cpp usamos kNativeIsActorValid pero esa constante no está declarada en ese archivo. Voy a corregir sólo esa referencia y verificar las constantes relacionadas.
+
+Añadida y corregida la constante nativa de validación de actores
+
+Ha pensado durante 30s
+
+Corregido.
+
+El error era exactamente el que indica MSVC: faltaba declarar kNativeIsActorValid en rdr_bridge.cpp.
+
+Añadí la constante correcta:
+
+IS_ACTOR_VALID = 0xBA6C3E92
+
+Commit aplicado en la rama:
+
+2293590be25c995f46a5c9683ada60d5384694e9
+
+Ya puedes volver a compilar.
+
+## Prompt:
+23/9/2026, 8:15:47
+
+ya buildeo https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.log
+
+## Response:
+23/9/2026, 8:15:55
+
+Voy a revisar el client.log de esa rama y aislar la parte de la prueba FrontierRemotePlayer, especialmente creación, validez, enum y IS_ACTOR_PLAYER.
+
+
+
+Powered by ChatGPT Exporter (https://www.chatgptexporter.com)
