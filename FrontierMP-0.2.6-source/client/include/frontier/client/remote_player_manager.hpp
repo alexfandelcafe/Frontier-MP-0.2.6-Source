@@ -18,6 +18,7 @@ struct RemotePlayer final {
     std::uint32_t lastServerTick{};
     std::uint64_t lastSeenMs{};
     bool spawnPending{};
+    std::uint64_t lastSpawnAttemptMs{};
 };
 
 class RemotePlayerManager final {
@@ -33,7 +34,8 @@ public:
     std::size_t size() const { return players_.size(); }
 
 private:
-    bool ensure_spawned(RemotePlayer& player, frontier::game::RdrBridge& bridge);
+    bool ensure_spawned(RemotePlayer& player, std::uint64_t nowMs,
+                        frontier::game::RdrBridge& bridge);
     void remove_player(std::unordered_map<std::uint16_t, RemotePlayer>::iterator it,
                        frontier::game::RdrBridge& bridge);
 
