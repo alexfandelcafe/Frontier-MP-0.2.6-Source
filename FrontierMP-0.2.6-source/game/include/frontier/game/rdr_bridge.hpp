@@ -26,6 +26,8 @@ public:
     bool request_remote_actor_test(const PlayerState& origin, std::string& error) const;
     bool spawn_remote_actor(std::uint16_t playerId, const PlayerState& state,
                             RemoteActorHandle& outActor, std::string& error) const;
+    bool update_remote_actor_motion(std::uint32_t actorHandle, const PlayerState& state,
+                                    std::string& error) const;
     bool update_remote_actor_transform(std::uint32_t actorHandle, const PlayerState& state,
                                        std::string& error) const;
     bool destroy_remote_actor(std::uint32_t actorHandle, std::string& error) const;
