@@ -31,6 +31,9 @@ constexpr std::uint32_t kNativeFindNamedLayout = 0x5699DE7E;
 constexpr std::uint32_t kNativeCreateLayout = 0x6CA53214;
 constexpr std::uint32_t kNativeIsLayoutRefValid = 0xFC8E55ED;
 constexpr std::uint32_t kNativeCreateActorInLayout = 0x8D67F397;
+constexpr std::uint32_t kNativeCreatePlayerActorInLayout = 0x6A307D5F;
+constexpr std::uint32_t kNativeGetPlayerActor = 0xE8CFDD53;
+constexpr std::uint32_t kNativeIsActorPlayer = 0xB27E91E7;
 constexpr std::uint32_t kNativeGetActorEnum = 0x0B28E9EC;
 constexpr std::uint32_t kNativeStreamingRequestActor = 0xB0A79FEE;
 constexpr std::uint32_t kNativeStreamingIsActorLoaded = 0x7DF72579;
@@ -500,7 +503,7 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
 
             if (layoutValid) {
                 // Use the same multiplayer actor family used by the game's MP startup
-                // path and request the asset before attempting actor creation.
+                // path and request the asset before attempting player-actor creation.
                 args[0] = static_cast<std::uintptr_t>(kRemoteTestActorEnum);
                 args[1] = 1;
                 args[2] = 0;
@@ -540,9 +543,12 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                 args[7] = 0;
 
                 result = 0;
-                if (!nativeInvoker_.invoke_raw(kNativeCreateActorInLayout, args, 7u, result)) {
+                // The generic CREATE_ACTOR_IN_LAYOUT path proved the MPPLAYER01 model can
+                // render, but it is not registered as a player. Test the engine's dedicated
+                // player-actor creation route in the isolated remote layout instead.
+                if (!nativeInvoker_.invoke_raw(kNativeCreatePlayerActorInLayout, args, 8u, result)) {
                     std::fprintf(stderr,
-                                 "[FrontierRemoteActor] CREATE_ACTOR_IN_LAYOUT invoke failed layout=0x%08X\\n",
+                                 "[FrontierRemotePlayer] CREATE_PLAYER_ACTOR_IN_LAYOUT invoke failed layout=0x%08X\\n",
                                  layoutId);
                 } else {
                     actorRef = result;
@@ -550,37 +556,45 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                     spawned = actorHandle != 0u;
 
                     if (spawned) {
-                        // CREATE_ACTOR_IN_LAYOUT returns the engine's tagged ActorRef in
-                        // the native return slot. Preserve that exact value for follow-up natives.
-                        // Native Actor parameters use the 32-bit handle, not the tagged
-                        // ActorRef returned by CREATE_ACTOR_IN_LAYOUT.
+                        std::uint32_t enumResult = 0;
+                        bool enumOk = false;
                         args[0] = static_cast<std::uintptr_t>(actorHandle);
                         result = 0;
                         if (nativeInvoker_.invoke_raw(kNativeGetActorEnum, args, 1u, result)) {
-                            char buffer[320]{};
-                            std::snprintf(buffer, sizeof(buffer),
-                                          "[FrontierRemoteActor] spawned layout=0x%08X actorRef=0x%llX actorHandle=0x%08X enum=%u position=(%.3f,%.3f,%.3f)",
-                                          layoutId,
-                                          static_cast<unsigned long long>(actorRef),
-                                          actorHandle,
-                                          static_cast<std::uint32_t>(result),
-                                          x, y, z);
-                            write_bridge_log_line(buffer);
-                        } else {
-                            char buffer[320]{};
-                            std::snprintf(buffer, sizeof(buffer),
-                                          "[FrontierRemoteActor] spawned layout=0x%08X actorRef=0x%llX actorHandle=0x%08X position=(%.3f,%.3f,%.3f) enum-check=failed",
-                                          layoutId,
-                                          static_cast<unsigned long long>(actorRef),
-                                          actorHandle,
-                                          x, y, z);
-                            write_bridge_log_line(buffer);
+                            enumResult = static_cast<std::uint32_t>(result);
+                            enumOk = true;
                         }
 
-                        // Previous diagnostic scan established that this CREATE_ACTOR_IN_LAYOUT
-                        // path can register the resulting actor in GeneralManagerSlots with a
-                        // sagGuid. Do not rescan the live manager here; keep the spawn experiment
-                        // free of broad raw-memory iteration.
+                        // These two registry queries are already used by the live engine
+                        // startup path and provide a direct post-create check without any
+                        // broad raw-memory scan.
+                        args[0] = static_cast<std::uintptr_t>(actorHandle);
+                        std::uintptr_t isPlayerResult = 0;
+                        const bool isPlayerOk =
+                            nativeInvoker_.invoke_raw(kNativeIsActorPlayer, args, 1u, isPlayerResult);
+
+                        args[0] = static_cast<std::uintptr_t>(actorHandle);
+                        std::uintptr_t getPlayerActorResult = 0;
+                        const bool getPlayerActorOk =
+                            nativeInvoker_.invoke_raw(kNativeGetPlayerActor, args, 1u, getPlayerActorResult);
+
+                        char buffer[520]{};
+                        std::snprintf(
+                            buffer, sizeof(buffer),
+                            "[FrontierRemotePlayer] created layout=0x%08X actorRef=0x%llX actorHandle=0x%08X "
+                            "enum=%s%u isActorPlayer=%s%u getPlayerActor(handle)=%s0x%08X "
+                            "position=(%.3f,%.3f,%.3f)",
+                            layoutId,
+                            static_cast<unsigned long long>(actorRef),
+                            actorHandle,
+                            enumOk ? "" : "?",
+                            enumResult,
+                            isPlayerOk ? "" : "?",
+                            isPlayerOk ? static_cast<unsigned>(isPlayerResult) : 0u,
+                            getPlayerActorOk ? "" : "?",
+                            getPlayerActorOk ? static_cast<unsigned>(getPlayerActorResult) : 0u,
+                            x, y, z);
+                        write_bridge_log_line(buffer);
                     }
                 }
             } else {
