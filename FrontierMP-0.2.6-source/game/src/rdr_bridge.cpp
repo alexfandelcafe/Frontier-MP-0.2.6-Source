@@ -547,8 +547,6 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                             write_bridge_log_line(buffer);
                         }
 
-#endif
-
                     }
                 }
             } else {
