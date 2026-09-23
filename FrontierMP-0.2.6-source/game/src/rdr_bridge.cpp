@@ -200,6 +200,7 @@ bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild 
         remoteActorTestSpawned_ = false;
         remoteActorTestLayout_ = 0;
         remoteActorTestActorRef_ = 0;
+        remoteActorLayout_ = 0;
     }
     {
         std::lock_guard lock(runtimeSnapshotMutex_);
