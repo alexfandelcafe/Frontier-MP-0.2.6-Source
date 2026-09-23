@@ -47,6 +47,38 @@ struct MinimalMatrix34 final {
     Vec3 position;
 };
 
+#ifdef _WIN32
+bool guarded_read_u32(std::uintptr_t address, std::uint32_t& out) {
+    __try {
+        out = *reinterpret_cast<const std::uint32_t*>(address);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        out = 0;
+        return false;
+    }
+}
+
+bool guarded_read_pointer(std::uintptr_t address, std::uintptr_t& out) {
+    __try {
+        out = *reinterpret_cast<const std::uintptr_t*>(address);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        out = 0;
+        return false;
+    }
+}
+
+bool guarded_read_position(std::uintptr_t address, Vec3& out) {
+    __try {
+        out = reinterpret_cast<const MinimalMatrix34*>(address)->position;
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        out = {};
+        return false;
+    }
+}
+#endif
+
 } // namespace
 
 std::uintptr_t RdrBridge::resolve_rip_target(std::uintptr_t instruction) const {
@@ -366,9 +398,7 @@ bool RdrBridge::read_local_player_state(PlayerState& outState, std::string& erro
     }
 
     std::uint32_t guid = 0;
-    __try {
-        guid = reinterpret_cast<const MinimalSagPlayer*>(localPlayer)->guid;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    if (!guarded_read_u32(localPlayer + offsetof(MinimalSagPlayer, guid), guid)) {
         char buffer[224]{};
         std::snprintf(buffer, sizeof(buffer),
                       "local player GUID read failed ptr=0x%llX",
@@ -402,13 +432,8 @@ bool RdrBridge::read_local_player_state(PlayerState& outState, std::string& erro
     }
 
     std::uintptr_t actorComponent = 0;
-    bool actorComponentRead = false;
-    __try {
-        actorComponent = reinterpret_cast<const MinimalSagActor*>(actor)->actorComponent;
-        actorComponentRead = true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        actorComponentRead = false;
-    }
+    const bool actorComponentRead =
+        guarded_read_pointer(actor + offsetof(MinimalSagActor, actorComponent), actorComponent);
     if (!actorComponentRead) {
         char buffer[240]{};
         std::snprintf(buffer, sizeof(buffer),
@@ -444,13 +469,8 @@ bool RdrBridge::read_local_player_state(PlayerState& outState, std::string& erro
     }
 
     std::uintptr_t transform = 0;
-    bool transformRead = false;
-    __try {
-        transform = reinterpret_cast<const MinimalSagActorComponent*>(actorComponent)->transform;
-        transformRead = true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        transformRead = false;
-    }
+    const bool transformRead =
+        guarded_read_pointer(actorComponent + offsetof(MinimalSagActorComponent, transform), transform);
     if (!transformRead) {
         char buffer[256]{};
         std::snprintf(buffer, sizeof(buffer),
@@ -485,9 +505,7 @@ bool RdrBridge::read_local_player_state(PlayerState& outState, std::string& erro
         return false;
     }
 
-    __try {
-        outState.position = reinterpret_cast<const MinimalMatrix34*>(transform)->position;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    if (!guarded_read_position(transform, outState.position)) {
         error = "position read failed";
         return false;
     }
