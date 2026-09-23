@@ -1,3 +1,8 @@
+## 0.2.54
+- Remove the invalid out-of-script CREATE_PLAYER_ACTOR_IN_LAYOUT probe from RdrBridge.
+- Keep RdrBridge limited to arming the remote layout and requesting MPPLAYER01.
+- Move the actual player-actor creation experiment into the live Player script native context captured by StartupNativeTracer.
+
 ## 0.2.53
 - Fix a regression in invoke_u32 introduced while separating native return storage for mutable invocations.
 - Keep returnValue local to invoke_raw_mutable so the existing u32 native path continues to read its return slot correctly.
