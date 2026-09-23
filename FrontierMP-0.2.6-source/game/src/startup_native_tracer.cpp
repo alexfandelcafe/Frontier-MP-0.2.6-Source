@@ -27,6 +27,9 @@ bool g_scriptHandleOwnerKnown[kObservedScriptCapacity]{};
 bool g_scriptHandleValid[kObservedScriptCapacity]{};
 bool g_scriptHandleValidKnown[kObservedScriptCapacity]{};
 std::size_t g_scriptHandleCount = 0;
+std::uint32_t gCreatePlayerActorTraceCount = 0;
+std::uint32_t gGetPlayerActorTraceCount = 0;
+std::uint32_t gCreateActorInLayoutTraceCount = 0;
 
 void append_execution_identity(char* buffer, std::size_t capacity, std::size_t& used, void* context) {
     if (!buffer || capacity == 0 || used >= capacity) return;
@@ -107,6 +110,9 @@ constexpr std::uint32_t kNetSessionQuickJoin = 0x8DF05A4Fu;
 constexpr std::uint32_t kNetSessionStartGameplay = 0x86FF3A9Bu;
 constexpr std::uint32_t kNetSessionEndGameplay = 0x81FD9851u;
 constexpr std::uint32_t kNetSessionIsGameplayStarted = 0xDC88B308u;
+constexpr std::uint32_t kCreatePlayerActorInLayout = 0x6A307D5Fu;
+constexpr std::uint32_t kGetPlayerActor = 0xE8CFDD53u;
+constexpr std::uint32_t kCreateActorInLayout = 0x8D67F397u;
 
 struct NativeTraceContext final {
     void* returnBuffer{};
@@ -502,6 +508,19 @@ bool StartupNativeTracer::attach(NativeInvoker& invoker, std::string& error) {
                      &StartupNativeTracer::net_session_is_gameplay_started_hook,
                      originalNetSessionIsGameplayStarted_,
                      "NET_SESSION_IS_GAMEPLAY_STARTED");
+
+    install_optional(kCreatePlayerActorInLayout,
+                     &StartupNativeTracer::create_player_actor_in_layout_hook,
+                     originalCreatePlayerActorInLayout_,
+                     "CREATE_PLAYER_ACTOR_IN_LAYOUT");
+    install_optional(kGetPlayerActor,
+                     &StartupNativeTracer::get_player_actor_hook,
+                     originalGetPlayerActor_,
+                     "GET_PLAYER_ACTOR");
+    install_optional(kCreateActorInLayout,
+                     &StartupNativeTracer::create_actor_in_layout_hook,
+                     originalCreateActorInLayout_,
+                     "CREATE_ACTOR_IN_LAYOUT");
 
     g_scriptHandleCount = 0;
     std::memset(g_scriptHandlePaths, 0, sizeof(g_scriptHandlePaths));
@@ -1180,6 +1199,119 @@ void StartupNativeTracer::net_session_is_gameplay_started_hook(void* context) {
         "[FrontierNativeTrace] NET_SESSION_IS_GAMEPLAY_STARTED result=%s%u",
         resultOk ? "" : "?",
         resultOk ? result : 0u));
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+
+void StartupNativeTracer::create_player_actor_in_layout_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    const auto traceIndex = gCreatePlayerActorTraceCount++;
+    if (tracer->originalCreatePlayerActorInLayout_) {
+        tracer->originalCreatePlayerActorInLayout_(context);
+    }
+    if (traceIndex >= 64) return;
+
+#ifdef _WIN32
+    const auto* call = reinterpret_cast<const NativeTraceContext*>(context);
+    const auto argc = call ? call->argumentCount : 0u;
+#else
+    const auto argc = 0u;
+#endif
+    std::uint32_t result = 0;
+#ifdef _WIN32
+    const bool resultOk = read_u32_return(context, result);
+#else
+    const bool resultOk = false;
+#endif
+
+    char buffer[640]{};
+    std::snprintf(buffer, sizeof(buffer),
+                  "[FrontierNativeTrace] CREATE_PLAYER_ACTOR_IN_LAYOUT trace=%u argc=%u "
+                  "a0=0x%llX a1=0x%llX a2=0x%llX a3=0x%llX a4=0x%llX "
+                  "a5=0x%llX a6=0x%llX a7=0x%llX a8=0x%llX a9=0x%llX result=%s%u",
+                  traceIndex, argc,
+                  static_cast<unsigned long long>(read_u64_arg_value(context, 0)),
+                  static_cast<unsigned long long>(read_u64_arg_value(context, 1)),
+                  static_cast<unsigned long long>(read_u64_arg_value(context, 2)),
+                  static_cast<unsigned long long>(read_u64_arg_value(context, 3)),
+                  static_cast<unsigned long long>(read_u64_arg_value(context, 4)),
+                  static_cast<unsigned long long>(read_u64_arg_value(context, 5)),
+                  static_cast<unsigned long long>(read_u64_arg_value(context, 6)),
+                  static_cast<unsigned long long>(read_u64_arg_value(context, 7)),
+                  static_cast<unsigned long long>(read_u64_arg_value(context, 8)),
+                  static_cast<unsigned long long>(read_u64_arg_value(context, 9)),
+                  resultOk ? "" : "?", resultOk ? result : 0u);
+    std::size_t used = std::strlen(buffer);
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+void StartupNativeTracer::get_player_actor_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    const auto traceIndex = gGetPlayerActorTraceCount++;
+    if (tracer->originalGetPlayerActor_) {
+        tracer->originalGetPlayerActor_(context);
+    }
+    if (traceIndex >= 64) return;
+
+    std::uintptr_t result = 0;
+#ifdef _WIN32
+    const bool resultOk = read_u64_return(context, result);
+#else
+    const bool resultOk = false;
+#endif
+    std::int32_t player = 0;
+    const bool playerOk = read_i32_arg(context, 0, player);
+
+    char buffer[288]{};
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        buffer, sizeof(buffer),
+        "[FrontierNativeTrace] GET_PLAYER_ACTOR trace=%u player=%s%d result=%s0x%llX",
+        traceIndex,
+        playerOk ? "" : "?",
+        playerOk ? player : 0,
+        resultOk ? "" : "?",
+        static_cast<unsigned long long>(result)));
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+void StartupNativeTracer::create_actor_in_layout_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    const auto traceIndex = gCreateActorInLayoutTraceCount++;
+    if (tracer->originalCreateActorInLayout_) {
+        tracer->originalCreateActorInLayout_(context);
+    }
+    if (traceIndex >= 64) return;
+
+#ifdef _WIN32
+    const auto* call = reinterpret_cast<const NativeTraceContext*>(context);
+    const auto argc = call ? call->argumentCount : 0u;
+#else
+    const auto argc = 0u;
+#endif
+    std::uintptr_t result = 0;
+#ifdef _WIN32
+    const bool resultOk = read_u64_return(context, result);
+#else
+    const bool resultOk = false;
+#endif
+
+    char buffer[320]{};
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        buffer, sizeof(buffer),
+        "[FrontierNativeTrace] CREATE_ACTOR_IN_LAYOUT trace=%u argc=%u result=%s0x%llX",
+        traceIndex,
+        argc,
+        resultOk ? "" : "?",
+        static_cast<unsigned long long>(result)));
     append_execution_identity(buffer, sizeof(buffer), used, context);
     log(buffer);
 }
