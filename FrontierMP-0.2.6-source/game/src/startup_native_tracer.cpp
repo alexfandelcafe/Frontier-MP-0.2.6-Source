@@ -1315,17 +1315,34 @@ void StartupNativeTracer::create_player_actor_in_layout_hook(void* context) {
     if (!tracer) return;
 
     const auto traceIndex = gCreatePlayerActorTraceCount++;
-    if (tracer->originalCreatePlayerActorInLayout_) {
-        tracer->originalCreatePlayerActorInLayout_(context);
-    }
-    if (traceIndex >= 64) return;
-
 #ifdef _WIN32
     const auto* call = reinterpret_cast<const NativeTraceContext*>(context);
     const auto argc = call ? call->argumentCount : 0u;
 #else
     const auto argc = 0u;
 #endif
+
+    // Capture arguments before the engine executes the native. Some RDR natives
+    // rewrite argument slots during execution; post-call logging can therefore
+    // mistake an output/reference for the original input.
+    const auto preA0 = read_u64_arg_value(context, 0);
+    const auto preA1 = read_u64_arg_value(context, 1);
+    const auto preA2 = read_u64_arg_value(context, 2);
+    const auto preA3 = read_u64_arg_value(context, 3);
+    const auto preA4 = read_u64_arg_value(context, 4);
+    const auto preA5 = read_u64_arg_value(context, 5);
+    const auto preA6 = read_u64_arg_value(context, 6);
+    const auto preA7 = read_u64_arg_value(context, 7);
+    const auto preA8 = read_u64_arg_value(context, 8);
+    const auto preA9 = read_u64_arg_value(context, 9);
+
+    if (tracer->originalCreatePlayerActorInLayout_) {
+        tracer->originalCreatePlayerActorInLayout_(context);
+    }
+    if (traceIndex >= 64) return;
+
+    const auto postA0 = read_u64_arg_value(context, 0);
+
     std::uint32_t result = 0;
 #ifdef _WIN32
     const bool resultOk = read_u32_return(context, result);
@@ -1333,23 +1350,26 @@ void StartupNativeTracer::create_player_actor_in_layout_hook(void* context) {
     const bool resultOk = false;
 #endif
 
-    char buffer[640]{};
+    char buffer[760]{};
     std::snprintf(buffer, sizeof(buffer),
                   "[FrontierNativeTrace] CREATE_PLAYER_ACTOR_IN_LAYOUT trace=%u argc=%u "
-                  "a0=0x%llX a1=0x%llX a2=0x%llX a3=0x%llX a4=0x%llX "
-                  "a5=0x%llX a6=0x%llX a7=0x%llX a8=0x%llX a9=0x%llX result=%s%u",
+                  "pre={a0=0x%llX a1=0x%llX a2=0x%llX a3=0x%llX a4=0x%llX "
+                  "a5=0x%llX a6=0x%llX a7=0x%llX a8=0x%llX a9=0x%llX} "
+                  "postA0=0x%llX result=%s%u",
                   traceIndex, argc,
-                  static_cast<unsigned long long>(read_u64_arg_value(context, 0)),
-                  static_cast<unsigned long long>(read_u64_arg_value(context, 1)),
-                  static_cast<unsigned long long>(read_u64_arg_value(context, 2)),
-                  static_cast<unsigned long long>(read_u64_arg_value(context, 3)),
-                  static_cast<unsigned long long>(read_u64_arg_value(context, 4)),
-                  static_cast<unsigned long long>(read_u64_arg_value(context, 5)),
-                  static_cast<unsigned long long>(read_u64_arg_value(context, 6)),
-                  static_cast<unsigned long long>(read_u64_arg_value(context, 7)),
-                  static_cast<unsigned long long>(read_u64_arg_value(context, 8)),
-                  static_cast<unsigned long long>(read_u64_arg_value(context, 9)),
-                  resultOk ? "" : "?", resultOk ? result : 0u);
+                  static_cast<unsigned long long>(preA0),
+                  static_cast<unsigned long long>(preA1),
+                  static_cast<unsigned long long>(preA2),
+                  static_cast<unsigned long long>(preA3),
+                  static_cast<unsigned long long>(preA4),
+                  static_cast<unsigned long long>(preA5),
+                  static_cast<unsigned long long>(preA6),
+                  static_cast<unsigned long long>(preA7),
+                  static_cast<unsigned long long>(preA8),
+                  static_cast<unsigned long long>(preA9),
+                  static_cast<unsigned long long>(postA0),
+                  resultOk ? "" : "?",
+                  resultOk ? result : 0u);
     std::size_t used = std::strlen(buffer);
     append_execution_identity(buffer, sizeof(buffer), used, context);
     log(buffer);
@@ -1392,17 +1412,29 @@ void StartupNativeTracer::create_actor_in_layout_hook(void* context) {
     if (!tracer) return;
 
     const auto traceIndex = gCreateActorInLayoutTraceCount++;
-    if (tracer->originalCreateActorInLayout_) {
-        tracer->originalCreateActorInLayout_(context);
-    }
-    if (traceIndex >= 64) return;
-
 #ifdef _WIN32
     const auto* call = reinterpret_cast<const NativeTraceContext*>(context);
     const auto argc = call ? call->argumentCount : 0u;
 #else
     const auto argc = 0u;
 #endif
+
+    // Capture the caller-supplied arguments before the native executes.
+    // CREATE_ACTOR_IN_LAYOUT may rewrite slot 0 with the resulting Actor handle.
+    const auto preA0 = read_u64_arg_value(context, 0);
+    const auto preA1 = read_u64_arg_value(context, 1);
+    const auto preA2 = read_u64_arg_value(context, 2);
+    const auto preA3 = read_u64_arg_value(context, 3);
+    const auto preA4 = read_u64_arg_value(context, 4);
+    const auto preA5 = read_u64_arg_value(context, 5);
+    const auto preA6 = read_u64_arg_value(context, 6);
+
+    if (tracer->originalCreateActorInLayout_) {
+        tracer->originalCreateActorInLayout_(context);
+    }
+    if (traceIndex >= 64) return;
+
+    const auto postA0 = read_u64_arg_value(context, 0);
 
     std::uintptr_t result = 0;
 #ifdef _WIN32
@@ -1411,26 +1443,13 @@ void StartupNativeTracer::create_actor_in_layout_hook(void* context) {
     const bool resultOk = false;
 #endif
 
-    std::uintptr_t layout = 0;
-    const bool layoutOk = read_u64_arg(context, 0, layout);
-
-    char layoutName[160]{};
-    const bool layoutNameOk = read_c_string(context, 1, layoutName, sizeof(layoutName));
-
-    std::int32_t actorEnum = 0;
-    const bool actorEnumOk = read_i32_arg(context, 2, actorEnum);
-
-    const auto raw3 = read_u64_arg_value(context, 3);
-    const auto raw4 = read_u64_arg_value(context, 4);
-    const auto raw5 = read_u64_arg_value(context, 5);
-    const auto raw6 = read_u64_arg_value(context, 6);
-
-    std::uint32_t posXYLow = static_cast<std::uint32_t>(raw3);
-    std::uint32_t posXYHigh = static_cast<std::uint32_t>(raw3 >> 32u);
-    std::uint32_t posZRaw = static_cast<std::uint32_t>(raw4);
-    std::uint32_t orientationXYLow = static_cast<std::uint32_t>(raw5);
-    std::uint32_t orientationXYHigh = static_cast<std::uint32_t>(raw5 >> 32u);
-    std::uint32_t orientationZRaw = static_cast<std::uint32_t>(raw6);
+    // Decode the Vector2 slots from the pre-call snapshot.
+    std::uint32_t posXYLow = static_cast<std::uint32_t>(preA3);
+    std::uint32_t posXYHigh = static_cast<std::uint32_t>(preA3 >> 32u);
+    std::uint32_t posZRaw = static_cast<std::uint32_t>(preA4);
+    std::uint32_t orientationXYLow = static_cast<std::uint32_t>(preA5);
+    std::uint32_t orientationXYHigh = static_cast<std::uint32_t>(preA5 >> 32u);
+    std::uint32_t orientationZRaw = static_cast<std::uint32_t>(preA6);
 
     float posX = 0.0f;
     float posY = 0.0f;
@@ -1445,41 +1464,49 @@ void StartupNativeTracer::create_actor_in_layout_hook(void* context) {
     std::memcpy(&orientationY, &orientationXYHigh, sizeof(orientationY));
     std::memcpy(&orientationZ, &orientationZRaw, sizeof(orientationZ));
 
+    std::int32_t actorEnum = 0;
+    const auto actorEnumOk = argc > 2u;
+#ifdef _WIN32
+    if (actorEnumOk) {
+        actorEnum = static_cast<std::int32_t>(static_cast<std::uint32_t>(preA2));
+    }
+#else
+    (void)actorEnumOk;
+#endif
+
+    char layoutName[160]{};
+    const bool layoutNameOk = read_c_string_value(preA1, layoutName, sizeof(layoutName));
+
     char buffer[960]{};
     std::size_t used = static_cast<std::size_t>(std::snprintf(
         buffer, sizeof(buffer),
         "[FrontierNativeTrace] CREATE_ACTOR_IN_LAYOUT trace=%u argc=%u "
-        "layout=%s0x%llX layoutName=%s%s actorEnum=%s%d "
+        "preLayout=0x%llX layoutName=%s%s actorEnum=%s%d "
         "pos=(%.6f,%.6f,%.6f) orient=(%.6f,%.6f,%.6f) "
-        "raw={a0=0x%llX a1=0x%llX a2=0x%llX a3=0x%llX a4=0x%llX a5=0x%llX a6=0x%llX} "
-        "result=%s0x%llX",
+        "preRaw={a0=0x%llX a1=0x%llX a2=0x%llX a3=0x%llX a4=0x%llX a5=0x%llX a6=0x%llX} "
+        "postA0=0x%llX result=%s0x%llX",
         traceIndex,
         argc,
-        layoutOk ? "" : "?",
-        static_cast<unsigned long long>(layout),
+        static_cast<unsigned long long>(preA0),
         layoutNameOk ? "" : "?",
         layoutNameOk ? layoutName : "<unreadable>",
         actorEnumOk ? "" : "?",
-        actorEnumOk ? actorEnum : 0,
-        static_cast<double>(posX),
-        static_cast<double>(posY),
-        static_cast<double>(posZ),
-        static_cast<double>(orientationX),
-        static_cast<double>(orientationY),
-        static_cast<double>(orientationZ),
-        static_cast<unsigned long long>(read_u64_arg_value(context, 0)),
-        static_cast<unsigned long long>(read_u64_arg_value(context, 1)),
-        static_cast<unsigned long long>(read_u64_arg_value(context, 2)),
-        static_cast<unsigned long long>(raw3),
-        static_cast<unsigned long long>(raw4),
-        static_cast<unsigned long long>(raw5),
-        static_cast<unsigned long long>(raw6),
+        actorEnum,
+        posX, posY, posZ,
+        orientationX, orientationY, orientationZ,
+        static_cast<unsigned long long>(preA0),
+        static_cast<unsigned long long>(preA1),
+        static_cast<unsigned long long>(preA2),
+        static_cast<unsigned long long>(preA3),
+        static_cast<unsigned long long>(preA4),
+        static_cast<unsigned long long>(preA5),
+        static_cast<unsigned long long>(preA6),
+        static_cast<unsigned long long>(postA0),
         resultOk ? "" : "?",
         static_cast<unsigned long long>(result)));
 
     append_execution_identity(buffer, sizeof(buffer), used, context);
     log(buffer);
 }
-
 
 } // namespace frontier::game
