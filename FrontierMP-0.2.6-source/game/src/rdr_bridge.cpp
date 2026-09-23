@@ -507,6 +507,7 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                 result = 0;
                 nativeInvoker_.invoke_raw(kNativeStreamingRequestActor, args, 3u, result);
 
+                args[1] = static_cast<std::uintptr_t>(0xFFFFFFFFu);
                 result = 0;
                 bool actorModelLoaded = false;
                 if (nativeInvoker_.invoke_raw(kNativeStreamingIsActorLoaded, args, 2u, result)) {
