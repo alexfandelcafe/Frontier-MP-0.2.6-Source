@@ -1,3 +1,10 @@
+## 0.2.36
+
+- Added passive tracing for the RDR1 NET session lifecycle.
+- Trace NET_ENABLE_MULTIPLAYER, NET_IS_IN_SESSION, NET_IS_SESSION_CLIENT, NET_SESSION_QUICK_JOIN_NATIVE, NET_SESSION_START_GAMEPLAY, NET_SESSION_END_GAMEPLAY, and NET_SESSION_IS_GAMEPLAY_STARTED when those handlers are available.
+- NET tracing records arguments/return values plus game-thread context identity without invoking or forcing any network/session transition.
+- NET hooks are optional so a missing handler does not prevent the existing startup tracer from attaching.
+
 ## 0.2.35
 
 - Normalize `FrontierSession::localPlayerReady` from the current stable-world state instead of retaining a stale ready value after stable world loss.
