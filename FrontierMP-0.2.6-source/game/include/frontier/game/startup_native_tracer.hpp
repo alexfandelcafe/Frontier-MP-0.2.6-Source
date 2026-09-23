@@ -25,6 +25,12 @@ private:
     static void is_script_valid_hook(void* context);
     static void terminate_script_hook(void* context);
     static void terminate_this_script_hook(void* context);
+    static void net_enable_multiplayer_hook(void* context);
+    static void net_is_in_session_hook(void* context);
+    static void net_is_session_client_hook(void* context);
+    static void net_session_start_gameplay_hook(void* context);
+    static void net_session_end_gameplay_hook(void* context);
+    static void net_session_is_gameplay_started_hook(void* context);
 
     static void log(const char* message);
 
@@ -41,6 +47,12 @@ private:
     NativeInvoker::NativeHandler originalIsScriptValid_{};
     NativeInvoker::NativeHandler originalTerminateScript_{};
     NativeInvoker::NativeHandler originalTerminateThisScript_{};
+    NativeInvoker::NativeHandler originalNetEnableMultiplayer_{};
+    NativeInvoker::NativeHandler originalNetIsInSession_{};
+    NativeInvoker::NativeHandler originalNetIsSessionClient_{};
+    NativeInvoker::NativeHandler originalNetSessionStartGameplay_{};
+    NativeInvoker::NativeHandler originalNetSessionEndGameplay_{};
+    NativeInvoker::NativeHandler originalNetSessionIsGameplayStarted_{};
     bool attached_{};
 };
 
