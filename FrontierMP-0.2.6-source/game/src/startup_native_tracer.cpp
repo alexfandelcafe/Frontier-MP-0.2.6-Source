@@ -18,8 +18,9 @@ namespace frontier::game {
 
 namespace {
 StartupNativeTracer* g_tracer = nullptr;
-std::int32_t g_scriptHandles[16]{};
-bool g_scriptHandleValid[16]{};
+std::int32_t g_scriptHandles[32]{};
+char g_scriptHandlePaths[32][96]{};
+bool g_scriptHandleValid[32]{};
 bool g_scriptHandleValidKnown[16]{};
 std::size_t g_scriptHandleCount = 0;
 
@@ -48,9 +49,10 @@ int find_remembered_script_handle(std::int32_t handle) {
     return -1;
 }
 
-bool is_startup_script_path(const char* path) {
+bool is_traced_script_path(const char* path) {
     if (!path || !*path) return false;
-    return std::strcmp(path, "$/content/frontier/pr_frontier") == 0 ||
+    return std::strcmp(path, "scripting/DesignerDefined/Player") == 0 ||
+           std::strcmp(path, "$/content/frontier/pr_frontier") == 0 ||
            std::strcmp(path, "$/content/frontier/hennigans_stead/hennigansstead") == 0 ||
            std::strcmp(path, "$/content/frontier/hennigans_stead/hennigans_ranch/hennigansranch") == 0 ||
            std::strcmp(path, "$/content/init/pop/hen_population") == 0 ||
@@ -58,15 +60,17 @@ bool is_startup_script_path(const char* path) {
            std::strcmp(path, "HennigansRanchVol") == 0;
 }
 
-void remember_startup_script_handle(const char* path, std::int32_t handle) {
-    if (!is_startup_script_path(path) || handle <= 0) return;
+void remember_traced_script_handle(const char* path, std::int32_t handle) {
+    if (!is_traced_script_path(path) || handle <= 0) return;
     for (std::size_t i = 0; i < g_scriptHandleCount; ++i) {
         if (g_scriptHandles[i] == handle) return;
     }
     if (g_scriptHandleCount < (sizeof(g_scriptHandles) / sizeof(g_scriptHandles[0]))) {
-        g_scriptHandles[g_scriptHandleCount] = handle;
-        g_scriptHandleValid[g_scriptHandleCount] = false;
-        g_scriptHandleValidKnown[g_scriptHandleCount] = false;
+        const auto slot = g_scriptHandleCount;
+        g_scriptHandles[slot] = handle;
+        std::snprintf(g_scriptHandlePaths[slot], sizeof(g_scriptHandlePaths[slot]), "%s", path);
+        g_scriptHandleValid[slot] = false;
+        g_scriptHandleValidKnown[slot] = false;
         ++g_scriptHandleCount;
     }
 }
@@ -354,6 +358,7 @@ bool StartupNativeTracer::attach(NativeInvoker& invoker, std::string& error) {
     }
 
     g_scriptHandleCount = 0;
+    std::memset(g_scriptHandlePaths, 0, sizeof(g_scriptHandlePaths));
     std::memset(g_scriptHandleValid, 0, sizeof(g_scriptHandleValid));
     std::memset(g_scriptHandleValidKnown, 0, sizeof(g_scriptHandleValidKnown));
     attached_ = true;
@@ -466,6 +471,10 @@ void StartupNativeTracer::launch_new_script_hook(void* context) {
     }
 #endif
 
+    if (resultReadable && pathReadable) {
+        remember_traced_script_handle(path, static_cast<std::int32_t>(result));
+    }
+
     char buffer[288]{};
     const std::uint32_t supplied = context
         ? reinterpret_cast<const NativeTraceContext*>(context)->argumentCount
@@ -572,7 +581,7 @@ void StartupNativeTracer::launch_new_script_with_args_hook(void* context) {
 #endif
 
     if (resultReadable) {
-        remember_startup_script_handle(path, result);
+        remember_traced_script_handle(path, result);
     }
 
     if (used + 48u < sizeof(buffer)) {
@@ -633,10 +642,16 @@ void StartupNativeTracer::is_script_valid_hook(void* context) {
     g_scriptHandleValidKnown[slot] = true;
     g_scriptHandleValid[slot] = valid;
 
-    char buffer[192]{};
+    const char* path = (slot >= 0)
+        ? g_scriptHandlePaths[slot]
+        : "";
+
+    char buffer[320]{};
     std::snprintf(buffer, sizeof(buffer),
-                  "[FrontierNativeTrace] IS_SCRIPT_VALID id=%d result=%u transition",
-                  scriptId, result);
+                  "[FrontierNativeTrace] IS_SCRIPT_VALID id=%d path=%s result=%u transition",
+                  scriptId,
+                  path && *path ? path : "<unknown>",
+                  result);
     std::size_t usedIdentity = std::strlen(buffer);
     append_execution_identity(buffer, sizeof(buffer), usedIdentity, context);
     log(buffer);
