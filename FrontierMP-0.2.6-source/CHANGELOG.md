@@ -1,3 +1,7 @@
+## 0.2.53
+- Fix a regression in invoke_u32 introduced while separating native return storage for mutable invocations.
+- Keep returnValue local to invoke_raw_mutable so the existing u32 native path continues to read its return slot correctly.
+
 ## 0.2.52
 - Ensure the mutable native invocation returns the separate native return value instead of the argument buffer.
 - This preserves CREATE_PLAYER_ACTOR_IN_LAYOUT's PlayerId return while also exposing its post-call ActorRef in argument 0.
