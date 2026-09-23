@@ -423,7 +423,7 @@ bool NativeInvoker::invoke_u32(std::uint32_t hash, std::uint32_t& out) const {
     context.dataCount = 0;
 
     if (!invoke_handler_guarded(handler, &context)) return false;
-    return guarded_copy(context.stack, &out, sizeof(out));
+    return guarded_copy(&returnValue, &out, sizeof(out));
 #else
     (void)hash;
     out = 0;
@@ -473,7 +473,10 @@ bool NativeInvoker::invoke_raw_mutable(std::uint32_t hash, std::uintptr_t* argum
     if (argumentCount != 0u && !arguments) return false;
 
     NativeTempContext context{};
-    context.returnBuffer = context.stack;
+    // Match the live native context: returnBuffer and argumentBuffer are distinct.
+    // CREATE_PLAYER_ACTOR_IN_LAYOUT returns PlayerId while rewriting argument 0 with ActorRef.
+    std::uintptr_t returnValue = 0;
+    context.returnBuffer = &returnValue;
     context.argumentBuffer = context.stack;
     context.argumentCount = static_cast<std::uint32_t>(argumentCount);
     context.dataCount = 0;
