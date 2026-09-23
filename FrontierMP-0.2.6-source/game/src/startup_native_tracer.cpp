@@ -1635,26 +1635,33 @@ void StartupNativeTracer::get_player_actor_hook(void* context) {
         }
 
         bool streamRequested = false;
-        if (!gRemotePlayerProbeRequested && tracer->originalStreamingRequestActor_) {
+        NativeInvoker::NativeHandler streamingRequestActor{};
+        NativeInvoker::NativeHandler streamingIsActorLoaded{};
+        if (tracer->invoker_) {
+            (void)tracer->invoker_->current_handler(kStreamingRequestActor, streamingRequestActor);
+            (void)tracer->invoker_->current_handler(kStreamingIsActorLoaded, streamingIsActorLoaded);
+        }
+
+        if (!gRemotePlayerProbeRequested && streamingRequestActor) {
             args[0] = 837u;
             args[1] = 1u;
             args[2] = 0u;
             std::uintptr_t streamRequestResult = 0;
             streamRequested = invoke_handler_in_existing_context(
-                tracer->originalStreamingRequestActor_, context, args, 3u, streamRequestResult);
+                streamingRequestActor, context, args, 3u, streamRequestResult);
             gRemotePlayerProbeRequested = true;
         }
 
         bool loaded = false;
         std::uint32_t loadedArg = 0u;
-        if (tracer->originalStreamingIsActorLoaded_) {
+        if (streamingIsActorLoaded) {
             const std::uint32_t probes[] = {0u, 1u, 0xFFFFFFFFu};
             for (const auto probeArg : probes) {
                 args[0] = 837u;
                 args[1] = probeArg;
                 std::uintptr_t loadedResult = 0;
                 if (invoke_handler_in_existing_context(
-                        tracer->originalStreamingIsActorLoaded_, context, args, 2u, loadedResult) &&
+                        streamingIsActorLoaded, context, args, 2u, loadedResult) &&
                     loadedResult != 0u) {
                     loaded = true;
                     loadedArg = probeArg;
