@@ -1603,7 +1603,7 @@ void StartupNativeTracer::get_player_actor_hook(void* context) {
     log(buffer);
 
     if (!gRemotePlayerProbeSpawned && playerOk && player > 0 && tracer->originalCreatePlayerActorInLayout_) {
-        char layoutName[] = "FrontierRemoteLayout";
+        char layoutName[] = "PlayerLayout";
         char actorName[] = "FrontierRemoteTest";
         std::uintptr_t args[8]{};
         std::uintptr_t nativeResult = 0;
