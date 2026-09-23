@@ -1,3 +1,9 @@
+## 0.2.33
+
+- Record the complete local-player pointer chain when state replication first becomes ready.
+- Log the GUID, actor-manager slot, actor, actor-component, and transform addresses at successful resolution.
+- No local-player offsets, readiness criteria, or runtime-state behavior were changed.
+
 ## 0.2.32
 
 - Clarified local-player chain diagnostics so null actor-component and transform pointers are reported as pending lifecycle state rather than unreadable memory.
