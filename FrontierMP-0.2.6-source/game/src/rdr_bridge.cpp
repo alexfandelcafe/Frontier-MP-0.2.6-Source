@@ -31,12 +31,6 @@ constexpr std::uint32_t kNativeCreateLayout = 0x6CA53214;
 constexpr std::uint32_t kNativeIsLayoutRefValid = 0xFC8E55ED;
 constexpr std::uint32_t kNativeCreateActorInLayout = 0x8D67F397;
 constexpr std::uint32_t kNativeGetActorEnum = 0x0B28E9EC;
-constexpr std::uint32_t kNativeIsActorPlayer = 0xB27E91E7;
-constexpr std::uint32_t kNativeIsActorLocalPlayer = 0x6542CF26;
-constexpr std::uint32_t kNativeGetActorX = 0x436CE75A;
-constexpr std::uint32_t kNativeGetActorY = 0x0B0FF6A1;
-constexpr std::uint32_t kNativeGetActorZ = 0x25A02BC1;
-constexpr std::uint32_t kNativeGetActorHeading = 0x42DE39F0;
 constexpr std::uintptr_t kTaggedLayoutRef = 0x100000000ull;
 constexpr std::int32_t kRemoteTestActorEnum = 0;
 
@@ -542,63 +536,6 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                             write_bridge_log_line(buffer);
                         }
 
-                        // Validate the plain Actor handle through scalar actor natives.
-                        // This avoids depending on Slot registration or Vector3 output ABI.
-                        bool actorIsPlayer = false;
-                        bool actorIsLocal = false;
-                        args[0] = static_cast<std::uintptr_t>(actorHandle);
-                        result = 0;
-                        const bool isActorPlayerInvoked =
-                            nativeInvoker_.invoke_raw(kNativeIsActorPlayer, args, 1u, result);
-                        actorIsPlayer = isActorPlayerInvoked && result != 0u;
-
-                        args[0] = static_cast<std::uintptr_t>(actorHandle);
-                        result = 0;
-                        const bool isActorLocalInvoked =
-                            nativeInvoker_.invoke_raw(kNativeIsActorLocalPlayer, args, 1u, result);
-                        actorIsLocal = isActorLocalInvoked && result != 0u;
-
-                        args[0] = static_cast<std::uintptr_t>(actorHandle);
-                        result = 0;
-                        const bool xInvoked = nativeInvoker_.invoke_raw(kNativeGetActorX, args, 1u, result);
-                        const float nativeX = float_from_bits(result);
-
-                        args[0] = static_cast<std::uintptr_t>(actorHandle);
-                        result = 0;
-                        const bool yInvoked = nativeInvoker_.invoke_raw(kNativeGetActorY, args, 1u, result);
-                        const float nativeY = float_from_bits(result);
-
-                        args[0] = static_cast<std::uintptr_t>(actorHandle);
-                        result = 0;
-                        const bool zInvoked = nativeInvoker_.invoke_raw(kNativeGetActorZ, args, 1u, result);
-                        const float nativeZ = float_from_bits(result);
-
-                        args[0] = static_cast<std::uintptr_t>(actorHandle);
-                        result = 0;
-                        const bool headingInvoked = nativeInvoker_.invoke_raw(kNativeGetActorHeading, args, 1u, result);
-                        const float nativeHeading = float_from_bits(result);
-
-                        char nativeBuffer[520]{};
-                        std::snprintf(nativeBuffer, sizeof(nativeBuffer),
-                                      "[FrontierRemoteActor] native-check actorRef=0x%llX actorHandle=0x%08X "
-                                      "isActorPlayer=%u isActorLocal=%u getX=%u x=%.3f getY=%u y=%.3f "
-                                      "getZ=%u z=%.3f getHeading=%u heading=%.3f",
-                                      static_cast<unsigned long long>(actorRef),
-                                      actorHandle,
-                                      actorIsPlayer ? 1u : 0u,
-                                      actorIsLocal ? 1u : 0u,
-                                      xInvoked ? 1u : 0u,
-                                      nativeX,
-                                      yInvoked ? 1u : 0u,
-                                      nativeY,
-                                      zInvoked ? 1u : 0u,
-                                      nativeZ,
-                                      headingInvoked ? 1u : 0u,
-                                      nativeHeading);
-                        write_bridge_log_line(nativeBuffer);
-
-                        // Internal actor offsets and manager slots are intentionally not used as
-                        // authoritative evidence until the scalar actor-native validation succeeds.
                     }
                 }
             } else {
