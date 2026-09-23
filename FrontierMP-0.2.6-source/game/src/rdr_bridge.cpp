@@ -511,6 +511,7 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                 result = 0;
                 const bool streamRequestOk =
                     nativeInvoker_.invoke_raw(kNativeStreamingRequestActor, args, 3u, result);
+                const auto streamRequestResult = result;
 
                 const auto installedArg = static_cast<std::uintptr_t>(kRemoteTestActorEnum);
                 std::uintptr_t installedResult = 0;
@@ -536,7 +537,7 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                               "installedOk=%u installed=%u loadedCheckOk=%u loaded=%u",
                               static_cast<unsigned>(kRemoteTestActorEnum),
                               streamRequestOk ? 1u : 0u,
-                              static_cast<unsigned long long>(result),
+                              static_cast<unsigned long long>(streamRequestResult),
                               installedOk ? 1u : 0u,
                               installedOk ? (installedResult != 0u ? 1u : 0u) : 0u,
                               loadedSentinelOk ? 1u : 0u,
@@ -587,12 +588,20 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                         nativeInvoker_.invoke_raw(kNativeIsActorPlayer,
                                                   isPlayerArgs, 1u, isPlayerResult);
 
-                    char buffer[560]{};
+                    std::uintptr_t getPlayerActorArgs[1]{static_cast<std::uintptr_t>(playerId)};
+                    std::uintptr_t mappedActorResult = 0;
+                    const bool mappedActorOk =
+                        playerId != 0u &&
+                        nativeInvoker_.invoke_raw(kNativeGetPlayerActor,
+                                                  getPlayerActorArgs, 1u, mappedActorResult);
+
+                    char buffer[640]{};
                     std::snprintf(
                         buffer, sizeof(buffer),
                         "[FrontierRemotePlayer] created layout=0x%08X playerId=0x%08X "
                         "actorRef=0x%llX actorHandle=0x%08X enum=%s%u isActorPlayer=%s%u "
-                        "streamLoaded=%u position=(%.3f,%.3f,%.3f)",
+                        "getPlayerActor(playerId)=%s0x%08X streamLoaded=%u "
+                        "mappedMatch=%u position=(%.3f,%.3f,%.3f)",
                         layoutId,
                         playerId,
                         static_cast<unsigned long long>(actorRef),
@@ -601,7 +610,10 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                         enumResult,
                         isPlayerOk ? "" : "?",
                         isPlayerOk ? static_cast<unsigned>(isPlayerResult) : 0u,
+                        mappedActorOk ? "" : "?",
+                        mappedActorOk ? static_cast<unsigned>(mappedActorResult) : 0u,
                         actorModelLoaded ? 1u : 0u,
+                        mappedActorOk && static_cast<std::uint32_t>(mappedActorResult) == actorHandle ? 1u : 0u,
                         x, y, z);
                     write_bridge_log_line(buffer);
                 }
