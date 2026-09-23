@@ -1,3 +1,9 @@
+## 0.2.38
+
+- Extend CREATE_ACTOR_IN_LAYOUT tracing with all seven raw arguments.
+- Decode layout handle, layout name, actor enum, position, and orientation from the observed native argument layout.
+- Preserve passive tracing only; no actor creation or mutation is introduced.
+
 ## 0.2.37
 
 - Added passive tracing for player actor creation and lookup.
