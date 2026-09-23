@@ -12,11 +12,23 @@
 
 namespace frontier::game {
 
+struct RemoteActorHandle final {
+    std::uintptr_t actorRef{};
+    std::uint32_t actorHandle{};
+
+    bool valid() const { return actorHandle != 0; }
+};
+
 class RdrBridge final {
 public:
     bool initialize(const ExecutableFingerprint& fingerprint, KnownBuild build);
     bool read_local_player_state(PlayerState& outState, std::string& error) const;
     bool request_remote_actor_test(const PlayerState& origin, std::string& error) const;
+    bool spawn_remote_actor(std::uint16_t playerId, const PlayerState& state,
+                            RemoteActorHandle& outActor, std::string& error) const;
+    bool update_remote_actor_transform(std::uint32_t actorHandle, const PlayerState& state,
+                                       std::string& error) const;
+    bool destroy_remote_actor(std::uint32_t actorHandle, std::string& error) const;
     std::string local_player_chain_diagnostic() const;
     bool local_player_pointer_available() const;
     bool try_initialize_native_invoker();
@@ -69,6 +81,7 @@ private:
     mutable bool remoteActorTestSpawned_{};
     mutable std::uint32_t remoteActorTestLayout_{};
     mutable std::uintptr_t remoteActorTestActorRef_{};
+    mutable std::uint32_t remoteActorLayout_{};
 };
 
 } // namespace frontier::game
