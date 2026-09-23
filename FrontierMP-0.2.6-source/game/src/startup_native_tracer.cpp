@@ -1570,6 +1570,9 @@ void StartupNativeTracer::create_player_actor_in_layout_hook(void* context) {
     log(buffer);
 }
 
+std::uintptr_t float_bits_for_tracer(float value);
+std::uintptr_t pack_vec2_for_tracer(float x, float y);
+
 void StartupNativeTracer::get_player_actor_hook(void* context) {
     auto* tracer = g_tracer;
     if (!tracer) return;
