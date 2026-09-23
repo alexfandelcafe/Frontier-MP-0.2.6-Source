@@ -7,11 +7,11 @@
 #include <filesystem>
 #include <sstream>
 #include <cstring>
-#include <intrin.h>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <intrin.h>
 #endif
 
 namespace frontier::game {
@@ -21,7 +21,7 @@ StartupNativeTracer* g_tracer = nullptr;
 std::int32_t g_scriptHandles[32]{};
 char g_scriptHandlePaths[32][96]{};
 bool g_scriptHandleValid[32]{};
-bool g_scriptHandleValidKnown[16]{};
+bool g_scriptHandleValidKnown[32]{};
 std::size_t g_scriptHandleCount = 0;
 
 void append_execution_identity(char* buffer, std::size_t capacity, std::size_t& used, void* context) {
