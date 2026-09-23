@@ -100,6 +100,12 @@ constexpr std::uint32_t kIsSimulateStartPress = 0xD8E31D42u;
 constexpr std::uint32_t kIsScriptValid = 0x45F7D589u;
 constexpr std::uint32_t kTerminateScript = 0x60A7FF09u;
 constexpr std::uint32_t kTerminateThisScript = 0x245B6AB6u;
+constexpr std::uint32_t kNetEnableMultiplayer = 0x9180FF1Cu;
+constexpr std::uint32_t kNetIsInSession = 0x8CA54980u;
+constexpr std::uint32_t kNetIsSessionClient = 0xFF65A07Cu;
+constexpr std::uint32_t kNetSessionStartGameplay = 0x86FF3A9Bu;
+constexpr std::uint32_t kNetSessionEndGameplay = 0x81FD9851u;
+constexpr std::uint32_t kNetSessionIsGameplayStarted = 0xDC88B308u;
 
 struct NativeTraceContext final {
     void* returnBuffer{};
@@ -109,6 +115,22 @@ struct NativeTraceContext final {
     void* outputVectors[4]{};
     std::uint8_t inputVectors[0x30]{};
 };
+
+#ifdef _WIN32
+bool read_u32_return(void* context, std::uint32_t& out) noexcept {
+    out = 0;
+    if (!context) return false;
+    const auto* call = reinterpret_cast<const NativeTraceContext*>(context);
+    if (!call->returnBuffer) return false;
+    __try {
+        std::memcpy(&out, call->returnBuffer, sizeof(out));
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        out = 0;
+        return false;
+    }
+}
+#endif
 
 bool read_u64_arg(void* context, std::uint32_t index, std::uintptr_t& out) {
     out = 0;
@@ -403,6 +425,57 @@ bool StartupNativeTracer::attach(NativeInvoker& invoker, std::string& error) {
         originalIsSimulateStartPress_ = nullptr; originalIsScriptValid_ = nullptr; originalTerminateScript_ = nullptr;
         return false;
     }
+
+    // Network/session tracing is optional so a missing NET native cannot prevent
+    // the core startup tracer from attaching.
+    const auto install_optional = [&](std::uint32_t hash,
+                                       NativeInvoker::NativeHandler replacement,
+                                       NativeInvoker::NativeHandler& original,
+                                       const char* label) {
+        if (!invoker.has_handler(hash)) {
+            char buffer[160]{};
+            std::snprintf(buffer, sizeof(buffer),
+                          "[FrontierNativeTrace] optional NET hook unavailable %s hash=0x%08X",
+                          label, hash);
+            log(buffer);
+            return;
+        }
+
+        std::string optionalError;
+        if (!invoker.hook_native(hash, replacement, original, &optionalError)) {
+            char buffer[256]{};
+            std::snprintf(buffer, sizeof(buffer),
+                          "[FrontierNativeTrace] optional NET hook failed %s hash=0x%08X error=%s",
+                          label, hash, optionalError.empty() ? "<unknown>" : optionalError.c_str());
+            log(buffer);
+            original = nullptr;
+        }
+    };
+
+    install_optional(kNetEnableMultiplayer,
+                     &StartupNativeTracer::net_enable_multiplayer_hook,
+                     originalNetEnableMultiplayer_,
+                     "NET_ENABLE_MULTIPLAYER");
+    install_optional(kNetIsInSession,
+                     &StartupNativeTracer::net_is_in_session_hook,
+                     originalNetIsInSession_,
+                     "NET_IS_IN_SESSION");
+    install_optional(kNetIsSessionClient,
+                     &StartupNativeTracer::net_is_session_client_hook,
+                     originalNetIsSessionClient_,
+                     "NET_IS_SESSION_CLIENT");
+    install_optional(kNetSessionStartGameplay,
+                     &StartupNativeTracer::net_session_start_gameplay_hook,
+                     originalNetSessionStartGameplay_,
+                     "NET_SESSION_START_GAMEPLAY");
+    install_optional(kNetSessionEndGameplay,
+                     &StartupNativeTracer::net_session_end_gameplay_hook,
+                     originalNetSessionEndGameplay_,
+                     "NET_SESSION_END_GAMEPLAY");
+    install_optional(kNetSessionIsGameplayStarted,
+                     &StartupNativeTracer::net_session_is_gameplay_started_hook,
+                     originalNetSessionIsGameplayStarted_,
+                     "NET_SESSION_IS_GAMEPLAY_STARTED");
 
     g_scriptHandleCount = 0;
     std::memset(g_scriptHandlePaths, 0, sizeof(g_scriptHandlePaths));
@@ -884,6 +957,172 @@ void StartupNativeTracer::is_simulate_start_press_hook(void* context) {
     std::snprintf(buffer, sizeof(buffer),
                   "[FrontierNativeTrace] IS_SIMULATE_START_PRESS=%s%u",
                   ok ? "" : "?", ok ? result : 0u);
+    log(buffer);
+}
+
+
+void StartupNativeTracer::net_enable_multiplayer_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    std::int32_t mode = 0;
+    const bool modeOk = read_i32_arg(context, 0, mode);
+    if (tracer->originalNetEnableMultiplayer_) {
+        tracer->originalNetEnableMultiplayer_(context);
+    }
+
+    std::uint32_t result = 0;
+    const bool resultOk =
+#ifdef _WIN32
+        read_u32_return(context, result);
+#else
+        false;
+#endif
+
+    char buffer[256]{};
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        buffer, sizeof(buffer),
+        "[FrontierNativeTrace] NET_ENABLE_MULTIPLAYER arg0=%s%d result=%s%u",
+        modeOk ? "" : "?",
+        modeOk ? mode : 0,
+        resultOk ? "" : "?",
+        resultOk ? result : 0u));
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+void StartupNativeTracer::net_is_in_session_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    if (tracer->originalNetIsInSession_) {
+        tracer->originalNetIsInSession_(context);
+    }
+
+    std::uint32_t result = 0;
+    const bool resultOk =
+#ifdef _WIN32
+        read_u32_return(context, result);
+#else
+        false;
+#endif
+
+    char buffer[224]{};
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        buffer, sizeof(buffer),
+        "[FrontierNativeTrace] NET_IS_IN_SESSION result=%s%u",
+        resultOk ? "" : "?",
+        resultOk ? result : 0u));
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+void StartupNativeTracer::net_is_session_client_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    std::int32_t arg0 = 0;
+    const bool argOk = read_i32_arg(context, 0, arg0);
+
+    if (tracer->originalNetIsSessionClient_) {
+        tracer->originalNetIsSessionClient_(context);
+    }
+
+    std::uint32_t result = 0;
+    const bool resultOk =
+#ifdef _WIN32
+        read_u32_return(context, result);
+#else
+        false;
+#endif
+
+    char buffer[256]{};
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        buffer, sizeof(buffer),
+        "[FrontierNativeTrace] NET_IS_SESSION_CLIENT arg0=%s%d result=%s%u",
+        argOk ? "" : "?",
+        argOk ? arg0 : 0,
+        resultOk ? "" : "?",
+        resultOk ? result : 0u));
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+void StartupNativeTracer::net_session_start_gameplay_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    if (tracer->originalNetSessionStartGameplay_) {
+        tracer->originalNetSessionStartGameplay_(context);
+    }
+
+    std::uint32_t result = 0;
+    const bool resultOk =
+#ifdef _WIN32
+        read_u32_return(context, result);
+#else
+        false;
+#endif
+
+    char buffer[240]{};
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        buffer, sizeof(buffer),
+        "[FrontierNativeTrace] NET_SESSION_START_GAMEPLAY result=%s%u",
+        resultOk ? "" : "?",
+        resultOk ? result : 0u));
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+void StartupNativeTracer::net_session_end_gameplay_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    if (tracer->originalNetSessionEndGameplay_) {
+        tracer->originalNetSessionEndGameplay_(context);
+    }
+
+    std::uint32_t result = 0;
+    const bool resultOk =
+#ifdef _WIN32
+        read_u32_return(context, result);
+#else
+        false;
+#endif
+
+    char buffer[240]{};
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        buffer, sizeof(buffer),
+        "[FrontierNativeTrace] NET_SESSION_END_GAMEPLAY result=%s%u",
+        resultOk ? "" : "?",
+        resultOk ? result : 0u));
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+void StartupNativeTracer::net_session_is_gameplay_started_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    if (tracer->originalNetSessionIsGameplayStarted_) {
+        tracer->originalNetSessionIsGameplayStarted_(context);
+    }
+
+    std::uint32_t result = 0;
+    const bool resultOk =
+#ifdef _WIN32
+        read_u32_return(context, result);
+#else
+        false;
+#endif
+
+    char buffer[256]{};
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        buffer, sizeof(buffer),
+        "[FrontierNativeTrace] NET_SESSION_IS_GAMEPLAY_STARTED result=%s%u",
+        resultOk ? "" : "?",
+        resultOk ? result : 0u));
+    append_execution_identity(buffer, sizeof(buffer), used, context);
     log(buffer);
 }
 
