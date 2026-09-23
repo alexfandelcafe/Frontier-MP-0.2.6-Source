@@ -33,6 +33,10 @@ constexpr std::uint32_t kNativeIsLayoutRefValid = 0xFC8E55ED;
 constexpr std::uint32_t kNativeCreateActorInLayout = 0x8D67F397;
 constexpr std::uint32_t kNativeDestroyActor = 0x8BD21869;
 constexpr std::uint32_t kNativeTeleportActorWithHeading = 0xE4DE507C;
+constexpr std::uint32_t kNativeGetPosition = 0x99BD9D6F;
+constexpr std::uint32_t kNativeSetActorHeading = 0xECE8520B;
+constexpr std::uint32_t kNativeSimulatePlayerInputGait = 0x0D77CC34;
+constexpr std::uint32_t kNativeResetPlayerInputGait = 0x4A701EE1;
 constexpr std::uint32_t kNativeCreatePlayerActorInLayout = 0x6A307D5F;
 constexpr std::uint32_t kNativeGetPlayerActor = 0xE8CFDD53;
 constexpr std::uint32_t kNativeIsActorPlayer = 0xB27E91E7;
@@ -828,6 +832,144 @@ bool RdrBridge::spawn_remote_actor(
     if (!completed) {
         error = dispatchError.empty()
             ? "remote actor spawn task did not complete"
+            : dispatchError;
+        return false;
+    }
+    return error.empty();
+}
+
+bool RdrBridge::update_remote_actor_motion(
+    std::uint32_t actorHandle,
+    const PlayerState& state,
+    std::string& error) const {
+    error.clear();
+
+    if (actorHandle == 0u) {
+        error = "invalid remote actor handle";
+        return false;
+    }
+    if (!initialized_) {
+        error = "bridge not initialized";
+        return false;
+    }
+    if (!nativeInvoker_.ready()) {
+        error = "native invoker not ready";
+        return false;
+    }
+    if (!gameThreadDispatcher_.attached()) {
+        error = gameThreadDispatcherError_.empty()
+            ? "game-thread dispatcher not attached"
+            : gameThreadDispatcherError_;
+        return false;
+    }
+
+    const PlayerState target = state;
+    std::string dispatchError;
+    const bool completed = gameThreadDispatcher_.submit_and_wait(
+        [this, actorHandle, target, &error]() {
+            // RDR1 exposes SIMULATE_PLAYER_INPUT_GAIT as 0x0D77CC34 with four
+            // arguments. The published RDR1 header leaves these parameters unnamed;
+            // this test uses actor, amount, gait type, speed.
+            const float horizontalSpeed =
+                std::sqrt(target.velocity.x * target.velocity.x +
+                          target.velocity.z * target.velocity.z);
+
+            std::uintptr_t headingArgs[3]{};
+            headingArgs[0] = static_cast<std::uintptr_t>(actorHandle);
+            headingArgs[1] = float_bits(target.yaw);
+            headingArgs[2] = 0u;
+
+            std::uintptr_t result = 0u;
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeSetActorHeading, headingArgs, 3u, result)) {
+                error = "SET_ACTOR_HEADING invoke failed";
+                return;
+            }
+
+            if (target.gait != 0u && horizontalSpeed > 0.05f) {
+                std::uintptr_t gaitArgs[4]{};
+                gaitArgs[0] = static_cast<std::uintptr_t>(actorHandle);
+                gaitArgs[1] = float_bits(1.0f);
+                gaitArgs[2] = static_cast<std::uintptr_t>(target.gait);
+                gaitArgs[3] = float_bits(horizontalSpeed);
+
+                if (!nativeInvoker_.invoke_raw(
+                        kNativeSimulatePlayerInputGait, gaitArgs, 4u, result)) {
+                    error = "SIMULATE_PLAYER_INPUT_GAIT invoke failed";
+                    return;
+                }
+
+                static std::uint32_t traceCount = 0u;
+                if (traceCount < 8u) {
+                    char message[320]{};
+                    std::snprintf(
+                        message, sizeof(message),
+                        "[FrontierRemoteMotion] gait actor=0x%08X gait=%u speed=%.3f yaw=%.3f",
+                        actorHandle,
+                        static_cast<unsigned>(target.gait),
+                        horizontalSpeed,
+                        target.yaw);
+                    write_bridge_log_line(message);
+                    ++traceCount;
+                }
+            } else {
+                if (!nativeInvoker_.invoke_raw(
+                        kNativeResetPlayerInputGait,
+                        &headingArgs[0], 1u, result)) {
+                    error = "RESET_PLAYER_INPUT_GAIT invoke failed";
+                    return;
+                }
+            }
+
+            // Position is authoritative only as a recovery mechanism. The normal
+            // update path does not teleport every network update.
+            Vec3 actualPosition{};
+            std::uintptr_t positionArgs[2]{};
+            positionArgs[0] = static_cast<std::uintptr_t>(actorHandle);
+            positionArgs[1] = reinterpret_cast<std::uintptr_t>(&actualPosition);
+
+            if (nativeInvoker_.invoke_raw(
+                    kNativeGetPosition, positionArgs, 2u, result)) {
+                const float dx = actualPosition.x - target.position.x;
+                const float dy = actualPosition.y - target.position.y;
+                const float dz = actualPosition.z - target.position.z;
+                constexpr float kHardCorrectionDistance = 2.5f;
+                if (dx * dx + dy * dy + dz * dz >
+                    kHardCorrectionDistance * kHardCorrectionDistance) {
+                    std::uintptr_t teleportArgs[7]{};
+                    teleportArgs[0] = static_cast<std::uintptr_t>(actorHandle);
+                    teleportArgs[1] = pack_vec2(target.position.x, target.position.y);
+                    teleportArgs[2] = float_bits(target.position.z);
+                    teleportArgs[3] = float_bits(target.yaw);
+                    teleportArgs[4] = 0u;
+                    teleportArgs[5] = 0u;
+                    teleportArgs[6] = 0u;
+
+                    if (!nativeInvoker_.invoke_raw(
+                            kNativeTeleportActorWithHeading,
+                            teleportArgs, 7u, result)) {
+                        error = "remote actor hard-correction teleport failed";
+                        return;
+                    }
+
+                    char message[360]{};
+                    std::snprintf(
+                        message, sizeof(message),
+                        "[FrontierRemoteMotion] hard correction actor=0x%08X "
+                        "actual=(%.2f,%.2f,%.2f) target=(%.2f,%.2f,%.2f)",
+                        actorHandle,
+                        actualPosition.x, actualPosition.y, actualPosition.z,
+                        target.position.x, target.position.y, target.position.z);
+                    write_bridge_log_line(message);
+                }
+            }
+        },
+        250u,
+        dispatchError);
+
+    if (!completed) {
+        error = dispatchError.empty()
+            ? "remote actor motion task did not complete"
             : dispatchError;
         return false;
     }
