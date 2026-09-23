@@ -157,6 +157,12 @@ void ClientRuntime::update() {
                     message << "[FrontierClient] local-player state replication active position=("
                             << state.position.x << ", " << state.position.y << ", " << state.position.z << ")";
                     log_line(message.str());
+
+                    const auto chain = gameBridge_.local_player_chain_diagnostic();
+                    if (!chain.empty()) {
+                        log_line("[FrontierClient] local-player ready chain " + chain);
+                    }
+
                     bridgeStateReady_ = true;
                 }
             } else if (lastBridgeLogMs_ == 0 || now - lastBridgeLogMs_ >= 1000) {
