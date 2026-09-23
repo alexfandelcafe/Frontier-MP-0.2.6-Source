@@ -12,6 +12,7 @@
 #include <string>
 #include <thread>
 #include <iomanip>
+#include <cmath>
 
 namespace frontier::client {
 
@@ -62,6 +63,12 @@ bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, cons
         return false;
     }
 
+    debugRemoteTestEnabled_ = environment_value("FRONTIER_REMOTE_TEST") == "1";
+
+    if (debugRemoteTestEnabled_) {
+        log_line("[FrontierClient] solo remote-player test enabled");
+    }
+
     if (!gameBridge_.initialize(fingerprint, build)) {
         log_line("[FrontierClient] game bridge initialization failed; networking will continue without local state replication");
     } else {
@@ -79,11 +86,52 @@ bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, cons
         log_line(message.str());
     });
     g_network->set_on_snapshot([this](const auto& snapshot) {
-        remotePlayers_.on_snapshot(snapshot, monotonic_ms());
+        protocol::Snapshot effectiveSnapshot = snapshot;
+
+        if (debugRemoteTestEnabled_ && localPlayerId_ != 0) {
+            constexpr std::uint16_t kSoloRemotePlayerId = 65000;
+            constexpr float kOrbitRadius = 4.0f;
+            constexpr float kOrbitSpeedRadiansPerSecond = 0.6f;
+            constexpr float kPi = 3.14159265358979323846f;
+
+            const auto localIt = std::find_if(
+                effectiveSnapshot.players.begin(),
+                effectiveSnapshot.players.end(),
+                [this](const auto& player) {
+                    return player.playerId == localPlayerId_;
+                });
+
+            if (localIt != effectiveSnapshot.players.end()) {
+                const float seconds =
+                    static_cast<float>(effectiveSnapshot.serverTick) /
+                    static_cast<float>(frontier::kServerTickRate);
+                const float angle = seconds * kOrbitSpeedRadiansPerSecond;
+                const float radiansToDegrees = 180.0f / kPi;
+
+                PlayerState fake{};
+                fake.playerId = kSoloRemotePlayerId;
+                fake.clientTick = effectiveSnapshot.serverTick;
+                fake.position = localIt->position;
+                fake.position.x += std::cos(angle) * kOrbitRadius;
+                fake.position.z += std::sin(angle) * kOrbitRadius;
+                fake.velocity = {
+                    -std::sin(angle) * kOrbitRadius * kOrbitSpeedRadiansPerSecond,
+                    0.0f,
+                    std::cos(angle) * kOrbitRadius * kOrbitSpeedRadiansPerSecond
+                };
+                fake.yaw = std::fmod(angle * radiansToDegrees + 90.0f, 360.0f);
+
+                if (fake.yaw < 0.0f) fake.yaw += 360.0f;
+
+                effectiveSnapshot.players.push_back(fake);
+            }
+        }
+
+        remotePlayers_.on_snapshot(effectiveSnapshot, monotonic_ms());
 
         std::ostringstream message;
-        message << "[FrontierClient] snapshot tick=" << snapshot.serverTick
-                << " players=" << snapshot.players.size()
+        message << "[FrontierClient] snapshot tick=" << effectiveSnapshot.serverTick
+                << " players=" << effectiveSnapshot.players.size()
                 << " remoteEntities=" << remotePlayers_.size();
         log_line(message.str());
     });
