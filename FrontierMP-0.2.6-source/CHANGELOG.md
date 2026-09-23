@@ -1,3 +1,7 @@
+## 0.2.56
+- Execute the in-context remote CREATE_PLAYER_ACTOR_IN_LAYOUT probe once the remote layout is valid instead of gating it on STREAMING_IS_ACTOR_LOADED.
+- Use the canonical one-argument STREAMING_IS_ACTOR_LOADED probe and keep its result diagnostic-only.
+
 ## 0.2.55
 - Keep the remote player creation probe in the live Player script context and fix helper declarations so the tracer compiles cleanly.
 
