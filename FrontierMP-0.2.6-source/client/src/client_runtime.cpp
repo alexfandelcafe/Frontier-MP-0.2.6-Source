@@ -121,8 +121,6 @@ bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, cons
                     std::cos(angle) * kOrbitRadius * kOrbitSpeedRadiansPerSecond
                 };
                 fake.yaw = std::fmod(angle * radiansToDegrees + 90.0f, 360.0f);
-                // The simulator client already uses gait=2 for moving entities.
-                fake.gait = 2;
 
                 if (fake.yaw < 0.0f) fake.yaw += 360.0f;
 
