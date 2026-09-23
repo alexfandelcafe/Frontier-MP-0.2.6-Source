@@ -24,6 +24,57 @@ constexpr std::uint32_t kNativeGetThisScriptId = 0x9C424E0Du;
 constexpr std::uint32_t kNativeGetScriptName = 0x0BC52445u;
 std::atomic<std::uint32_t> g_scriptNameTraceCount{0};
 
+
+struct ScriptContextIdEntry final {
+    std::uintptr_t context{};
+    std::uint32_t scriptId{};
+    bool used{};
+};
+
+std::mutex g_scriptContextIdMutex;
+ScriptContextIdEntry g_scriptContextIds[64]{};
+std::size_t g_scriptContextIdNext{};
+
+bool record_script_context_id(void* context, std::uint32_t scriptId) {
+    if (!context) return false;
+    const auto key = reinterpret_cast<std::uintptr_t>(context);
+    std::lock_guard lock(g_scriptContextIdMutex);
+    for (auto& entry : g_scriptContextIds) {
+        if (entry.used && entry.context == key) {
+            if (entry.scriptId == scriptId) return false;
+            entry.scriptId = scriptId;
+            return true;
+        }
+    }
+    for (auto& entry : g_scriptContextIds) {
+        if (!entry.used) {
+            entry.used = true;
+            entry.context = key;
+            entry.scriptId = scriptId;
+            return true;
+        }
+    }
+    auto& entry = g_scriptContextIds[g_scriptContextIdNext++ % (sizeof(g_scriptContextIds) / sizeof(g_scriptContextIds[0]))];
+    entry.used = true;
+    entry.context = key;
+    entry.scriptId = scriptId;
+    return true;
+}
+
+bool lookup_script_context_id(void* context, std::uint32_t& scriptId) {
+    scriptId = 0;
+    if (!context) return false;
+    const auto key = reinterpret_cast<std::uintptr_t>(context);
+    std::lock_guard lock(g_scriptContextIdMutex);
+    for (const auto& entry : g_scriptContextIds) {
+        if (entry.used && entry.context == key) {
+            scriptId = entry.scriptId;
+            return true;
+        }
+    }
+    return false;
+}
+
 struct NativeTraceContext final {
     void* returnBuffer{};
     std::uint32_t argumentCount{};
@@ -434,20 +485,19 @@ void GameThreadDispatcher::get_this_script_id_hook(void* context) {
 
 #ifdef _WIN32
     const auto traceIndex = g_scriptIdTraceCount.fetch_add(1, std::memory_order_relaxed);
-    if (traceIndex < 64) {
-        std::uint32_t scriptId = 0;
-        const bool ok = read_u32_return(context, scriptId);
-
+    std::uint32_t scriptId = 0;
+    const bool ok = read_u32_return(context, scriptId);
+    const bool changed = ok && record_script_context_id(context, scriptId);
+    if (ok && changed) {
         char line[224]{};
         std::snprintf(line, sizeof(line),
                       "[FrontierNative] GET_THIS_SCRIPT_ID trace=%lu context=0x%llX "
-                      "thread=%lu id=%s%u ret=0x%llX",
+                      "thread=%lu id=%u changed=1 ret=0x%llX",
                       static_cast<unsigned long>(traceIndex),
                       static_cast<unsigned long long>(
                           reinterpret_cast<std::uintptr_t>(context)),
                       static_cast<unsigned long>(GetCurrentThreadId()),
-                      ok ? "" : "?",
-                      ok ? scriptId : 0u,
+                      scriptId,
                       static_cast<unsigned long long>(
                           reinterpret_cast<std::uintptr_t>(_ReturnAddress())));
         write_script_trace_line(line);
