@@ -103,6 +103,7 @@ constexpr std::uint32_t kTerminateThisScript = 0x245B6AB6u;
 constexpr std::uint32_t kNetEnableMultiplayer = 0x9180FF1Cu;
 constexpr std::uint32_t kNetIsInSession = 0x8CA54980u;
 constexpr std::uint32_t kNetIsSessionClient = 0xFF65A07Cu;
+constexpr std::uint32_t kNetSessionQuickJoin = 0x8DF05A4Fu;
 constexpr std::uint32_t kNetSessionStartGameplay = 0x86FF3A9Bu;
 constexpr std::uint32_t kNetSessionEndGameplay = 0x81FD9851u;
 constexpr std::uint32_t kNetSessionIsGameplayStarted = 0xDC88B308u;
@@ -464,6 +465,10 @@ bool StartupNativeTracer::attach(NativeInvoker& invoker, std::string& error) {
                      &StartupNativeTracer::net_is_session_client_hook,
                      originalNetIsSessionClient_,
                      "NET_IS_SESSION_CLIENT");
+    install_optional(kNetSessionQuickJoin,
+                     &StartupNativeTracer::net_session_quick_join_hook,
+                     originalNetSessionQuickJoin_,
+                     "NET_SESSION_QUICK_JOIN_NATIVE");
     install_optional(kNetSessionStartGameplay,
                      &StartupNativeTracer::net_session_start_gameplay_hook,
                      originalNetSessionStartGameplay_,
@@ -1040,6 +1045,38 @@ void StartupNativeTracer::net_is_session_client_hook(void* context) {
     std::size_t used = static_cast<std::size_t>(std::snprintf(
         buffer, sizeof(buffer),
         "[FrontierNativeTrace] NET_IS_SESSION_CLIENT arg0=%s%d result=%s%u",
+        argOk ? "" : "?",
+        argOk ? arg0 : 0,
+        resultOk ? "" : "?",
+        resultOk ? result : 0u));
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+
+void StartupNativeTracer::net_session_quick_join_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    std::int32_t arg0 = 0;
+    const bool argOk = read_i32_arg(context, 0, arg0);
+
+    if (tracer->originalNetSessionQuickJoin_) {
+        tracer->originalNetSessionQuickJoin_(context);
+    }
+
+    std::uint32_t result = 0;
+    const bool resultOk =
+#ifdef _WIN32
+        read_u32_return(context, result);
+#else
+        false;
+#endif
+
+    char buffer[280]{};
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        buffer, sizeof(buffer),
+        "[FrontierNativeTrace] NET_SESSION_QUICK_JOIN_NATIVE arg0=%s%d result=%s%u",
         argOk ? "" : "?",
         argOk ? arg0 : 0,
         resultOk ? "" : "?",
