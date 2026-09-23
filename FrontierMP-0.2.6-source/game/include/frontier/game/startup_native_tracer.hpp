@@ -32,6 +32,9 @@ private:
     static void net_session_start_gameplay_hook(void* context);
     static void net_session_end_gameplay_hook(void* context);
     static void net_session_is_gameplay_started_hook(void* context);
+    static void create_player_actor_in_layout_hook(void* context);
+    static void get_player_actor_hook(void* context);
+    static void create_actor_in_layout_hook(void* context);
 
     static void log(const char* message);
 
@@ -55,6 +58,9 @@ private:
     NativeInvoker::NativeHandler originalNetSessionStartGameplay_{};
     NativeInvoker::NativeHandler originalNetSessionEndGameplay_{};
     NativeInvoker::NativeHandler originalNetSessionIsGameplayStarted_{};
+    NativeInvoker::NativeHandler originalCreatePlayerActorInLayout_{};
+    NativeInvoker::NativeHandler originalGetPlayerActor_{};
+    NativeInvoker::NativeHandler originalCreateActorInLayout_{};
     bool attached_{};
 };
 
