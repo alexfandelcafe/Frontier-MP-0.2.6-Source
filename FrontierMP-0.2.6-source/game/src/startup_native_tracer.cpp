@@ -30,6 +30,10 @@ std::size_t g_scriptHandleCount = 0;
 std::uint32_t gCreatePlayerActorTraceCount = 0;
 std::uint32_t gGetPlayerActorTraceCount = 0;
 std::uint32_t gCreateActorInLayoutTraceCount = 0;
+std::uint32_t gGetActorSlotTraceCount = 0;
+std::uint32_t gGetSlotActorTraceCount = 0;
+std::uint32_t gGetLocalSlotTraceCount = 0;
+std::uint32_t gIsSlotValidTraceCount = 0;
 
 void append_execution_identity(char* buffer, std::size_t capacity, std::size_t& used, void* context) {
     if (!buffer || capacity == 0 || used >= capacity) return;
@@ -117,6 +121,10 @@ constexpr std::uint32_t kGetActorEnum = 0x0B28E9ECu;
 constexpr std::uint32_t kCreateLayout = 0x6CA53214u;
 constexpr std::uint32_t kFindNamedLayout = 0x5699DE7Eu;
 constexpr std::uint32_t kIsLayoutrefValid = 0xFC8E55EDu;
+constexpr std::uint32_t kGetActorSlot = 0xAABF3356u;
+constexpr std::uint32_t kGetSlotActor = 0xDB9B49D8u;
+constexpr std::uint32_t kGetLocalSlot = 0xAD68A22Eu;
+constexpr std::uint32_t kIsSlotValid = 0xD04480FEu;
 
 struct NativeTraceContext final {
     void* returnBuffer{};
@@ -555,6 +563,22 @@ bool StartupNativeTracer::attach(NativeInvoker& invoker, std::string& error) {
                      &StartupNativeTracer::get_actor_enum_hook,
                      originalGetActorEnum_,
                      "GET_ACTOR_ENUM");
+    install_optional(kGetActorSlot,
+                     &StartupNativeTracer::get_actor_slot_hook,
+                     originalGetActorSlot_,
+                     "GET_ACTOR_SLOT");
+    install_optional(kGetSlotActor,
+                     &StartupNativeTracer::get_slot_actor_hook,
+                     originalGetSlotActor_,
+                     "GET_SLOT_ACTOR");
+    install_optional(kGetLocalSlot,
+                     &StartupNativeTracer::get_local_slot_hook,
+                     originalGetLocalSlot_,
+                     "GET_LOCAL_SLOT");
+    install_optional(kIsSlotValid,
+                     &StartupNativeTracer::is_slot_valid_hook,
+                     originalIsSlotValid_,
+                     "IS_SLOT_VALID");
 
     install_optional(kCreateLayout,
                      &StartupNativeTracer::create_layout_hook,
@@ -1463,6 +1487,140 @@ void StartupNativeTracer::get_actor_enum_hook(void* context) {
         static_cast<unsigned long long>(result),
         resultOk ? "" : "?",
         resultOk ? static_cast<unsigned int>(static_cast<std::uint32_t>(result)) : 0u));
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+void StartupNativeTracer::get_actor_slot_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    const auto traceIndex = gGetActorSlotTraceCount++;
+    const auto actorRaw = read_u64_arg_value(context, 0);
+
+    if (tracer->originalGetActorSlot_) {
+        tracer->originalGetActorSlot_(context);
+    }
+    if (traceIndex >= 256u) return;
+
+    std::uint32_t resultRaw = 0;
+    const bool resultOk =
+#ifdef _WIN32
+        read_u32_return(context, resultRaw);
+#else
+        false;
+#endif
+
+    char buffer[320]{};
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        buffer, sizeof(buffer),
+        "[FrontierNativeTrace] GET_ACTOR_SLOT trace=%u actorRaw=0x%llX actor=0x%08X result=%s0x%08X",
+        traceIndex,
+        static_cast<unsigned long long>(actorRaw),
+        static_cast<unsigned>(static_cast<std::uint32_t>(actorRaw)),
+        resultOk ? "" : "?",
+        resultRaw));
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+void StartupNativeTracer::get_slot_actor_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    const auto traceIndex = gGetSlotActorTraceCount++;
+    std::int32_t slot = 0;
+    const bool slotOk = read_i32_arg(context, 0, slot);
+
+    if (tracer->originalGetSlotActor_) {
+        tracer->originalGetSlotActor_(context);
+    }
+    if (traceIndex >= 256u) return;
+
+    std::uintptr_t result = 0;
+    const bool resultOk =
+#ifdef _WIN32
+        read_u64_return(context, result);
+#else
+        false;
+#endif
+
+    char buffer[320]{};
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        buffer, sizeof(buffer),
+        "[FrontierNativeTrace] GET_SLOT_ACTOR trace=%u slot=%s%d result=%s0x%llX actor=0x%08X",
+        traceIndex,
+        slotOk ? "" : "?",
+        slotOk ? slot : 0,
+        resultOk ? "" : "?",
+        static_cast<unsigned long long>(result),
+        static_cast<unsigned>(static_cast<std::uint32_t>(result))));
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+void StartupNativeTracer::get_local_slot_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    const auto traceIndex = gGetLocalSlotTraceCount++;
+
+    if (tracer->originalGetLocalSlot_) {
+        tracer->originalGetLocalSlot_(context);
+    }
+    if (traceIndex >= 64u) return;
+
+    std::uint32_t resultRaw = 0;
+    const bool resultOk =
+#ifdef _WIN32
+        read_u32_return(context, resultRaw);
+#else
+        false;
+#endif
+
+    char buffer[288]{};
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        buffer, sizeof(buffer),
+        "[FrontierNativeTrace] GET_LOCAL_SLOT trace=%u result=%s0x%08X slot=%s%d",
+        traceIndex,
+        resultOk ? "" : "?",
+        resultRaw,
+        resultOk ? "" : "?",
+        resultOk ? static_cast<std::int32_t>(resultRaw) : 0));
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+void StartupNativeTracer::is_slot_valid_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    const auto traceIndex = gIsSlotValidTraceCount++;
+    std::int32_t slot = 0;
+    const bool slotOk = read_i32_arg(context, 0, slot);
+
+    if (tracer->originalIsSlotValid_) {
+        tracer->originalIsSlotValid_(context);
+    }
+    if (traceIndex >= 256u) return;
+
+    std::uint32_t resultRaw = 0;
+    const bool resultOk =
+#ifdef _WIN32
+        read_u32_return(context, resultRaw);
+#else
+        false;
+#endif
+
+    char buffer[320]{};
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        buffer, sizeof(buffer),
+        "[FrontierNativeTrace] IS_SLOT_VALID trace=%u slot=%s%d result=%s%u",
+        traceIndex,
+        slotOk ? "" : "?",
+        slotOk ? slot : 0,
+        resultOk ? "" : "?",
+        resultOk ? resultRaw : 0u));
     append_execution_identity(buffer, sizeof(buffer), used, context);
     log(buffer);
 }
