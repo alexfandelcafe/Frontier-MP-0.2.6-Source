@@ -18,6 +18,7 @@ namespace frontier::game {
 namespace {
 std::atomic<GameThreadDispatcher*> g_dispatcher{nullptr};
 std::atomic<std::uint32_t> g_waitTraceCount{0};
+std::atomic<std::uint32_t> g_scriptIdTraceCount{0};
 constexpr std::uint32_t kNativeScrThreadWait = 0x7715C03Bu;
 constexpr std::uint32_t kNativeGetThisScriptId = 0x9C424E0Du;
 
@@ -317,8 +318,8 @@ void GameThreadDispatcher::get_this_script_id_hook(void* context) {
     }
 
 #ifdef _WIN32
-    const auto traceIndex = g_waitTraceCount.fetch_add(1, std::memory_order_relaxed);
-    if (traceIndex < 32) {
+    const auto traceIndex = g_scriptIdTraceCount.fetch_add(1, std::memory_order_relaxed);
+    if (traceIndex < 64) {
         std::uint32_t scriptId = 0;
         const bool ok = read_u32_return(context, scriptId);
 
