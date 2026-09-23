@@ -2056,8 +2056,44 @@ ya buildeo https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-
 ## Response:
 23/9/2026, 8:15:55
 
-Voy a revisar el client.log de esa rama y aislar la parte de la prueba FrontierRemotePlayer, especialmente creación, validez, enum y IS_ACTOR_PLAYER.
+Sí. El log confirma que la prueba funcionó correctamente.
 
+La línea clave es:
+
+[FrontierRemotePlayer] generic actor test
+layout=0x00000339
+streamOk=1
+streamResult=0x345
+createOk=1
+actorRef=0x10000033A
+actorHandle=0x0000033A
+actorValid=1
+actorEnum=837
+isActorPlayer=0
+position=(-837.760,92.547,2372.670)
+Diagnóstico
+STREAMING_REQUEST_ACTOR(837) respondió correctamente.
+CREATE_ACTOR_IN_LAYOUT creó un Actor real.
+actorRef=0x10000033A y actorHandle=0x33A son coherentes.
+IS_ACTOR_VALID(0x33A)=1: el Actor existe y es válido.
+GET_ACTOR_ENUM(0x33A)=837: es exactamente ACTOR_MPPLAYER01.
+IS_ACTOR_PLAYER(0x33A)=0: no es un Player nativo.
+La posición corresponde a los ~2 metros respecto al jugador local que queríamos probar.
+Además, esta vez el CREATE_ACTOR_IN_LAYOUT usa correctamente su retorno: postA0=0x10000033A y result=0x10000033A.
+
+Esto resuelve la duda que teníamos en la prueba anterior: no necesitamos convertir el Actor en un Native Player para tener un ACTOR_MPPLAYER01 válido.
+
+La arquitectura que habíamos planteado queda técnicamente demostrada:
+
+FrontierPlayer
+├── LocalPlayer
+│   └── Native PlayerId → Actor
+│
+└── RemotePlayer
+    └── NetworkPlayerId → ActorHandle
+                         └── ACTOR_MPPLAYER01
+
+El siguiente paso lógico ya no es investigar IS_ACTOR_PLAYER; es pasar de este spawn de prueba único a un RemotePlayer real asociado a cada NetworkPlayerId, con creación, actualización de posición/rotación y destrucción/reemplazo del Actor.
 
 
 Powered by ChatGPT Exporter (https://www.chatgptexporter.com)
