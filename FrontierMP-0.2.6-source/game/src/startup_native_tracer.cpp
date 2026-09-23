@@ -1570,7 +1570,7 @@ void trace_actor_bool_native(void* context,
         resultOk ? "" : "?",
         resultOk ? resultRaw : 0u));
     append_execution_identity(buffer, sizeof(buffer), used, context);
-    log(buffer);
+    write_log_line(buffer);
 }
 }
 
