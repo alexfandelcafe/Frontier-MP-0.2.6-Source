@@ -506,7 +506,9 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                     if (spawned) {
                         // CREATE_ACTOR_IN_LAYOUT returns the engine's tagged ActorRef in
                         // the native return slot. Preserve that exact value for follow-up natives.
-                        args[0] = actorRef;
+                        // Native Actor parameters use the 32-bit handle, not the tagged
+                        // ActorRef returned by CREATE_ACTOR_IN_LAYOUT.
+                        args[0] = static_cast<std::uintptr_t>(actorHandle);
                         result = 0;
                         if (nativeInvoker_.invoke_raw(kNativeGetActorEnum, args, 1u, result)) {
                             char buffer[320]{};
@@ -529,9 +531,9 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                             write_bridge_log_line(buffer);
                         }
 
-                        // Validate the returned handle through public actor/slot natives
-                        // before using any internal actor layout assumptions.
-                        args[0] = actorRef;
+                        // Validate the returned handle through public actor/slot natives.
+                        // These natives use the plain 32-bit Actor handle.
+                        args[0] = static_cast<std::uintptr_t>(actorHandle);
                         result = 0;
                         const bool slotNativeOk =
                             nativeInvoker_.invoke_raw(kNativeGetActorSlot, args, 1u, result);
@@ -546,24 +548,23 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                         }
 
                         Vec3 nativePosition{};
-                        args[0] = actorRef;
+                        args[0] = static_cast<std::uintptr_t>(actorHandle);
                         args[1] = reinterpret_cast<std::uintptr_t>(&nativePosition);
-                        result = 0;
-                        const bool positionNativeOk =
+                        const bool positionNativeInvoked =
                             nativeInvoker_.invoke_raw(kNativeGetActorPosition, args, 2u, result);
 
                         char nativeBuffer[520]{};
                         std::snprintf(nativeBuffer, sizeof(nativeBuffer),
                                       "[FrontierRemoteActor] native-check actorRef=0x%llX actorHandle=0x%08X "
                                       "getActorSlot=%u slot=0x%08X getSlotActor=%u slotActor=0x%llX "
-                                      "getPosition=%u position=(%.3f,%.3f,%.3f)",
+                                      "getPositionInvoked=%u position=(%.3f,%.3f,%.3f)",
                                       static_cast<unsigned long long>(actorRef),
                                       actorHandle,
                                       slotNativeOk ? 1u : 0u,
                                       nativeSlot,
                                       slotActorNativeOk ? 1u : 0u,
                                       static_cast<unsigned long long>(slotActorRef),
-                                      positionNativeOk ? 1u : 0u,
+                                      positionNativeInvoked ? 1u : 0u,
                                       nativePosition.x,
                                       nativePosition.y,
                                       nativePosition.z);
