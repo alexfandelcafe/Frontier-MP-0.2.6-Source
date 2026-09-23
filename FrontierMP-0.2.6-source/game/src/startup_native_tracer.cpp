@@ -113,6 +113,9 @@ constexpr std::uint32_t kNetSessionIsGameplayStarted = 0xDC88B308u;
 constexpr std::uint32_t kCreatePlayerActorInLayout = 0x6A307D5Fu;
 constexpr std::uint32_t kGetPlayerActor = 0xE8CFDD53u;
 constexpr std::uint32_t kCreateActorInLayout = 0x8D67F397u;
+constexpr std::uint32_t kCreateLayout = 0x6CA53214u;
+constexpr std::uint32_t kFindNamedLayout = 0x5699DE7Eu;
+constexpr std::uint32_t kIsLayoutrefValid = 0xFC8E55EDu;
 
 struct NativeTraceContext final {
     void* returnBuffer{};
@@ -454,16 +457,16 @@ bool StartupNativeTracer::attach(NativeInvoker& invoker, std::string& error) {
         return false;
     }
 
-    // Network/session tracing is optional so a missing NET native cannot prevent
+    // Auxiliary native tracing is optional so a missing native cannot prevent
     // the core startup tracer from attaching.
     const auto install_optional = [&](std::uint32_t hash,
                                        NativeInvoker::NativeHandler replacement,
                                        NativeInvoker::NativeHandler& original,
                                        const char* label) {
         if (!invoker.has_handler(hash)) {
-            char buffer[160]{};
+            char buffer[176]{};
             std::snprintf(buffer, sizeof(buffer),
-                          "[FrontierNativeTrace] optional NET hook unavailable %s hash=0x%08X",
+                          "[FrontierNativeTrace] optional hook unavailable %s hash=0x%08X",
                           label, hash);
             log(buffer);
             return;
@@ -471,9 +474,9 @@ bool StartupNativeTracer::attach(NativeInvoker& invoker, std::string& error) {
 
         std::string optionalError;
         if (!invoker.hook_native(hash, replacement, original, &optionalError)) {
-            char buffer[256]{};
+            char buffer[272]{};
             std::snprintf(buffer, sizeof(buffer),
-                          "[FrontierNativeTrace] optional NET hook failed %s hash=0x%08X error=%s",
+                          "[FrontierNativeTrace] optional hook failed %s hash=0x%08X error=%s",
                           label, hash, optionalError.empty() ? "<unknown>" : optionalError.c_str());
             log(buffer);
             original = nullptr;
@@ -521,6 +524,19 @@ bool StartupNativeTracer::attach(NativeInvoker& invoker, std::string& error) {
                      &StartupNativeTracer::create_actor_in_layout_hook,
                      originalCreateActorInLayout_,
                      "CREATE_ACTOR_IN_LAYOUT");
+
+    install_optional(kCreateLayout,
+                     &StartupNativeTracer::create_layout_hook,
+                     originalCreateLayout_,
+                     "CREATE_LAYOUT");
+    install_optional(kFindNamedLayout,
+                     &StartupNativeTracer::find_named_layout_hook,
+                     originalFindNamedLayout_,
+                     "FIND_NAMED_LAYOUT");
+    install_optional(kIsLayoutrefValid,
+                     &StartupNativeTracer::is_layoutref_valid_hook,
+                     originalIsLayoutrefValid_,
+                     "IS_LAYOUTREF_VALID");
 
     g_scriptHandleCount = 0;
     std::memset(g_scriptHandlePaths, 0, sizeof(g_scriptHandlePaths));
@@ -1203,6 +1219,96 @@ void StartupNativeTracer::net_session_is_gameplay_started_hook(void* context) {
     log(buffer);
 }
 
+
+void StartupNativeTracer::create_layout_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    char layoutName[160]{};
+    const bool nameOk = read_c_string(context, 0, layoutName, sizeof(layoutName));
+
+    if (tracer->originalCreateLayout_) {
+        tracer->originalCreateLayout_(context);
+    }
+
+    std::uint32_t result = 0;
+#ifdef _WIN32
+    const bool resultOk = read_u32_return(context, result);
+#else
+    const bool resultOk = false;
+#endif
+
+    char buffer[320]{};
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        buffer, sizeof(buffer),
+        "[FrontierNativeTrace] CREATE_LAYOUT name=%s%s result=%s0x%08X",
+        nameOk ? "" : "?",
+        nameOk ? layoutName : "<unreadable>",
+        resultOk ? "" : "?",
+        resultOk ? result : 0u));
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+void StartupNativeTracer::find_named_layout_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    char layoutName[160]{};
+    const bool nameOk = read_c_string(context, 0, layoutName, sizeof(layoutName));
+
+    if (tracer->originalFindNamedLayout_) {
+        tracer->originalFindNamedLayout_(context);
+    }
+
+    std::uint32_t result = 0;
+#ifdef _WIN32
+    const bool resultOk = read_u32_return(context, result);
+#else
+    const bool resultOk = false;
+#endif
+
+    char buffer[320]{};
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        buffer, sizeof(buffer),
+        "[FrontierNativeTrace] FIND_NAMED_LAYOUT name=%s%s result=%s0x%08X",
+        nameOk ? "" : "?",
+        nameOk ? layoutName : "<unreadable>",
+        resultOk ? "" : "?",
+        resultOk ? result : 0u));
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+void StartupNativeTracer::is_layoutref_valid_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    std::int32_t layout = 0;
+    const bool layoutOk = read_i32_arg(context, 0, layout);
+
+    if (tracer->originalIsLayoutrefValid_) {
+        tracer->originalIsLayoutrefValid_(context);
+    }
+
+    std::uint32_t result = 0;
+#ifdef _WIN32
+    const bool resultOk = read_u32_return(context, result);
+#else
+    const bool resultOk = false;
+#endif
+
+    char buffer[320]{};
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        buffer, sizeof(buffer),
+        "[FrontierNativeTrace] IS_LAYOUTREF_VALID layout=%s0x%08X result=%s%u",
+        layoutOk ? "" : "?",
+        layoutOk ? static_cast<std::uint32_t>(layout) : 0u,
+        resultOk ? "" : "?",
+        resultOk ? result : 0u));
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
 
 void StartupNativeTracer::create_player_actor_in_layout_hook(void* context) {
     auto* tracer = g_tracer;
