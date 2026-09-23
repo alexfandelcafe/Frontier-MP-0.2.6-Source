@@ -3,6 +3,7 @@
 #include "frontier/game/native_invoker.hpp"
 
 #include <chrono>
+#include <atomic>
 #include <cstdio>
 #ifdef _WIN32
 #include <windows.h>
@@ -12,6 +13,7 @@ namespace frontier::game {
 
 namespace {
 std::atomic<GameThreadDispatcher*> g_dispatcher{nullptr};
+std::atomic<std::uint32_t> g_waitTraceCount{0};
 constexpr std::uint32_t kNativeScrThreadWait = 0x7715C03Bu;
 }
 
@@ -210,6 +212,15 @@ bool GameThreadDispatcher::is_game_thread() const {
 void GameThreadDispatcher::wait_hook(void* context) {
     auto* dispatcher = g_dispatcher.load(std::memory_order_acquire);
     if (dispatcher) {
+#ifdef _WIN32
+        const auto traceIndex = g_waitTraceCount.fetch_add(1, std::memory_order_relaxed);
+        if (traceIndex < 32) {
+            std::fprintf(stderr, "[FrontierNative] scrThread::Wait trace=%lu context=0x%llX thread=%lu\\n",
+                         static_cast<unsigned long>(traceIndex),
+                         static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(context)),
+                         static_cast<unsigned long>(GetCurrentThreadId()));
+        }
+#endif
         dispatcher->pump();
         const auto original = dispatcher->originalWait_.load(std::memory_order_acquire);
         if (original) {
