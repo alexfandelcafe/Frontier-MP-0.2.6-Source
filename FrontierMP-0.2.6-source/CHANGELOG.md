@@ -1,3 +1,8 @@
+## 0.2.46
+- Replace the old ActorHandle-based manager lookup experiment with a non-destructive `sagGuid`-indexed `GeneralManagerSlots` scan.
+- After remote actor creation, correlate the new actor by its `sagActor::m_Guid` at `+0x08` and transform position, logging whether the actor was actually registered in the actor manager.
+- Keep the remote spawn path itself unchanged; the manager scan is diagnostic only.
+
 ## 0.2.45
 - Extend passive actor tracing with IS_ACTOR_INITED to distinguish handle creation from completed actor initialization.
 - Continue avoiding direct classification probes from Frontier during the remote-actor test.
