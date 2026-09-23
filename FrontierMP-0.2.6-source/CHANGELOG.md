@@ -1,3 +1,8 @@
+## 0.2.62
+- Test the remote-player architecture as a normal ACTOR_MPPLAYER01-backed Actor.
+- Use a dedicated FrontierRemoteLayout and the normal generic CREATE_ACTOR_IN_LAYOUT return path.
+- Validate the resulting Actor and log its enum and IS_ACTOR_PLAYER state without attempting native Player promotion.
+
 ## 0.2.61
 - Defer the MPPLAYER01 CREATE_ACTOR_IN_LAYOUT and RESPAWN_PLAYER_ACTOR_IN_LAYOUT probe to the game-thread dispatcher instead of calling them reentrantly from GET_PLAYER_ACTOR.
 - Log post-creation actor validity and enum, then post-respawn validity, IS_ACTOR_PLAYER, and enum.
