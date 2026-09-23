@@ -69,16 +69,22 @@ bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, cons
     }
 
     g_network = std::make_unique<NetworkClient>();
-    g_network->set_on_welcome([](const auto& welcome) {
+    g_network->set_on_welcome([this](const auto& welcome) {
+        localPlayerId_ = welcome.playerId;
+        remotePlayers_.set_local_player_id(localPlayerId_);
+
         std::ostringstream message;
         message << "[FrontierClient] connected as player " << welcome.playerId
                 << " serverTick=" << welcome.serverTick;
         log_line(message.str());
     });
-    g_network->set_on_snapshot([](const auto& snapshot) {
+    g_network->set_on_snapshot([this](const auto& snapshot) {
+        remotePlayers_.on_snapshot(snapshot, monotonic_ms());
+
         std::ostringstream message;
         message << "[FrontierClient] snapshot tick=" << snapshot.serverTick
-                << " players=" << snapshot.players.size();
+                << " players=" << snapshot.players.size()
+                << " remoteEntities=" << remotePlayers_.size();
         log_line(message.str());
     });
     g_network->set_on_disconnect([](const std::string& reason) { log_line("[FrontierClient] " + reason); });
@@ -122,6 +128,10 @@ void ClientRuntime::run_loop() {
 void ClientRuntime::shutdown() {
     stopRequested_.store(true, std::memory_order_relaxed);
     if (g_network) g_network->stop();
+    if (gameBridge_.initialized()) {
+        remotePlayers_.clear(gameBridge_);
+    }
+    localPlayerId_ = 0;
     g_network.reset();
     connected_ = false;
     clientTick_ = 0;
@@ -163,22 +173,14 @@ void ClientRuntime::update() {
                         log_line("[FrontierClient] local-player ready chain " + chain);
                     }
 
-                    std::string remoteActorError;
-                    if (gameBridge_.request_remote_actor_test(state, remoteActorError)) {
-                        log_line("[FrontierClient] remote actor test request accepted");
-                    } else {
-                        log_line("[FrontierClient] remote actor test request failed: " + remoteActorError);
-                    }
-
                     bridgeStateReady_ = true;
-                } else {
-                    // The remote actor test may defer while its streamed model is loading.
-                    // Re-submit on subsequent state ticks so RdrBridge can poll/retry until
-                    // the asset becomes available, while its own pending/spawned flags keep
-                    // the game-thread submission idempotent.
-                    std::string ignoredRemoteActorError;
-                    gameBridge_.request_remote_actor_test(state, ignoredRemoteActorError);
                 }
+            }
+
+            if (gameBridge_.initialized() &&
+                g_network->state() == ConnectionState::Connected) {
+                remotePlayers_.update(now, gameBridge_);
+            }
             } else if (lastBridgeLogMs_ == 0 || now - lastBridgeLogMs_ >= 1000) {
                 log_line("[FrontierClient] local-player read pending: " + bridgeError);
                 lastBridgeLogMs_ = now;
