@@ -35,7 +35,7 @@ std::mutex g_scriptContextIdMutex;
 ScriptContextIdEntry g_scriptContextIds[64]{};
 std::size_t g_scriptContextIdNext{};
 
-bool record_script_context_id(void* context, std::uint32_t scriptId) {
+bool record_script_context_id_impl(void* context, std::uint32_t scriptId) {
     if (!context) return false;
     const auto key = reinterpret_cast<std::uintptr_t>(context);
     std::lock_guard lock(g_scriptContextIdMutex);
@@ -61,7 +61,7 @@ bool record_script_context_id(void* context, std::uint32_t scriptId) {
     return true;
 }
 
-bool lookup_script_context_id(void* context, std::uint32_t& scriptId) {
+bool lookup_script_context_id_impl(void* context, std::uint32_t& scriptId) {
     scriptId = 0;
     if (!context) return false;
     const auto key = reinterpret_cast<std::uintptr_t>(context);
@@ -150,6 +150,14 @@ bool read_c_string(const void* pointer, char* out, std::size_t capacity) noexcep
     return true;
 }
 #endif
+}
+
+bool record_script_context_id(void* context, std::uint32_t scriptId) {
+    return record_script_context_id_impl(context, scriptId);
+}
+
+bool lookup_script_context_id(void* context, std::uint32_t& scriptId) {
+    return lookup_script_context_id_impl(context, scriptId);
 }
 
 bool GameThreadDispatcher::attach(NativeInvoker& invoker, std::string& error) {
