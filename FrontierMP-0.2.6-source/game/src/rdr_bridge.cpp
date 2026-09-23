@@ -421,6 +421,7 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
             bool spawned = false;
             std::uint32_t layoutId = 0;
             std::uint32_t actorHandle = 0;
+            std::uintptr_t actorRef = 0;
 
             char layoutName[] = "FrontierRemoteLayout";
             char actorName[] = "FrontierRemoteTest";
@@ -477,7 +478,7 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                                  "[FrontierRemoteActor] CREATE_ACTOR_IN_LAYOUT invoke failed layout=0x%08X\\n",
                                  layoutId);
                 } else {
-                    const auto actorRef = result;
+                    actorRef = result;
                     actorHandle = static_cast<std::uint32_t>(actorRef);
                     spawned = actorHandle != 0u;
 
