@@ -106,6 +106,11 @@ bool RdrBridge::local_player_pointer_available() const {
 #endif
 }
 
+std::string RdrBridge::local_player_chain_diagnostic() const {
+    std::lock_guard lock(localPlayerDiagnosticMutex_);
+    return localPlayerChainDiagnostic_;
+}
+
 bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild build) {
     initialized_ = false;
     build_ = build;
@@ -485,6 +490,21 @@ bool RdrBridge::read_local_player_state(PlayerState& outState, std::string& erro
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         error = "position read failed";
         return false;
+    }
+
+    {
+        char buffer[448]{};
+        std::snprintf(buffer, sizeof(buffer),
+                      "local=0x%llX manager=0x%llX guid=0x%08X slot=0x%llX actor=0x%llX component=0x%llX transform=0x%llX",
+                      static_cast<unsigned long long>(localPlayer),
+                      static_cast<unsigned long long>(managerSlots),
+                      guid,
+                      static_cast<unsigned long long>(actorSlotAddress),
+                      static_cast<unsigned long long>(actor),
+                      static_cast<unsigned long long>(actorComponent),
+                      static_cast<unsigned long long>(transform));
+        std::lock_guard lock(localPlayerDiagnosticMutex_);
+        localPlayerChainDiagnostic_ = buffer;
     }
     return true;
 #else
