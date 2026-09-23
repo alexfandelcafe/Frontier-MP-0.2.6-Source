@@ -163,6 +163,13 @@ void ClientRuntime::update() {
                         log_line("[FrontierClient] local-player ready chain " + chain);
                     }
 
+                    std::string remoteActorError;
+                    if (gameBridge_.request_remote_actor_test(state, remoteActorError)) {
+                        log_line("[FrontierClient] remote actor test request accepted");
+                    } else {
+                        log_line("[FrontierClient] remote actor test request failed: " + remoteActorError);
+                    }
+
                     bridgeStateReady_ = true;
                 }
             } else if (lastBridgeLogMs_ == 0 || now - lastBridgeLogMs_ >= 1000) {

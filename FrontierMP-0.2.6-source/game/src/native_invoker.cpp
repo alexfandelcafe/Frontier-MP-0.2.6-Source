@@ -431,6 +431,37 @@ bool NativeInvoker::invoke_u32(std::uint32_t hash, std::uint32_t& out) const {
 #endif
 }
 
+bool NativeInvoker::invoke_raw(std::uint32_t hash, const std::uintptr_t* arguments,
+                                  std::size_t argumentCount, std::uintptr_t& out) const {
+#ifdef _WIN32
+    out = 0;
+    if (argumentCount > 32u) return false;
+
+    const auto handler = get_handler(hash);
+    if (!handler) return false;
+
+    NativeTempContext context{};
+    context.returnBuffer = context.stack;
+    context.argumentBuffer = context.stack;
+    context.argumentCount = static_cast<std::uint32_t>(argumentCount);
+    context.dataCount = 0;
+
+    if (argumentCount != 0u) {
+        if (!arguments) return false;
+        std::memcpy(context.stack, arguments, argumentCount * sizeof(context.stack[0]));
+    }
+
+    if (!invoke_handler_guarded(handler, &context)) return false;
+    return guarded_copy(context.stack, &out, sizeof(out));
+#else
+    (void)hash;
+    (void)arguments;
+    (void)argumentCount;
+    out = 0;
+    return false;
+#endif
+}
+
 bool NativeInvoker::hook_native(std::uint32_t hash, NativeHandler replacement,
                                       NativeHandler& original, std::string* error) {
 #ifdef _WIN32

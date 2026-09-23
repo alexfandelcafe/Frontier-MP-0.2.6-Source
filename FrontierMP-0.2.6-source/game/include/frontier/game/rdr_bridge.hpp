@@ -16,6 +16,7 @@ class RdrBridge final {
 public:
     bool initialize(const ExecutableFingerprint& fingerprint, KnownBuild build);
     bool read_local_player_state(PlayerState& outState, std::string& error) const;
+    bool request_remote_actor_test(const PlayerState& origin, std::string& error) const;
     std::string local_player_chain_diagnostic() const;
     bool local_player_pointer_available() const;
     bool try_initialize_native_invoker();
@@ -63,6 +64,11 @@ private:
     mutable bool runtimeRefreshPending_{};
     mutable std::mutex localPlayerDiagnosticMutex_;
     mutable std::string localPlayerChainDiagnostic_;
+    mutable std::mutex remoteActorTestMutex_;
+    mutable bool remoteActorTestPending_{};
+    mutable bool remoteActorTestSpawned_{};
+    mutable std::uint32_t remoteActorTestLayout_{};
+    mutable std::uintptr_t remoteActorTestActorRef_{};
 };
 
 } // namespace frontier::game

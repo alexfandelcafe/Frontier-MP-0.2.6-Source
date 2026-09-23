@@ -1,3 +1,11 @@
+## 0.2.41
+
+- Added a game-thread-only controlled remote actor spawn test through CREATE_ACTOR_IN_LAYOUT.
+- Added a raw NativeInvoker call path for up to 32 uintptr-sized native arguments.
+- Follow the observed Layout lifecycle: FIND_NAMED_LAYOUT, CREATE_LAYOUT fallback, IS_LAYOUTREF_VALID, then CREATE_ACTOR_IN_LAYOUT.
+- Use actor enum 0 from the verified local CREATE_PLAYER_ACTOR_IN_LAYOUT trace and place the diagnostic actor two meters from the local player.
+- Keep the remote actor test idempotent per client session; no actor memory mutation or Rockstar NET session is introduced.
+
 ## 0.2.40
 
 - Capture CREATE_PLAYER_ACTOR_IN_LAYOUT and CREATE_ACTOR_IN_LAYOUT arguments before invoking the original native.

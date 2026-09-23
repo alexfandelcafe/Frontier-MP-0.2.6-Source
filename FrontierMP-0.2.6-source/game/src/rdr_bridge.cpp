@@ -23,6 +23,13 @@ constexpr std::uint32_t kNativeGetGameState = 0xDD9BD22B;
 constexpr std::uint32_t kNativeStreamingIsWorldLoaded = 0x87B74064;
 constexpr std::uint32_t kNativeIsSimulateStartMultiplayer = 0x9A73C2CD;
 constexpr std::uint32_t kNativeIsStartPosInCommandLine = 0x814D97E8;
+constexpr std::uint32_t kNativeFindNamedLayout = 0x5699DE7E;
+constexpr std::uint32_t kNativeCreateLayout = 0x6CA53214;
+constexpr std::uint32_t kNativeIsLayoutRefValid = 0xFC8E55ED;
+constexpr std::uint32_t kNativeCreateActorInLayout = 0x8D67F397;
+constexpr std::uint32_t kNativeGetActorEnum = 0x0B28E9EC;
+constexpr std::uintptr_t kTaggedLayoutRef = 0x100000000ull;
+constexpr std::int32_t kRemoteTestActorEnum = 0;
 
 constexpr const char* kActorManagerPattern =
     "48 8B 05 ? ? ? ? 0F B7 CA 48 03 C9 C1 EA 10 66 39 54 C8 ? 75 03 B0 01 C3 32 C0 C3 CC 48 89 5C 24 ?";
@@ -148,6 +155,13 @@ bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild 
     build_ = build;
     localPlayerStorage_ = 0;
     actorManagerSlotsStorage_ = 0;
+    {
+        std::lock_guard lock(remoteActorTestMutex_);
+        remoteActorTestPending_ = false;
+        remoteActorTestSpawned_ = false;
+        remoteActorTestLayout_ = 0;
+        remoteActorTestActorRef_ = 0;
+    }
     {
         std::lock_guard lock(runtimeSnapshotMutex_);
         runtimeSnapshot_ = {};
@@ -354,6 +368,157 @@ bool RdrBridge::read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bo
     if (!snapshot.gameStateKnown || !snapshot.worldLoadedKnown ||
         !snapshot.simulateStartMultiplayerKnown || !snapshot.startPosCommandLineKnown) {
         if (error.empty()) error = "runtime snapshot pending";
+        return false;
+    }
+
+    return true;
+}
+
+namespace {
+
+std::uintptr_t float_bits(float value) {
+    std::uintptr_t bits = 0;
+    static_assert(sizeof(float) == sizeof(std::uint32_t));
+    std::uint32_t raw = 0;
+    std::memcpy(&raw, &value, sizeof(raw));
+    bits = raw;
+    return bits;
+}
+
+std::uintptr_t pack_vec2(float x, float y) {
+    return float_bits(x) | (float_bits(y) << 32u);
+}
+
+} // namespace
+
+bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string& error) const {
+    error.clear();
+    if (!initialized_) {
+        error = "bridge not initialized";
+        return false;
+    }
+    if (!nativeInvoker_.ready()) {
+        error = "native invoker not ready";
+        return false;
+    }
+    if (!gameThreadDispatcher_.attached()) {
+        error = gameThreadDispatcherError_.empty()
+            ? "game-thread dispatcher not attached"
+            : gameThreadDispatcherError_;
+        return false;
+    }
+
+    {
+        std::lock_guard lock(remoteActorTestMutex_);
+        if (remoteActorTestSpawned_ || remoteActorTestPending_) return true;
+        remoteActorTestPending_ = true;
+    }
+
+    const PlayerState spawnOrigin = origin;
+    std::string dispatchError;
+    const bool submitted = gameThreadDispatcher_.submit(
+        [this, spawnOrigin]() {
+            bool spawned = false;
+            std::uint32_t layoutId = 0;
+            std::uint32_t actorHandle = 0;
+
+            char layoutName[] = "FrontierRemoteLayout";
+            char actorName[] = "FrontierRemoteTest";
+
+            std::uintptr_t args[8]{};
+            std::uintptr_t result = 0;
+
+            // Match the engine's observed layout lifecycle: find first, create if absent,
+            // then validate the raw Layout id before passing the tagged LayoutRef to actor creation.
+            args[0] = reinterpret_cast<std::uintptr_t>(layoutName);
+            if (nativeInvoker_.invoke_raw(kNativeFindNamedLayout, args, 1u, result)) {
+                layoutId = static_cast<std::uint32_t>(result);
+            }
+
+            bool layoutValid = false;
+            if (layoutId != 0u) {
+                args[0] = layoutId;
+                if (nativeInvoker_.invoke_raw(kNativeIsLayoutRefValid, args, 1u, result)) {
+                    layoutValid = result != 0u;
+                }
+            }
+
+            if (!layoutValid) {
+                args[0] = reinterpret_cast<std::uintptr_t>(layoutName);
+                result = 0;
+                if (!nativeInvoker_.invoke_raw(kNativeCreateLayout, args, 1u, result)) {
+                    std::fprintf(stderr, "[FrontierRemoteActor] CREATE_LAYOUT invoke failed\\n");
+                } else {
+                    layoutId = static_cast<std::uint32_t>(result);
+                    args[0] = layoutId;
+                    if (nativeInvoker_.invoke_raw(kNativeIsLayoutRefValid, args, 1u, result)) {
+                        layoutValid = result != 0u;
+                    }
+                }
+            }
+
+            if (layoutValid) {
+                const float x = spawnOrigin.position.x + 2.0f;
+                const float y = spawnOrigin.position.y;
+                const float z = spawnOrigin.position.z;
+
+                args[0] = kTaggedLayoutRef | static_cast<std::uintptr_t>(layoutId);
+                args[1] = reinterpret_cast<std::uintptr_t>(actorName);
+                args[2] = static_cast<std::uintptr_t>(static_cast<std::uint32_t>(kRemoteTestActorEnum));
+                args[3] = pack_vec2(x, y);
+                args[4] = float_bits(z);
+                args[5] = pack_vec2(0.0f, 0.0f);
+                args[6] = float_bits(0.0f);
+                args[7] = 0;
+
+                result = 0;
+                if (!nativeInvoker_.invoke_raw(kNativeCreateActorInLayout, args, 7u, result)) {
+                    std::fprintf(stderr,
+                                 "[FrontierRemoteActor] CREATE_ACTOR_IN_LAYOUT invoke failed layout=0x%08X\\n",
+                                 layoutId);
+                } else {
+                    const auto actorRef = result;
+                    actorHandle = static_cast<std::uint32_t>(actorRef);
+                    spawned = actorHandle != 0u;
+
+                    if (spawned) {
+                        // CREATE_ACTOR_IN_LAYOUT returns the engine's tagged ActorRef in
+                        // the native return slot. Preserve that exact value for follow-up natives.
+                        args[0] = actorRef;
+                        result = 0;
+                        if (nativeInvoker_.invoke_raw(kNativeGetActorEnum, args, 1u, result)) {
+                            std::fprintf(stderr,
+                                         "[FrontierRemoteActor] spawned layout=0x%08X actor=0x%08X enum=%u position=(%.3f,%.3f,%.3f)\\n",
+                                         layoutId, actorHandle, static_cast<std::uint32_t>(result), x, y, z);
+                        } else {
+                            std::fprintf(stderr,
+                                         "[FrontierRemoteActor] spawned layout=0x%08X actor=0x%08X position=(%.3f,%.3f,%.3f) enum-check=failed\\n",
+                                         layoutId, actorHandle, x, y, z);
+                        }
+                    }
+                }
+            } else {
+                std::fprintf(stderr,
+                             "[FrontierRemoteActor] layout invalid name=%s id=0x%08X\\n",
+                             layoutName, layoutId);
+            }
+
+            {
+                std::lock_guard lock(remoteActorTestMutex_);
+                remoteActorTestPending_ = false;
+                if (spawned) {
+                    remoteActorTestSpawned_ = true;
+                    remoteActorTestLayout_ = layoutId;
+                    remoteActorTestActorRef_ = actorRef;
+                }
+            }
+        },
+        dispatchError);
+
+    if (!submitted) {
+        std::lock_guard lock(remoteActorTestMutex_);
+        remoteActorTestPending_ = false;
+        error = dispatchError.empty() ? "remote actor test enqueue failed" : dispatchError;
         return false;
     }
 
