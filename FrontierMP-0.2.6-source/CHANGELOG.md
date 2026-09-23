@@ -1,3 +1,8 @@
+## 0.2.61
+- Defer the MPPLAYER01 CREATE_ACTOR_IN_LAYOUT and RESPAWN_PLAYER_ACTOR_IN_LAYOUT probe to the game-thread dispatcher instead of calling them reentrantly from GET_PLAYER_ACTOR.
+- Log post-creation actor validity and enum, then post-respawn validity, IS_ACTOR_PLAYER, and enum.
+- Keep the probe one-shot per client session and retry only when task submission itself fails.
+
 ## 0.2.60
 - Stop retrying the rejected CREATE_PLAYER_ACTOR_IN_LAYOUT remote-player path.
 - Create a proven ACTOR_MPPLAYER01 through CREATE_ACTOR_IN_LAYOUT in the live Player context and test RESPAWN_PLAYER_ACTOR_IN_LAYOUT against that concrete actor.
