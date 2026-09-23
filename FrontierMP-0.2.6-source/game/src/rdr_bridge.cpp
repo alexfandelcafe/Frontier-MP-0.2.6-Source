@@ -111,6 +111,11 @@ bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild 
     build_ = build;
     localPlayerStorage_ = 0;
     actorManagerSlotsStorage_ = 0;
+    {
+        std::lock_guard lock(runtimeSnapshotMutex_);
+        runtimeSnapshot_ = {};
+        runtimeRefreshPending_ = false;
+    }
 
 #ifdef _WIN32
     if (build == KnownBuild::Unknown) return false;
@@ -233,63 +238,89 @@ bool RdrBridge::read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bo
         return false;
     }
 
-    struct RuntimeNativeResult final {
-        bool gameStateOk{};
-        std::uint32_t gameState{};
-        bool worldLoadedOk{};
-        std::uint32_t worldLoaded{};
-        bool simulateMpOk{};
-        std::uint32_t simulateMp{};
-        bool startPosOk{};
-        std::uint32_t startPos{};
-    };
+    bool enqueueRefresh = false;
+    RuntimeSnapshot snapshot{};
+    {
+        std::lock_guard lock(runtimeSnapshotMutex_);
+        snapshot = runtimeSnapshot_;
+        if (!runtimeRefreshPending_) {
+            runtimeRefreshPending_ = true;
+            enqueueRefresh = true;
+        }
+    }
 
-    auto result = std::make_shared<RuntimeNativeResult>();
-    std::string dispatchError;
-    bool dispatched = gameThreadDispatcher_.submit_and_wait(
-        [this, result]() {
-            result->gameStateOk = nativeInvoker_.invoke_u32(kNativeGetGameState, result->gameState);
-            result->worldLoadedOk = nativeInvoker_.invoke_u32(kNativeStreamingIsWorldLoaded, result->worldLoaded);
-            result->simulateMpOk = nativeInvoker_.invoke_u32(kNativeIsSimulateStartMultiplayer, result->simulateMp);
-            result->startPosOk = nativeInvoker_.invoke_u32(kNativeIsStartPosInCommandLine, result->startPos);
-        },
-        1000,
-        dispatchError);
+    if (enqueueRefresh) {
+        std::string dispatchError;
+        const bool submitted = gameThreadDispatcher_.submit(
+            [this]() {
+                RuntimeSnapshot refreshed{};
+                refreshed.gameState = -1;
 
-    if (!dispatched) {
-        error = dispatchError.empty() ? "game-thread native dispatch failed" : dispatchError;
+                if (nativeInvoker_.invoke_u32(kNativeGetGameState,
+                                              reinterpret_cast<std::uint32_t&>(refreshed.gameState))) {
+                    refreshed.gameStateKnown = true;
+                }
+                if (nativeInvoker_.invoke_u32(kNativeStreamingIsWorldLoaded,
+                                              reinterpret_cast<std::uint32_t&>(refreshed.worldLoaded))) {
+                    refreshed.worldLoadedKnown = true;
+                }
+                if (nativeInvoker_.invoke_u32(kNativeIsSimulateStartMultiplayer,
+                                              reinterpret_cast<std::uint32_t&>(refreshed.simulateStartMultiplayer))) {
+                    refreshed.simulateStartMultiplayerKnown = true;
+                }
+                if (nativeInvoker_.invoke_u32(kNativeIsStartPosInCommandLine,
+                                              reinterpret_cast<std::uint32_t&>(refreshed.startPosCommandLine))) {
+                    refreshed.startPosCommandLineKnown = true;
+                }
+
+                std::lock_guard lock(runtimeSnapshotMutex_);
+                if (refreshed.gameStateKnown) {
+                    runtimeSnapshot_.gameStateKnown = true;
+                    runtimeSnapshot_.gameState = refreshed.gameState;
+                }
+                if (refreshed.worldLoadedKnown) {
+                    runtimeSnapshot_.worldLoadedKnown = true;
+                    runtimeSnapshot_.worldLoaded = refreshed.worldLoaded;
+                }
+                if (refreshed.simulateStartMultiplayerKnown) {
+                    runtimeSnapshot_.simulateStartMultiplayerKnown = true;
+                    runtimeSnapshot_.simulateStartMultiplayer = refreshed.simulateStartMultiplayer;
+                }
+                if (refreshed.startPosCommandLineKnown) {
+                    runtimeSnapshot_.startPosCommandLineKnown = true;
+                    runtimeSnapshot_.startPosCommandLine = refreshed.startPosCommandLine;
+                }
+                runtimeRefreshPending_ = false;
+            },
+            dispatchError);
+
+        if (!submitted) {
+            std::lock_guard lock(runtimeSnapshotMutex_);
+            runtimeRefreshPending_ = false;
+            error = dispatchError.empty() ? "game-thread runtime refresh enqueue failed" : dispatchError;
+        }
+    }
+
+    {
+        std::lock_guard lock(runtimeSnapshotMutex_);
+        snapshot = runtimeSnapshot_;
+    }
+
+    gameState = snapshot.gameState;
+    worldLoaded = snapshot.worldLoaded;
+    worldLoadedKnown = snapshot.worldLoadedKnown;
+    simulateStartMultiplayer = snapshot.simulateStartMultiplayer;
+    simulateStartMultiplayerKnown = snapshot.simulateStartMultiplayerKnown;
+    startPosCommandLine = snapshot.startPosCommandLine;
+    startPosCommandLineKnown = snapshot.startPosCommandLineKnown;
+
+    if (!snapshot.gameStateKnown || !snapshot.worldLoadedKnown ||
+        !snapshot.simulateStartMultiplayerKnown || !snapshot.startPosCommandLineKnown) {
+        if (error.empty()) error = "runtime snapshot pending";
         return false;
     }
 
-    if (!result->gameStateOk) {
-        error += "GET_GAME_STATE invoke failed; ";
-    } else {
-        gameState = static_cast<std::int32_t>(result->gameState);
-    }
-
-    worldLoadedKnown = result->worldLoadedOk;
-    if (result->worldLoadedOk) {
-        worldLoaded = result->worldLoaded != 0;
-    } else {
-        error += "STREAMING_IS_WORLD_LOADED invoke failed; ";
-    }
-
-    simulateStartMultiplayerKnown = result->simulateMpOk;
-    if (result->simulateMpOk) {
-        simulateStartMultiplayer = result->simulateMp != 0;
-    } else {
-        error += "IS_SIMULATE_START_MULTIPLAYER invoke failed; ";
-    }
-
-    startPosCommandLineKnown = result->startPosOk;
-    if (result->startPosOk) {
-        startPosCommandLine = result->startPos != 0;
-    } else {
-        error += "IS_STARTPOS_IN_COMMANDLINE invoke failed; ";
-    }
-
-    return result->gameStateOk && result->worldLoadedOk &&
-           result->simulateMpOk && result->startPosOk;
+    return true;
 }
 
 bool RdrBridge::read_local_player_state(PlayerState& outState, std::string& error) const {
