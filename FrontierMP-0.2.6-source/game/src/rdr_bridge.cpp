@@ -335,16 +335,28 @@ bool RdrBridge::read_local_player_state(PlayerState& outState, std::string& erro
     std::uintptr_t localPlayer = 0;
     std::uintptr_t managerSlots = 0;
     if (!read_pointer(localPlayerStorage_, localPlayer)) {
-        error = "local player pointer unavailable";
+        char buffer[192]{};
+        std::snprintf(buffer, sizeof(buffer),
+                      "local player pointer unavailable storage=0x%llX",
+                      static_cast<unsigned long long>(localPlayerStorage_));
+        error = buffer;
         return false;
     }
     if (!read_pointer(actorManagerSlotsStorage_, managerSlots)) {
-        error = "actor manager slots unavailable";
+        char buffer[192]{};
+        std::snprintf(buffer, sizeof(buffer),
+                      "actor manager slots unavailable storage=0x%llX",
+                      static_cast<unsigned long long>(actorManagerSlotsStorage_));
+        error = buffer;
         return false;
     }
 
     if (!readable(localPlayer, sizeof(MinimalSagPlayer))) {
-        error = "local player object unreadable";
+        char buffer[224]{};
+        std::snprintf(buffer, sizeof(buffer),
+                      "local player object unreadable ptr=0x%llX",
+                      static_cast<unsigned long long>(localPlayer));
+        error = buffer;
         return false;
     }
 
@@ -352,42 +364,93 @@ bool RdrBridge::read_local_player_state(PlayerState& outState, std::string& erro
     __try {
         guid = reinterpret_cast<const MinimalSagPlayer*>(localPlayer)->guid;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
-        error = "local player GUID read failed";
+        char buffer[224]{};
+        std::snprintf(buffer, sizeof(buffer),
+                      "local player GUID read failed ptr=0x%llX",
+                      static_cast<unsigned long long>(localPlayer));
+        error = buffer;
         return false;
     }
 
-    const auto actorSlotAddress = managerSlots + (static_cast<std::uintptr_t>(static_cast<std::uint16_t>(guid)) * 0x10u);
+    const auto actorSlotAddress = managerSlots +
+        (static_cast<std::uintptr_t>(static_cast<std::uint16_t>(guid)) * 0x10u);
     std::uintptr_t actor = 0;
     if (!read_pointer(actorSlotAddress, actor)) {
-        error = "local actor pointer unavailable";
+        char buffer[320]{};
+        std::snprintf(buffer, sizeof(buffer),
+                      "local actor pointer unavailable manager=0x%llX guid=0x%08X slot=0x%llX",
+                      static_cast<unsigned long long>(managerSlots),
+                      guid,
+                      static_cast<unsigned long long>(actorSlotAddress));
+        error = buffer;
         return false;
     }
     if (!readable(actor, sizeof(MinimalSagActor))) {
-        error = "local actor unreadable";
+        char buffer[240]{};
+        std::snprintf(buffer, sizeof(buffer),
+                      "local actor unreadable ptr=0x%llX guid=0x%08X slot=0x%llX",
+                      static_cast<unsigned long long>(actor),
+                      guid,
+                      static_cast<unsigned long long>(actorSlotAddress));
+        error = buffer;
         return false;
     }
 
     std::uintptr_t actorComponent = 0;
+    bool actorComponentRead = false;
     __try {
         actorComponent = reinterpret_cast<const MinimalSagActor*>(actor)->actorComponent;
+        actorComponentRead = true;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
-        error = "actor component read failed";
+        actorComponentRead = false;
+    }
+    if (!actorComponentRead) {
+        char buffer[240]{};
+        std::snprintf(buffer, sizeof(buffer),
+                      "actor component read failed actor=0x%llX guid=0x%08X",
+                      static_cast<unsigned long long>(actor),
+                      guid);
+        error = buffer;
         return false;
     }
     if (!readable(actorComponent, sizeof(MinimalSagActorComponent))) {
-        error = "actor component unreadable";
+        char buffer[288]{};
+        std::snprintf(buffer, sizeof(buffer),
+                      "actor component unreadable ptr=0x%llX actor=0x%llX guid=0x%08X",
+                      static_cast<unsigned long long>(actorComponent),
+                      static_cast<unsigned long long>(actor),
+                      guid);
+        error = buffer;
         return false;
     }
 
     std::uintptr_t transform = 0;
+    bool transformRead = false;
     __try {
         transform = reinterpret_cast<const MinimalSagActorComponent*>(actorComponent)->transform;
+        transformRead = true;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
-        error = "transform pointer read failed";
+        transformRead = false;
+    }
+    if (!transformRead) {
+        char buffer[256]{};
+        std::snprintf(buffer, sizeof(buffer),
+                      "transform pointer read failed component=0x%llX actor=0x%llX guid=0x%08X",
+                      static_cast<unsigned long long>(actorComponent),
+                      static_cast<unsigned long long>(actor),
+                      guid);
+        error = buffer;
         return false;
     }
     if (!readable(transform, sizeof(MinimalMatrix34))) {
-        error = "transform unreadable";
+        char buffer[288]{};
+        std::snprintf(buffer, sizeof(buffer),
+                      "transform unreadable ptr=0x%llX component=0x%llX actor=0x%llX guid=0x%08X",
+                      static_cast<unsigned long long>(transform),
+                      static_cast<unsigned long long>(actorComponent),
+                      static_cast<unsigned long long>(actor),
+                      guid);
+        error = buffer;
         return false;
     }
 
