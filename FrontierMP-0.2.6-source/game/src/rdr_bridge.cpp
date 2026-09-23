@@ -630,10 +630,63 @@ bool RdrBridge::spawn_remote_actor(
     std::string dispatchError;
     const bool completed = gameThreadDispatcher_.submit_and_wait(
         [this, remotePlayerId, spawnState, &outActor, &error]() {
-            char layoutName[] = "FrontierRemoteLayout";
+            constexpr const char* kAmbientLayoutName = "AmbientMissions_Layout";
+            constexpr const char* kFallbackLayoutName = "FrontierRemoteLayout";
+
+            char ambientLayoutName[] = "AmbientMissions_Layout";
+            char fallbackLayoutName[] = "FrontierRemoteLayout";
+
             char actorName[64]{};
             std::snprintf(actorName, sizeof(actorName), "FrontierRemote_%u",
                           static_cast<unsigned>(remotePlayerId));
+
+            // The Lua RDRMP resource validates that the actor enum exists before
+            // requesting its asset, so mirror that sequence here.
+            std::uintptr_t enumArgs[1]{
+                static_cast<std::uintptr_t>(kRemoteTestActorEnum)};
+            std::uintptr_t enumInstalledResult = 0u;
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeIsActorenumInstalled, enumArgs, 1u, enumInstalledResult)) {
+                error = "IS_ACTORENUM_INSTALLED invoke failed";
+                return;
+            }
+            if (enumInstalledResult == 0u) {
+                char message[192]{};
+                std::snprintf(
+                    message, sizeof(message),
+                    "remote actor enum %u is not installed",
+                    static_cast<unsigned>(kRemoteTestActorEnum));
+                error = message;
+                return;
+            }
+
+            // Match the proven RDRMP resource flow: request the actor first, then
+            // only create it once the streamed asset reports loaded.
+            std::uintptr_t streamArgs[3]{};
+            streamArgs[0] = static_cast<std::uintptr_t>(kRemoteTestActorEnum);
+            streamArgs[1] = 1u;
+            streamArgs[2] = 0u;
+            std::uintptr_t streamResult = 0u;
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeStreamingRequestActor, streamArgs, 3u, streamResult)) {
+                error = "STREAMING_REQUEST_ACTOR invoke failed";
+                return;
+            }
+
+            std::uintptr_t loadedArgs[2]{};
+            loadedArgs[0] = static_cast<std::uintptr_t>(kRemoteTestActorEnum);
+            loadedArgs[1] =
+                static_cast<std::uintptr_t>(static_cast<std::intptr_t>(-1));
+            std::uintptr_t loadedResult = 0u;
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeStreamingIsActorLoaded, loadedArgs, 2u, loadedResult)) {
+                error = "STREAMING_IS_ACTOR_LOADED invoke failed";
+                return;
+            }
+            if (loadedResult == 0u) {
+                error = "remote actor asset still loading";
+                return;
+            }
 
             std::uint32_t layoutId = remoteActorLayout_;
             bool layoutValid = false;
@@ -648,8 +701,28 @@ bool RdrBridge::spawn_remote_actor(
             }
 
             if (!layoutValid) {
+                // The Lua resource uses get_ambient_layout(); its trace resolves
+                // that layout as AmbientMissions_Layout. Prefer the same proven
+                // layout before falling back to a dedicated layout.
                 std::uintptr_t args[1]{
-                    reinterpret_cast<std::uintptr_t>(layoutName)};
+                    reinterpret_cast<std::uintptr_t>(ambientLayoutName)};
+                std::uintptr_t result = 0u;
+                if (nativeInvoker_.invoke_raw(
+                        kNativeFindNamedLayout, args, 1u, result)) {
+                    layoutId = static_cast<std::uint32_t>(result);
+                    if (layoutId != 0u) {
+                        args[0] = static_cast<std::uintptr_t>(layoutId);
+                        result = 0u;
+                        layoutValid = nativeInvoker_.invoke_raw(
+                            kNativeIsLayoutRefValid, args, 1u, result) &&
+                            result != 0u;
+                    }
+                }
+            }
+
+            if (!layoutValid) {
+                std::uintptr_t args[1]{
+                    reinterpret_cast<std::uintptr_t>(fallbackLayoutName)};
                 std::uintptr_t result = 0u;
                 if (!nativeInvoker_.invoke_raw(
                         kNativeFindNamedLayout, args, 1u, result)) {
@@ -669,7 +742,7 @@ bool RdrBridge::spawn_remote_actor(
 
             if (!layoutValid) {
                 std::uintptr_t args[1]{
-                    reinterpret_cast<std::uintptr_t>(layoutName)};
+                    reinterpret_cast<std::uintptr_t>(fallbackLayoutName)};
                 std::uintptr_t result = 0u;
                 if (!nativeInvoker_.invoke_raw(
                         kNativeCreateLayout, args, 1u, result)) {
@@ -688,22 +761,11 @@ bool RdrBridge::spawn_remote_actor(
             }
 
             if (!layoutValid) {
-                error = "FrontierRemoteLayout is invalid";
+                error = "actor layout is invalid";
                 return;
             }
 
             remoteActorLayout_ = layoutId;
-
-            std::uintptr_t streamArgs[3]{};
-            streamArgs[0] = static_cast<std::uintptr_t>(kRemoteTestActorEnum);
-            streamArgs[1] = 1u;
-            streamArgs[2] = 0u;
-            std::uintptr_t streamResult = 0u;
-            if (!nativeInvoker_.invoke_raw(
-                    kNativeStreamingRequestActor, streamArgs, 3u, streamResult)) {
-                error = "STREAMING_REQUEST_ACTOR invoke failed";
-                return;
-            }
 
             std::uintptr_t args[7]{};
             args[0] = kTaggedLayoutRef | static_cast<std::uintptr_t>(layoutId);
@@ -712,8 +774,12 @@ bool RdrBridge::spawn_remote_actor(
                 static_cast<std::uint32_t>(kRemoteTestActorEnum));
             args[3] = pack_vec2(spawnState.position.x, spawnState.position.y);
             args[4] = float_bits(spawnState.position.z);
-            args[5] = pack_vec2(0.0f, 0.0f);
-            args[6] = float_bits(spawnState.yaw);
+
+            // CREATE_ACTOR_IN_LAYOUT receives rotation as Vector3. The native
+            // trace for the Lua resource shows vector3(0, heading, 0) packed
+            // as args[5]=pack_vec2(heading, 0), args[6]=0.
+            args[5] = pack_vec2(spawnState.yaw, 0.0f);
+            args[6] = float_bits(0.0f);
 
             std::uintptr_t result = 0u;
             if (!nativeInvoker_.invoke_raw(
