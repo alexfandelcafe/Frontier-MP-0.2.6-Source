@@ -52,10 +52,17 @@ void RemotePlayerManager::on_snapshot(const protocol::Snapshot& snapshot, std::u
     }
 }
 
-bool RemotePlayerManager::ensure_spawned(RemotePlayer& player, frontier::game::RdrBridge& bridge) {
+bool RemotePlayerManager::ensure_spawned(RemotePlayer& player, std::uint64_t nowMs,
+                                         frontier::game::RdrBridge& bridge) {
+    constexpr std::uint64_t kSpawnRetryMs = 250;
     if (player.actor.valid()) return true;
     if (player.spawnPending) return false;
+    if (player.lastSpawnAttemptMs != 0 &&
+        nowMs - player.lastSpawnAttemptMs < kSpawnRetryMs) {
+        return false;
+    }
 
+    player.lastSpawnAttemptMs = nowMs;
     player.spawnPending = true;
 
     frontier::game::RemoteActorHandle created{};
@@ -97,7 +104,7 @@ void RemotePlayerManager::update(std::uint64_t nowMs, frontier::game::RdrBridge&
             continue;
         }
 
-        if (!ensure_spawned(player, bridge)) {
+        if (!ensure_spawned(player, effectiveNow, bridge)) {
             ++it;
             continue;
         }
