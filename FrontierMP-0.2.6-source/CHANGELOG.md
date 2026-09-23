@@ -1,3 +1,10 @@
+## 0.2.63
+- Replace the one-shot remote actor test with a RemotePlayerManager driven by server snapshots.
+- Keep each remote identity keyed by NetworkPlayerId while backing it with a normal ACTOR_MPPLAYER01 Actor.
+- Add game-thread-safe remote Actor spawn, transform update, and destruction operations.
+- Reuse the existing snapshot interpolation layer and remove remote Actors after a short absence grace period.
+- Route remote-player lifecycle out of the native Player experiment; Native PlayerId remains local-only.
+
 ## 0.2.62
 - Test the remote-player architecture as a normal ACTOR_MPPLAYER01-backed Actor.
 - Use a dedicated FrontierRemoteLayout and the normal generic CREATE_ACTOR_IN_LAYOUT return path.
