@@ -1297,6 +1297,7 @@ void StartupNativeTracer::create_actor_in_layout_hook(void* context) {
 #else
     const auto argc = 0u;
 #endif
+
     std::uintptr_t result = 0;
 #ifdef _WIN32
     const bool resultOk = read_u64_return(context, result);
@@ -1304,14 +1305,72 @@ void StartupNativeTracer::create_actor_in_layout_hook(void* context) {
     const bool resultOk = false;
 #endif
 
-    char buffer[320]{};
+    std::uintptr_t layout = 0;
+    const bool layoutOk = read_u64_arg(context, 0, layout);
+
+    char layoutName[160]{};
+    const bool layoutNameOk = read_c_string(context, 1, layoutName, sizeof(layoutName));
+
+    std::int32_t actorEnum = 0;
+    const bool actorEnumOk = read_i32_arg(context, 2, actorEnum);
+
+    const auto raw3 = read_u64_arg_value(context, 3);
+    const auto raw4 = read_u64_arg_value(context, 4);
+    const auto raw5 = read_u64_arg_value(context, 5);
+    const auto raw6 = read_u64_arg_value(context, 6);
+
+    std::uint32_t posXYLow = static_cast<std::uint32_t>(raw3);
+    std::uint32_t posXYHigh = static_cast<std::uint32_t>(raw3 >> 32u);
+    std::uint32_t posZRaw = static_cast<std::uint32_t>(raw4);
+    std::uint32_t orientationXYLow = static_cast<std::uint32_t>(raw5);
+    std::uint32_t orientationXYHigh = static_cast<std::uint32_t>(raw5 >> 32u);
+    std::uint32_t orientationZRaw = static_cast<std::uint32_t>(raw6);
+
+    float posX = 0.0f;
+    float posY = 0.0f;
+    float posZ = 0.0f;
+    float orientationX = 0.0f;
+    float orientationY = 0.0f;
+    float orientationZ = 0.0f;
+    std::memcpy(&posX, &posXYLow, sizeof(posX));
+    std::memcpy(&posY, &posXYHigh, sizeof(posY));
+    std::memcpy(&posZ, &posZRaw, sizeof(posZ));
+    std::memcpy(&orientationX, &orientationXYLow, sizeof(orientationX));
+    std::memcpy(&orientationY, &orientationXYHigh, sizeof(orientationY));
+    std::memcpy(&orientationZ, &orientationZRaw, sizeof(orientationZ));
+
+    char buffer[960]{};
     std::size_t used = static_cast<std::size_t>(std::snprintf(
         buffer, sizeof(buffer),
-        "[FrontierNativeTrace] CREATE_ACTOR_IN_LAYOUT trace=%u argc=%u result=%s0x%llX",
+        "[FrontierNativeTrace] CREATE_ACTOR_IN_LAYOUT trace=%u argc=%u "
+        "layout=%s0x%llX layoutName=%s%s actorEnum=%s%d "
+        "pos=(%.6f,%.6f,%.6f) orient=(%.6f,%.6f,%.6f) "
+        "raw={a0=0x%llX a1=0x%llX a2=0x%llX a3=0x%llX a4=0x%llX a5=0x%llX a6=0x%llX} "
+        "result=%s0x%llX",
         traceIndex,
         argc,
+        layoutOk ? "" : "?",
+        static_cast<unsigned long long>(layout),
+        layoutNameOk ? "" : "?",
+        layoutNameOk ? layoutName : "<unreadable>",
+        actorEnumOk ? "" : "?",
+        actorEnumOk ? actorEnum : 0,
+        static_cast<double>(posX),
+        static_cast<double>(posY),
+        static_cast<double>(posZ),
+        static_cast<double>(orientationX),
+        static_cast<double>(orientationY),
+        static_cast<double>(orientationZ),
+        static_cast<unsigned long long>(read_u64_arg_value(context, 0)),
+        static_cast<unsigned long long>(read_u64_arg_value(context, 1)),
+        static_cast<unsigned long long>(read_u64_arg_value(context, 2)),
+        static_cast<unsigned long long>(raw3),
+        static_cast<unsigned long long>(raw4),
+        static_cast<unsigned long long>(raw5),
+        static_cast<unsigned long long>(raw6),
         resultOk ? "" : "?",
         static_cast<unsigned long long>(result)));
+
     append_execution_identity(buffer, sizeof(buffer), used, context);
     log(buffer);
 }
