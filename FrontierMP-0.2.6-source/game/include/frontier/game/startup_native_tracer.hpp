@@ -35,6 +35,7 @@ private:
     static void create_player_actor_in_layout_hook(void* context);
     static void get_player_actor_hook(void* context);
     static void get_actor_enum_hook(void* context);
+    static void is_actor_inited_hook(void* context);
     static void is_actor_valid_hook(void* context);
     static void is_actor_player_hook(void* context);
     static void is_actor_local_player_hook(void* context);
@@ -76,6 +77,7 @@ private:
     NativeInvoker::NativeHandler originalCreatePlayerActorInLayout_{};
     NativeInvoker::NativeHandler originalGetPlayerActor_{};
     NativeInvoker::NativeHandler originalGetActorEnum_{};
+    NativeInvoker::NativeHandler originalIsActorInited_{};
     NativeInvoker::NativeHandler originalIsActorValid_{};
     NativeInvoker::NativeHandler originalIsActorPlayer_{};
     NativeInvoker::NativeHandler originalIsActorLocalPlayer_{};
