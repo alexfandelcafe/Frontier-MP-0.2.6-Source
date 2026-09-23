@@ -31,6 +31,8 @@ constexpr std::uint32_t kNativeFindNamedLayout = 0x5699DE7E;
 constexpr std::uint32_t kNativeCreateLayout = 0x6CA53214;
 constexpr std::uint32_t kNativeIsLayoutRefValid = 0xFC8E55ED;
 constexpr std::uint32_t kNativeCreateActorInLayout = 0x8D67F397;
+constexpr std::uint32_t kNativeDestroyActor = 0x8BD21869;
+constexpr std::uint32_t kNativeTeleportActorWithHeading = 0xE4DE507C;
 constexpr std::uint32_t kNativeCreatePlayerActorInLayout = 0x6A307D5F;
 constexpr std::uint32_t kNativeGetPlayerActor = 0xE8CFDD53;
 constexpr std::uint32_t kNativeIsActorPlayer = 0xB27E91E7;
@@ -596,6 +598,276 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
     }
 
     return true;
+}
+
+
+bool RdrBridge::spawn_remote_actor(
+    std::uint16_t playerId,
+    const PlayerState& state,
+    RemoteActorHandle& outActor,
+    std::string& error) const {
+    outActor = {};
+    error.clear();
+
+    if (!initialized_) {
+        error = "bridge not initialized";
+        return false;
+    }
+    if (!nativeInvoker_.ready()) {
+        error = "native invoker not ready";
+        return false;
+    }
+    if (!gameThreadDispatcher_.attached()) {
+        error = gameThreadDispatcherError_.empty()
+            ? "game-thread dispatcher not attached"
+            : gameThreadDispatcherError_;
+        return false;
+    }
+
+    const PlayerState spawnState = state;
+    const std::uint16_t remotePlayerId = playerId;
+    std::string dispatchError;
+    const bool completed = gameThreadDispatcher_.submit_and_wait(
+        [this, remotePlayerId, spawnState, &outActor, &error]() {
+            char layoutName[] = "FrontierRemoteLayout";
+            char actorName[64]{};
+            std::snprintf(actorName, sizeof(actorName), "FrontierRemote_%u",
+                          static_cast<unsigned>(remotePlayerId));
+
+            std::uint32_t layoutId = remoteActorLayout_;
+            bool layoutValid = false;
+
+            if (layoutId != 0u) {
+                std::uintptr_t layoutArgs[1]{
+                    static_cast<std::uintptr_t>(layoutId)};
+                std::uintptr_t layoutResult = 0u;
+                layoutValid = nativeInvoker_.invoke_raw(
+                    kNativeIsLayoutRefValid, layoutArgs, 1u, layoutResult) &&
+                    layoutResult != 0u;
+            }
+
+            if (!layoutValid) {
+                std::uintptr_t args[1]{
+                    reinterpret_cast<std::uintptr_t>(layoutName)};
+                std::uintptr_t result = 0u;
+                if (!nativeInvoker_.invoke_raw(
+                        kNativeFindNamedLayout, args, 1u, result)) {
+                    error = "FIND_NAMED_LAYOUT invoke failed";
+                    return;
+                }
+
+                layoutId = static_cast<std::uint32_t>(result);
+                if (layoutId != 0u) {
+                    args[0] = static_cast<std::uintptr_t>(layoutId);
+                    result = 0u;
+                    layoutValid = nativeInvoker_.invoke_raw(
+                        kNativeIsLayoutRefValid, args, 1u, result) &&
+                        result != 0u;
+                }
+            }
+
+            if (!layoutValid) {
+                std::uintptr_t args[1]{
+                    reinterpret_cast<std::uintptr_t>(layoutName)};
+                std::uintptr_t result = 0u;
+                if (!nativeInvoker_.invoke_raw(
+                        kNativeCreateLayout, args, 1u, result)) {
+                    error = "CREATE_LAYOUT invoke failed";
+                    return;
+                }
+
+                layoutId = static_cast<std::uint32_t>(result);
+                if (layoutId != 0u) {
+                    args[0] = static_cast<std::uintptr_t>(layoutId);
+                    result = 0u;
+                    layoutValid = nativeInvoker_.invoke_raw(
+                        kNativeIsLayoutRefValid, args, 1u, result) &&
+                        result != 0u;
+                }
+            }
+
+            if (!layoutValid) {
+                error = "FrontierRemoteLayout is invalid";
+                return;
+            }
+
+            remoteActorLayout_ = layoutId;
+
+            std::uintptr_t streamArgs[3]{};
+            streamArgs[0] = static_cast<std::uintptr_t>(kRemoteTestActorEnum);
+            streamArgs[1] = 1u;
+            streamArgs[2] = 0u;
+            std::uintptr_t streamResult = 0u;
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeStreamingRequestActor, streamArgs, 3u, streamResult)) {
+                error = "STREAMING_REQUEST_ACTOR invoke failed";
+                return;
+            }
+
+            std::uintptr_t args[7]{};
+            args[0] = kTaggedLayoutRef | static_cast<std::uintptr_t>(layoutId);
+            args[1] = reinterpret_cast<std::uintptr_t>(actorName);
+            args[2] = static_cast<std::uintptr_t>(
+                static_cast<std::uint32_t>(kRemoteTestActorEnum));
+            args[3] = pack_vec2(spawnState.position.x, spawnState.position.y);
+            args[4] = float_bits(spawnState.position.z);
+            args[5] = pack_vec2(0.0f, 0.0f);
+            args[6] = float_bits(spawnState.yaw);
+
+            std::uintptr_t result = 0u;
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeCreateActorInLayout, args, 7u, result)) {
+                error = "CREATE_ACTOR_IN_LAYOUT invoke failed";
+                return;
+            }
+
+            const std::uintptr_t actorRef = result;
+            const std::uint32_t actorHandle =
+                static_cast<std::uint32_t>(actorRef);
+            if (actorHandle == 0u) {
+                error = "CREATE_ACTOR_IN_LAYOUT returned null ActorRef";
+                return;
+            }
+
+            std::uintptr_t actorArgs[1]{
+                static_cast<std::uintptr_t>(actorHandle)};
+            std::uintptr_t validResult = 0u;
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeIsActorValid, actorArgs, 1u, validResult) ||
+                validResult == 0u) {
+                error = "created Actor failed IS_ACTOR_VALID";
+                return;
+            }
+
+            actorArgs[0] = static_cast<std::uintptr_t>(actorHandle);
+            std::uintptr_t enumResult = 0u;
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeGetActorEnum, actorArgs, 1u, enumResult) ||
+                static_cast<std::uint32_t>(enumResult) !=
+                    static_cast<std::uint32_t>(kRemoteTestActorEnum)) {
+                char message[192]{};
+                std::snprintf(
+                    message, sizeof(message),
+                    "remote Actor enum mismatch expected=%u actual=%u",
+                    static_cast<unsigned>(kRemoteTestActorEnum),
+                    static_cast<unsigned>(enumResult));
+                error = message;
+                return;
+            }
+
+            outActor.actorRef = actorRef;
+            outActor.actorHandle = actorHandle;
+        },
+        500u,
+        dispatchError);
+
+    if (!completed) {
+        error = dispatchError.empty()
+            ? "remote actor spawn task did not complete"
+            : dispatchError;
+        return false;
+    }
+    return error.empty();
+}
+
+bool RdrBridge::update_remote_actor_transform(
+    std::uint32_t actorHandle,
+    const PlayerState& state,
+    std::string& error) const {
+    error.clear();
+
+    if (actorHandle == 0u) {
+        error = "invalid remote actor handle";
+        return false;
+    }
+    if (!initialized_) {
+        error = "bridge not initialized";
+        return false;
+    }
+    if (!nativeInvoker_.ready()) {
+        error = "native invoker not ready";
+        return false;
+    }
+    if (!gameThreadDispatcher_.attached()) {
+        error = gameThreadDispatcherError_.empty()
+            ? "game-thread dispatcher not attached"
+            : gameThreadDispatcherError_;
+        return false;
+    }
+
+    const PlayerState target = state;
+    std::string dispatchError;
+    const bool completed = gameThreadDispatcher_.submit_and_wait(
+        [this, actorHandle, target, &error]() {
+            std::uintptr_t args[7]{};
+            args[0] = static_cast<std::uintptr_t>(actorHandle);
+            args[1] = pack_vec2(target.position.x, target.position.y);
+            args[2] = float_bits(target.position.z);
+            args[3] = float_bits(target.yaw);
+            args[4] = 0u;
+            args[5] = 0u;
+            args[6] = 0u;
+
+            std::uintptr_t result = 0u;
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeTeleportActorWithHeading, args, 7u, result)) {
+                error = "TELEPORT_ACTOR_WITH_HEADING invoke failed";
+            }
+        },
+        250u,
+        dispatchError);
+
+    if (!completed) {
+        error = dispatchError.empty()
+            ? "remote actor transform task did not complete"
+            : dispatchError;
+        return false;
+    }
+    return error.empty();
+}
+
+bool RdrBridge::destroy_remote_actor(
+    std::uint32_t actorHandle,
+    std::string& error) const {
+    error.clear();
+
+    if (actorHandle == 0u) return true;
+    if (!initialized_) {
+        error = "bridge not initialized";
+        return false;
+    }
+    if (!nativeInvoker_.ready()) {
+        error = "native invoker not ready";
+        return false;
+    }
+    if (!gameThreadDispatcher_.attached()) {
+        error = gameThreadDispatcherError_.empty()
+            ? "game-thread dispatcher not attached"
+            : gameThreadDispatcherError_;
+        return false;
+    }
+
+    std::string dispatchError;
+    const bool completed = gameThreadDispatcher_.submit_and_wait(
+        [this, actorHandle, &error]() {
+            std::uintptr_t args[1]{
+                static_cast<std::uintptr_t>(actorHandle)};
+            std::uintptr_t result = 0u;
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeDestroyActor, args, 1u, result)) {
+                error = "DESTROY_ACTOR invoke failed";
+            }
+        },
+        250u,
+        dispatchError);
+
+    if (!completed) {
+        error = dispatchError.empty()
+            ? "remote actor destroy task did not complete"
+            : dispatchError;
+        return false;
+    }
+    return error.empty();
 }
 
 bool RdrBridge::read_local_player_state(PlayerState& outState, std::string& error) const {
