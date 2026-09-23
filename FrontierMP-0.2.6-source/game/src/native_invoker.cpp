@@ -490,7 +490,7 @@ bool NativeInvoker::invoke_raw_mutable(std::uint32_t hash, std::uintptr_t* argum
     if (argumentCount != 0u) {
         std::memcpy(arguments, context.stack, argumentCount * sizeof(context.stack[0]));
     }
-    return guarded_copy(context.stack, &out, sizeof(out));
+    return guarded_copy(&returnValue, &out, sizeof(out));
 #else
     (void)hash;
     (void)arguments;
