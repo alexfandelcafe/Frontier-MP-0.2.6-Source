@@ -6,6 +6,7 @@
 - Use actor enum 0 from the verified local CREATE_PLAYER_ACTOR_IN_LAYOUT trace and place the diagnostic actor two meters from the local player.
 - Keep the remote actor test idempotent per client session; no actor memory mutation or Rockstar NET session is introduced.
 - Trace GET_ACTOR_ENUM for the returned ActorRef and probe the verified actor-manager slot mapping for internal actor/component/transform resolution.
+- Validate the spawned ActorRef through GET_ACTOR_SLOT, GET_SLOT_ACTOR, and GET_POSITION before treating internal actor offsets as authoritative.
 
 ## 0.2.40
 
