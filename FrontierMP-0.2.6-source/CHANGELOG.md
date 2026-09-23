@@ -1,3 +1,8 @@
+## 0.2.50
+- Add a mutable native invocation path so natives that rewrite argument slots can expose those outputs to Frontier.
+- Correct the CREATE_PLAYER_ACTOR_IN_LAYOUT experiment to treat its native return as PlayerId and post-call argument 0 as the ActorRef.
+- Log MPPLAYER01 installation/streaming state and permit the isolated player-creation probe even when STREAMING_IS_ACTOR_LOADED remains false.
+
 ## 0.2.49
 - Switch the isolated remote MPPLAYER01 experiment from CREATE_ACTOR_IN_LAYOUT to CREATE_PLAYER_ACTOR_IN_LAYOUT.
 - Keep the remote layout and streaming lifecycle unchanged so the test isolates player registration from model loading.
