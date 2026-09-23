@@ -1453,13 +1453,40 @@ void StartupNativeTracer::create_player_actor_in_layout_hook(void* context) {
     const bool resultOk = false;
 #endif
 
-    char buffer[760]{};
+    char actorName[160]{};
+    const bool actorNameOk = read_c_string_pointer(preA1, actorName, sizeof(actorName));
+
+    const auto posXYLow = static_cast<std::uint32_t>(preA3);
+    const auto posXYHigh = static_cast<std::uint32_t>(preA3 >> 32u);
+    const auto posZRaw = static_cast<std::uint32_t>(preA4);
+    const auto rotationXYLow = static_cast<std::uint32_t>(preA5);
+    const auto rotationXYHigh = static_cast<std::uint32_t>(preA5 >> 32u);
+    const auto rotationZRaw = static_cast<std::uint32_t>(preA6);
+
+    float posX = 0.0f, posY = 0.0f, posZ = 0.0f;
+    float rotationX = 0.0f, rotationY = 0.0f, rotationZ = 0.0f;
+    std::memcpy(&posX, &posXYLow, sizeof(posX));
+    std::memcpy(&posY, &posXYHigh, sizeof(posY));
+    std::memcpy(&posZ, &posZRaw, sizeof(posZ));
+    std::memcpy(&rotationX, &rotationXYLow, sizeof(rotationX));
+    std::memcpy(&rotationY, &rotationXYHigh, sizeof(rotationY));
+    std::memcpy(&rotationZ, &rotationZRaw, sizeof(rotationZ));
+
+    char buffer[1100]{};
     std::snprintf(buffer, sizeof(buffer),
                   "[FrontierNativeTrace] CREATE_PLAYER_ACTOR_IN_LAYOUT trace=%u argc=%u "
+                  "layout=0x%llX actorName=%s%s model=%u "
+                  "pos=(%.6f,%.6f,%.6f) rotation=(%.6f,%.6f,%.6f) outfitVariation=%u "
                   "pre={a0=0x%llX a1=0x%llX a2=0x%llX a3=0x%llX a4=0x%llX "
-                  "a5=0x%llX a6=0x%llX a7=0x%llX a8=0x%llX a9=0x%llX} "
-                  "postA0=0x%llX result=%s%u",
+                  "a5=0x%llX a6=0x%llX a7=0x%llX} postA0=0x%llX result=%s%u",
                   traceIndex, argc,
+                  static_cast<unsigned long long>(preA0),
+                  actorNameOk ? "" : "?",
+                  actorNameOk ? actorName : "<unreadable>",
+                  static_cast<unsigned>(static_cast<std::uint32_t>(preA2)),
+                  posX, posY, posZ,
+                  rotationX, rotationY, rotationZ,
+                  static_cast<unsigned>(static_cast<std::uint32_t>(preA7)),
                   static_cast<unsigned long long>(preA0),
                   static_cast<unsigned long long>(preA1),
                   static_cast<unsigned long long>(preA2),
@@ -1468,8 +1495,6 @@ void StartupNativeTracer::create_player_actor_in_layout_hook(void* context) {
                   static_cast<unsigned long long>(preA5),
                   static_cast<unsigned long long>(preA6),
                   static_cast<unsigned long long>(preA7),
-                  static_cast<unsigned long long>(preA8),
-                  static_cast<unsigned long long>(preA9),
                   static_cast<unsigned long long>(postA0),
                   resultOk ? "" : "?",
                   resultOk ? result : 0u);
