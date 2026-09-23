@@ -1,3 +1,8 @@
+## 0.2.48
+- Retry the remote multiplayer actor spawn request on subsequent state ticks when `STREAMING_IS_ACTOR_LOADED` initially reports not loaded.
+- Keep the existing game-thread idempotence guard so repeated retries do not enqueue duplicate work while a spawn attempt is pending.
+- Do not change the actor enum, native creation path, or raw-memory diagnostics.
+
 ## 0.2.47
 - Remove the broad raw-memory `GeneralManagerSlots` scan from the live remote-actor test after confirming it can locate the created actor as `sagGuid=0x0003`.
 - Stop using `ACTOR_PLAYER=0` with `CREATE_ACTOR_IN_LAYOUT`; use `ACTOR_MPPLAYER01=837`, matching the game's multiplayer actor family.
