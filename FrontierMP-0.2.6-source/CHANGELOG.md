@@ -1,3 +1,8 @@
+## 0.2.51
+- Keep mutable native arguments and native return storage separate to match the live RDR native call context.
+- Validate remote CREATE_PLAYER_ACTOR_IN_LAYOUT by comparing its returned PlayerId with GET_PLAYER_ACTOR(PlayerId) and IS_ACTOR_PLAYER on the created Actor.
+- Preserve the streaming diagnostics and request result while probing the player-creation path.
+
 ## 0.2.50
 - Add a mutable native invocation path so natives that rewrite argument slots can expose those outputs to Frontier.
 - Correct the CREATE_PLAYER_ACTOR_IN_LAYOUT experiment to treat its native return as PlayerId and post-call argument 0 as the ActorRef.
