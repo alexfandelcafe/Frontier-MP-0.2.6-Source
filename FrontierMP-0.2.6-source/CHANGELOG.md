@@ -1,3 +1,9 @@
+## 0.2.42
+
+- Add a read-only diagnostic that resolves the spawned Actor handle through the actor-manager backing storage used by the local-player chain.
+- Probe a bounded actor->component->transform candidate chain and accept it only when the resolved position matches the spawn coordinates.
+- Keep the probe game-thread-only, protected, and free of additional native calls or actor-memory writes.
+
 ## 0.2.41
 
 - Added a game-thread-only controlled remote actor spawn test through CREATE_ACTOR_IN_LAYOUT.
