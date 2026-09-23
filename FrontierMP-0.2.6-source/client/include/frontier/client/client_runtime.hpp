@@ -31,6 +31,7 @@ private:
     std::string sessionMode_{"freeroam"};
     RemotePlayerManager remotePlayers_{};
     std::uint16_t localPlayerId_{};
+    bool debugRemoteTestEnabled_{};
 };
 
 } // namespace frontier::client
