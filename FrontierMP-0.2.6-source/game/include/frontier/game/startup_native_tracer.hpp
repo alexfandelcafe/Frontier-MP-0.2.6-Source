@@ -24,6 +24,7 @@ private:
     static void is_simulate_start_press_hook(void* context);
     static void is_script_valid_hook(void* context);
     static void terminate_script_hook(void* context);
+    static void terminate_this_script_hook(void* context);
 
     static void log(const char* message);
 
@@ -39,6 +40,7 @@ private:
     NativeInvoker::NativeHandler originalIsSimulateStartPress_{};
     NativeInvoker::NativeHandler originalIsScriptValid_{};
     NativeInvoker::NativeHandler originalTerminateScript_{};
+    NativeInvoker::NativeHandler originalTerminateThisScript_{};
     bool attached_{};
 };
 
