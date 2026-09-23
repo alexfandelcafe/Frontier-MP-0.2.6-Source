@@ -1,3 +1,7 @@
+## 0.2.44
+- Add passive tracing for actor/player classification and player-actor lifecycle natives: IS_ACTOR_VALID, IS_ACTOR_PLAYER, IS_ACTOR_LOCAL_PLAYER, IS_LOCAL_PLAYER_VALID, RESPAWN_PLAYER_ACTOR_IN_LAYOUT, SWITCH_PLAYER_TO_ENUM, and INIT_NATIVE_ACTORENUM_PLAYER.
+- Keep the remote actor experiment free of additional direct classification calls; use runtime traces to determine whether the engine promotes or uses the created actor as a player.
+
 ## 0.2.43
 
 - Replace the speculative remote Actor -> manager-slot memory scan with passive tracing of the engine's Actor/Slot natives.
