@@ -1,3 +1,8 @@
+## 0.2.60
+- Stop retrying the rejected CREATE_PLAYER_ACTOR_IN_LAYOUT remote-player path.
+- Create a proven ACTOR_MPPLAYER01 through CREATE_ACTOR_IN_LAYOUT in the live Player context and test RESPAWN_PLAYER_ACTOR_IN_LAYOUT against that concrete actor.
+- Keep the experiment one-shot per client session and log the resulting ActorRef, actor validity, and IS_ACTOR_PLAYER state.
+
 ## 0.2.59
 - Restore the two-argument STREAMING_IS_ACTOR_LOADED(Model, unk) probe documented by the public RDR1/RDRMP native reference.
 - Probe the known second-argument candidates again so MPPLAYER01 load state is measured with the correct native signature.
