@@ -358,7 +358,7 @@ void write_log_line(const char* message) {
 
 } // namespace
 
-bool StartupNativeTracer::attach(NativeInvoker& invoker, std::string& error) {
+bool StartupNativeTracer::attach(NativeInvoker& invoker, GameThreadDispatcher& dispatcher, std::string& error) {
     if (attached_) return true;
     if (g_tracer != nullptr) {
         error = "another startup native tracer is already attached";
@@ -367,6 +367,7 @@ bool StartupNativeTracer::attach(NativeInvoker& invoker, std::string& error) {
 
     g_tracer = this;
     invoker_ = &invoker;
+    gameThreadDispatcher_ = &dispatcher;
 
     if (!invoker.hook_native(kSetStartPos, &StartupNativeTracer::set_start_pos_hook,
                              originalSetStartPos_, &error)) {
@@ -1617,103 +1618,156 @@ void StartupNativeTracer::get_player_actor_hook(void* context) {
         const float y = gRemotePlayerProbeY;
         const float z = gRemotePlayerProbeZ;
 
-        char actorName[] = "FrontierRemoteMPActor";
-        char respawnName[] = "FrontierRemoteMPActor";
-
-        // First create a normal ACTOR_MPPLAYER01. This is the path already
-        // proven to produce a visible MP player actor.
-        std::uintptr_t createArgs[7]{};
-        createArgs[0] = layoutRef;
-        createArgs[1] = reinterpret_cast<std::uintptr_t>(actorName);
-        createArgs[2] = 837u;
-        createArgs[3] = pack_vec2_for_tracer(x, y);
-        createArgs[4] = float_bits_for_tracer(z);
-        createArgs[5] = pack_vec2_for_tracer(0.0f, 0.0f);
-        createArgs[6] = float_bits_for_tracer(0.0f);
-
-        std::uintptr_t createResult = 0;
-        const bool createOk = invoke_handler_in_existing_context(
-            tracer->originalCreateActorInLayout_, context, createArgs, 7u, createResult);
-
-        const std::uintptr_t actorRef = createArgs[0];
-        const std::uint32_t actorHandle = static_cast<std::uint32_t>(actorRef);
-        const std::uint32_t createReturn = static_cast<std::uint32_t>(createResult);
-
-        std::uintptr_t actorValidArgs[1]{static_cast<std::uintptr_t>(actorHandle)};
-        std::uintptr_t actorValidResult = 0;
-        const bool actorValidOk =
-            actorHandle != 0u && tracer->originalIsActorValid_ &&
-            invoke_handler_in_existing_context(
-                tracer->originalIsActorValid_, context, actorValidArgs, 1u, actorValidResult);
-
-        char createLog[720]{};
-        std::snprintf(
-            createLog, sizeof(createLog),
-            "[FrontierRemotePlayerProbe] genericCreateOk=%u layout=0x%08X "
-            "createResult=0x%08X actorRef=0x%llX actorHandle=0x%08X "
-            "actorValid=%u position=(%.3f,%.3f,%.3f)",
-            createOk ? 1u : 0u,
-            layoutId,
-            createReturn,
-            static_cast<unsigned long long>(actorRef),
-            actorHandle,
-            actorValidOk ? static_cast<unsigned>(actorValidResult) : 0u,
-            x, y, z);
-        log(createLog);
-
-        if (createOk && actorHandle != 0u) {
-            // Test the player-specific respawn path against the concrete
-            // MPPLAYER01 actor. The actor argument is the plain 32-bit handle.
-            std::uintptr_t respawnArgs[9]{};
-            respawnArgs[0] = layoutRef;
-            respawnArgs[1] = static_cast<std::uintptr_t>(actorHandle);
-            respawnArgs[2] = reinterpret_cast<std::uintptr_t>(respawnName);
-            respawnArgs[3] = 837u;
-            respawnArgs[4] = pack_vec2_for_tracer(x, y);
-            respawnArgs[5] = float_bits_for_tracer(z);
-            respawnArgs[6] = pack_vec2_for_tracer(0.0f, 0.0f);
-            respawnArgs[7] = float_bits_for_tracer(0.0f);
-            respawnArgs[8] = 0u;
-
-            std::uintptr_t respawnResult = 0;
-            const bool respawnOk = invoke_handler_in_existing_context(
-                tracer->originalRespawnPlayerActorInLayout_,
-                context, respawnArgs, 9u, respawnResult);
-
-            const std::uintptr_t respawnActorRef = respawnArgs[0];
-            const std::uint32_t respawnActorHandle =
-                static_cast<std::uint32_t>(respawnActorRef);
-            const std::uint32_t respawnReturn =
-                static_cast<std::uint32_t>(respawnResult);
-
-            std::uintptr_t playerCheckArgs[1]{
-                static_cast<std::uintptr_t>(
-                    respawnActorHandle != 0u ? respawnActorHandle : actorHandle)};
-            std::uintptr_t playerCheckResult = 0;
-            const bool playerCheckOk =
-                tracer->originalIsActorPlayer_ &&
-                invoke_handler_in_existing_context(
-                    tracer->originalIsActorPlayer_,
-                    context, playerCheckArgs, 1u, playerCheckResult);
-
-            char respawnLog[860]{};
-            std::snprintf(
-                respawnLog, sizeof(respawnLog),
-                "[FrontierRemotePlayerProbe] respawnOk=%u layout=0x%08X "
-                "respawnResult=0x%08X respawnActorRef=0x%llX "
-                "respawnActorHandle=0x%08X isActorPlayer=%u",
-                respawnOk ? 1u : 0u,
-                layoutId,
-                respawnReturn,
-                static_cast<unsigned long long>(respawnActorRef),
-                respawnActorHandle,
-                playerCheckOk ? static_cast<unsigned>(playerCheckResult) : 0u);
-            log(respawnLog);
-
-            if (respawnOk && respawnActorHandle != 0u) {
-                gRemotePlayerProbeSpawned = true;
-            }
+        if (!tracer->gameThreadDispatcher_) {
+            log("[FrontierRemotePlayerProbe] deferred probe unavailable: game-thread dispatcher not attached");
+            gRemotePlayerProbeAttempted = false;
+            return;
         }
+
+        std::string dispatchError;
+        const bool submitted = tracer->gameThreadDispatcher_->submit(
+            [tracer, layoutId, layoutRef, x, y, z]() {
+                if (!tracer || !tracer->invoker_) {
+                    log("[FrontierRemotePlayerProbe] deferred probe aborted: tracer/invoker unavailable");
+                    return;
+                }
+
+                char actorName[] = "FrontierRemoteMPActor";
+                char respawnName[] = "FrontierRemoteMPActor";
+
+                // This task is intentionally executed after GET_PLAYER_ACTOR has
+                // returned, on the dispatcher's game thread. Calling actor creation
+                // reentrantly from GET_PLAYER_ACTOR produces a false-positive native
+                // return with no valid ActorRef.
+                std::uintptr_t createArgs[7]{};
+                createArgs[0] = layoutRef;
+                createArgs[1] = reinterpret_cast<std::uintptr_t>(actorName);
+                createArgs[2] = 837u; // ACTOR_MPPLAYER01
+                createArgs[3] = pack_vec2_for_tracer(x, y);
+                createArgs[4] = float_bits_for_tracer(z);
+                createArgs[5] = pack_vec2_for_tracer(0.0f, 0.0f);
+                createArgs[6] = float_bits_for_tracer(0.0f);
+
+                std::uintptr_t createResult = 0;
+                const bool createOk = tracer->invoker_->invoke_raw_mutable(
+                    kCreateActorInLayout, createArgs, 7u, createResult);
+
+                const std::uintptr_t actorRef = createArgs[0];
+                const std::uint32_t actorHandle = static_cast<std::uint32_t>(actorRef);
+                const std::uint32_t createReturn =
+                    static_cast<std::uint32_t>(createResult);
+
+                std::uintptr_t validArgs[1]{
+                    static_cast<std::uintptr_t>(actorHandle)};
+                std::uintptr_t validResult = 0;
+                const bool validInvokeOk =
+                    actorHandle != 0u &&
+                    tracer->invoker_->invoke_raw(kIsActorValid, validArgs, 1u, validResult);
+
+                std::uintptr_t enumResult = 0;
+                const bool enumOk =
+                    actorHandle != 0u &&
+                    tracer->invoker_->invoke_raw(
+                        kGetActorEnum, validArgs, 1u, enumResult);
+
+                char createLog[760]{};
+                std::snprintf(
+                    createLog, sizeof(createLog),
+                    "[FrontierRemotePlayerProbe] deferredCreateOk=%u layout=0x%08X "
+                    "createResult=0x%08X actorRef=0x%llX actorHandle=0x%08X "
+                    "actorValid=%u actorEnum=%u origin=(%.3f,%.3f,%.3f)",
+                    createOk ? 1u : 0u,
+                    layoutId,
+                    createReturn,
+                    static_cast<unsigned long long>(actorRef),
+                    actorHandle,
+                    validInvokeOk ? static_cast<unsigned>(validResult) : 0u,
+                    enumOk ? static_cast<unsigned>(enumResult) : 0u,
+                    x, y, z);
+                log(createLog);
+
+                if (!createOk || actorHandle == 0u || !validInvokeOk || validResult == 0u) {
+                    return;
+                }
+
+                std::uintptr_t respawnArgs[9]{};
+                respawnArgs[0] = layoutRef;
+                respawnArgs[1] = static_cast<std::uintptr_t>(actorHandle);
+                respawnArgs[2] = reinterpret_cast<std::uintptr_t>(respawnName);
+                respawnArgs[3] = 837u;
+                respawnArgs[4] = pack_vec2_for_tracer(x, y);
+                respawnArgs[5] = float_bits_for_tracer(z);
+                respawnArgs[6] = pack_vec2_for_tracer(0.0f, 0.0f);
+                respawnArgs[7] = float_bits_for_tracer(0.0f);
+                respawnArgs[8] = 0u;
+
+                std::uintptr_t respawnResult = 0;
+                const bool respawnOk = tracer->invoker_->invoke_raw_mutable(
+                    kRespawnPlayerActorInLayout,
+                    respawnArgs,
+                    9u,
+                    respawnResult);
+
+                const std::uintptr_t respawnActorRef = respawnArgs[0];
+                const std::uint32_t respawnActorHandle =
+                    static_cast<std::uint32_t>(respawnActorRef);
+
+                std::uintptr_t postValidArgs[1]{
+                    static_cast<std::uintptr_t>(
+                        respawnActorHandle != 0u ? respawnActorHandle : actorHandle)};
+                std::uintptr_t postValidResult = 0;
+                const bool postValidOk = tracer->invoker_->invoke_raw(
+                    kIsActorValid, postValidArgs, 1u, postValidResult);
+
+                std::uintptr_t playerCheckResult = 0;
+                const bool playerCheckOk = tracer->invoker_->invoke_raw(
+                    kIsActorPlayer, postValidArgs, 1u, playerCheckResult);
+
+                std::uintptr_t postEnumResult = 0;
+                const bool postEnumOk = tracer->invoker_->invoke_raw(
+                    kGetActorEnum, postValidArgs, 1u, postEnumResult);
+
+                char respawnLog[900]{};
+                std::snprintf(
+                    respawnLog, sizeof(respawnLog),
+                    "[FrontierRemotePlayerProbe] deferredRespawnOk=%u layout=0x%08X "
+                    "respawnResult=0x%08X respawnActorRef=0x%llX "
+                    "respawnActorHandle=0x%08X actorValidAfter=%u "
+                    "isActorPlayer=%u actorEnumAfter=%u",
+                    respawnOk ? 1u : 0u,
+                    layoutId,
+                    static_cast<std::uint32_t>(respawnResult),
+                    static_cast<unsigned long long>(respawnActorRef),
+                    respawnActorHandle,
+                    postValidOk ? static_cast<unsigned>(postValidResult) : 0u,
+                    playerCheckOk ? static_cast<unsigned>(playerCheckResult) : 0u,
+                    postEnumOk ? static_cast<unsigned>(postEnumResult) : 0u);
+                log(respawnLog);
+
+                if (respawnOk && (postValidOk ? postValidResult != 0u : false)) {
+                    gRemotePlayerProbeSpawned = true;
+                }
+            },
+            dispatchError);
+
+        if (!submitted) {
+            char errorLog[480]{};
+            std::snprintf(
+                errorLog, sizeof(errorLog),
+                "[FrontierRemotePlayerProbe] deferred probe enqueue failed: %s",
+                dispatchError.empty() ? "<unknown>" : dispatchError.c_str());
+            log(errorLog);
+            gRemotePlayerProbeAttempted = false;
+            return;
+        }
+
+        char queueLog[360]{};
+        std::snprintf(
+            queueLog, sizeof(queueLog),
+            "[FrontierRemotePlayerProbe] deferred probe queued layout=0x%08X "
+            "position=(%.3f,%.3f,%.3f)",
+            layoutId, x, y, z);
+        log(queueLog);
     }
 }
 
