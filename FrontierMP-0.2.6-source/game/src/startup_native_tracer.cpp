@@ -113,6 +113,7 @@ constexpr std::uint32_t kNetSessionIsGameplayStarted = 0xDC88B308u;
 constexpr std::uint32_t kCreatePlayerActorInLayout = 0x6A307D5Fu;
 constexpr std::uint32_t kGetPlayerActor = 0xE8CFDD53u;
 constexpr std::uint32_t kCreateActorInLayout = 0x8D67F397u;
+constexpr std::uint32_t kGetActorEnum = 0x0B28E9ECu;
 constexpr std::uint32_t kCreateLayout = 0x6CA53214u;
 constexpr std::uint32_t kFindNamedLayout = 0x5699DE7Eu;
 constexpr std::uint32_t kIsLayoutrefValid = 0xFC8E55EDu;
@@ -550,6 +551,10 @@ bool StartupNativeTracer::attach(NativeInvoker& invoker, std::string& error) {
                      &StartupNativeTracer::create_actor_in_layout_hook,
                      originalCreateActorInLayout_,
                      "CREATE_ACTOR_IN_LAYOUT");
+    install_optional(kGetActorEnum,
+                     &StartupNativeTracer::get_actor_enum_hook,
+                     originalGetActorEnum_,
+                     "GET_ACTOR_ENUM");
 
     install_optional(kCreateLayout,
                      &StartupNativeTracer::create_layout_hook,
@@ -1433,6 +1438,35 @@ void StartupNativeTracer::get_player_actor_hook(void* context) {
     log(buffer);
 }
 
+void StartupNativeTracer::get_actor_enum_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    const auto actorRef = read_u64_arg_value(context, 0);
+    if (tracer->originalGetActorEnum_) {
+        tracer->originalGetActorEnum_(context);
+    }
+
+    std::uintptr_t result = 0;
+#ifdef _WIN32
+    const bool resultOk = read_u64_return(context, result);
+#else
+    const bool resultOk = false;
+#endif
+
+    char buffer[320]{};
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        buffer, sizeof(buffer),
+        "[FrontierNativeTrace] GET_ACTOR_ENUM actor=0x%llX result=%s0x%llX enum=%s%u",
+        static_cast<unsigned long long>(actorRef),
+        resultOk ? "" : "?",
+        static_cast<unsigned long long>(result),
+        resultOk ? "" : "?",
+        resultOk ? static_cast<unsigned int>(static_cast<std::uint32_t>(result)) : 0u));
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
 void StartupNativeTracer::create_actor_in_layout_hook(void* context) {
     auto* tracer = g_tracer;
     if (!tracer) return;
@@ -1500,22 +1534,22 @@ void StartupNativeTracer::create_actor_in_layout_hook(void* context) {
     (void)actorEnumOk;
 #endif
 
-    char layoutName[160]{};
-    const bool layoutNameOk = read_c_string_pointer(preA1, layoutName, sizeof(layoutName));
+    char actorName[160]{};
+    const bool actorNameOk = read_c_string_pointer(preA1, actorName, sizeof(actorName));
 
     char buffer[960]{};
     std::size_t used = static_cast<std::size_t>(std::snprintf(
         buffer, sizeof(buffer),
         "[FrontierNativeTrace] CREATE_ACTOR_IN_LAYOUT trace=%u argc=%u "
-        "preLayout=0x%llX layoutName=%s%s actorEnum=%s%d "
+        "preLayout=0x%llX actorName=%s%s actorEnum=%s%d "
         "pos=(%.6f,%.6f,%.6f) orient=(%.6f,%.6f,%.6f) "
         "preRaw={a0=0x%llX a1=0x%llX a2=0x%llX a3=0x%llX a4=0x%llX a5=0x%llX a6=0x%llX} "
         "postA0=0x%llX result=%s0x%llX",
         traceIndex,
         argc,
         static_cast<unsigned long long>(preA0),
-        layoutNameOk ? "" : "?",
-        layoutNameOk ? layoutName : "<unreadable>",
+        actorNameOk ? "" : "?",
+        actorNameOk ? actorName : "<unreadable>",
         actorEnumOk ? "" : "?",
         actorEnum,
         posX, posY, posZ,
