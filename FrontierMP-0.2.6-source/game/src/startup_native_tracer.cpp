@@ -131,6 +131,20 @@ bool read_u32_return(void* context, std::uint32_t& out) noexcept {
         return false;
     }
 }
+
+bool read_u64_return(void* context, std::uintptr_t& out) noexcept {
+    out = 0;
+    if (!context) return false;
+    const auto* call = reinterpret_cast<const NativeTraceContext*>(context);
+    if (!call->returnBuffer) return false;
+    __try {
+        std::memcpy(&out, call->returnBuffer, sizeof(out));
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        out = 0;
+        return false;
+    }
+}
 #endif
 
 bool read_u64_arg(void* context, std::uint32_t index, std::uintptr_t& out) {
@@ -153,6 +167,13 @@ bool read_u64_arg(void* context, std::uint32_t index, std::uintptr_t& out) {
     return false;
 #endif
 }
+
+std::uintptr_t read_u64_arg_value(void* context, std::uint32_t index) {
+    std::uintptr_t value = 0;
+    (void)read_u64_arg(context, index, value);
+    return value;
+}
+
 
 
 bool read_c_string(void* context, std::uint32_t index, char* out, std::size_t capacity) {
