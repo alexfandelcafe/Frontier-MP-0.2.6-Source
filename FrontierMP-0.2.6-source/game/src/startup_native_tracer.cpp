@@ -1,6 +1,7 @@
 #include "frontier/game/startup_native_tracer.hpp"
 
 #include "frontier/game/native_invoker.hpp"
+#include "frontier/game/game_thread_dispatcher.hpp"
 
 #include <cstdio>
 #include <fstream>
@@ -707,9 +708,14 @@ void StartupNativeTracer::terminate_this_script_hook(void* context) {
         tracer->originalTerminateThisScript_(context);
     }
 
-    char buffer[256]{};
+    std::uint32_t scriptId = 0;
+    const bool hasScriptId = lookup_script_context_id(context, scriptId);
+
+    char buffer[320]{};
     std::snprintf(buffer, sizeof(buffer),
-                  "[FrontierNativeTrace] TERMINATE_THIS_SCRIPT()");
+                  "[FrontierNativeTrace] TERMINATE_THIS_SCRIPT scriptId=%s%u",
+                  hasScriptId ? "" : "?",
+                  hasScriptId ? scriptId : 0u);
     std::size_t usedIdentity = std::strlen(buffer);
     append_execution_identity(buffer, sizeof(buffer), usedIdentity, context);
     log(buffer);
@@ -733,11 +739,16 @@ void StartupNativeTracer::terminate_script_hook(void* context) {
     g_scriptHandleValid[slot] = false;
 
     const char* path = g_scriptHandlePaths[slot];
-    char buffer[320]{};
+    std::uint32_t ownerScriptId = 0;
+    const bool hasOwnerScriptId = lookup_script_context_id(context, ownerScriptId);
+
+    char buffer[352]{};
     std::snprintf(buffer, sizeof(buffer),
-                  "[FrontierNativeTrace] TERMINATE_SCRIPT id=%d path=%s",
+                  "[FrontierNativeTrace] TERMINATE_SCRIPT id=%d path=%s ownerScriptId=%s%u",
                   scriptId,
-                  path && *path ? path : "<unknown>");
+                  path && *path ? path : "<unknown>",
+                  hasOwnerScriptId ? "" : "?",
+                  hasOwnerScriptId ? ownerScriptId : 0u);
     std::size_t usedIdentity = std::strlen(buffer);
     append_execution_identity(buffer, sizeof(buffer), usedIdentity, context);
     log(buffer);
