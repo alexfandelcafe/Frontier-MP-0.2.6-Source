@@ -413,13 +413,27 @@ bool RdrBridge::read_local_player_state(PlayerState& outState, std::string& erro
         error = buffer;
         return false;
     }
-    if (!readable(actorComponent, sizeof(MinimalSagActorComponent))) {
-        char buffer[288]{};
+    if (actorComponent == 0) {
+        char buffer[384]{};
         std::snprintf(buffer, sizeof(buffer),
-                      "actor component unreadable ptr=0x%llX actor=0x%llX guid=0x%08X",
+                      "actor component pending ptr=0x0 local=0x%llX manager=0x%llX guid=0x%08X slot=0x%llX actor=0x%llX",
+                      static_cast<unsigned long long>(localPlayer),
+                      static_cast<unsigned long long>(managerSlots),
+                      guid,
+                      static_cast<unsigned long long>(actorSlotAddress),
+                      static_cast<unsigned long long>(actor));
+        error = buffer;
+        return false;
+    }
+    if (!readable(actorComponent, sizeof(MinimalSagActorComponent))) {
+        char buffer[320]{};
+        std::snprintf(buffer, sizeof(buffer),
+                      "actor component unreadable ptr=0x%llX local=0x%llX manager=0x%llX guid=0x%08X actor=0x%llX",
                       static_cast<unsigned long long>(actorComponent),
-                      static_cast<unsigned long long>(actor),
-                      guid);
+                      static_cast<unsigned long long>(localPlayer),
+                      static_cast<unsigned long long>(managerSlots),
+                      guid,
+                      static_cast<unsigned long long>(actor));
         error = buffer;
         return false;
     }
@@ -442,13 +456,25 @@ bool RdrBridge::read_local_player_state(PlayerState& outState, std::string& erro
         error = buffer;
         return false;
     }
-    if (!readable(transform, sizeof(MinimalMatrix34))) {
-        char buffer[288]{};
+    if (transform == 0) {
+        char buffer[352]{};
         std::snprintf(buffer, sizeof(buffer),
-                      "transform unreadable ptr=0x%llX component=0x%llX actor=0x%llX guid=0x%08X",
+                      "transform pending ptr=0x0 component=0x%llX actor=0x%llX local=0x%llX guid=0x%08X",
+                      static_cast<unsigned long long>(actorComponent),
+                      static_cast<unsigned long long>(actor),
+                      static_cast<unsigned long long>(localPlayer),
+                      guid);
+        error = buffer;
+        return false;
+    }
+    if (!readable(transform, sizeof(MinimalMatrix34))) {
+        char buffer[320]{};
+        std::snprintf(buffer, sizeof(buffer),
+                      "transform unreadable ptr=0x%llX component=0x%llX actor=0x%llX local=0x%llX guid=0x%08X",
                       static_cast<unsigned long long>(transform),
                       static_cast<unsigned long long>(actorComponent),
                       static_cast<unsigned long long>(actor),
+                      static_cast<unsigned long long>(localPlayer),
                       guid);
         error = buffer;
         return false;
