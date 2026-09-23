@@ -7,6 +7,7 @@
 - Keep the remote actor test idempotent per client session; no actor memory mutation or Rockstar NET session is introduced.
 - Trace GET_ACTOR_ENUM for the returned ActorRef and probe the verified actor-manager slot mapping for internal actor/component/transform resolution.
 - Validate the spawned ActorRef through GET_ACTOR_SLOT, GET_SLOT_ACTOR, and GET_POSITION before treating internal actor offsets as authoritative.
+- Pass the plain 32-bit Actor handle to actor natives; retain the 0x100000000 tag only on the raw ActorRef returned by CREATE_ACTOR_IN_LAYOUT.
 
 ## 0.2.40
 
