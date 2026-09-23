@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <cmath>
 
 namespace frontier::game {
 
@@ -96,6 +97,16 @@ bool guarded_read_pointer(std::uintptr_t address, std::uintptr_t& out) {
 bool guarded_read_position(std::uintptr_t address, Vec3& out) {
     __try {
         out = reinterpret_cast<const MinimalMatrix34*>(address)->position;
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        out = {};
+        return false;
+    }
+}
+
+bool guarded_read_vec3(std::uintptr_t address, Vec3& out) {
+    __try {
+        out = *reinterpret_cast<const Vec3*>(address);
         return true;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         out = {};
@@ -592,14 +603,8 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                                     }
 
                                     Vec3 position{};
-                                    bool positionRead = false;
-                                    __try {
-                                        position = *reinterpret_cast<const Vec3*>(
-                                            transformCandidate + 0x30u);
-                                        positionRead = true;
-                                    } __except (EXCEPTION_EXECUTE_HANDLER) {
-                                        positionRead = false;
-                                    }
+                                    const bool positionRead =
+                                        guarded_read_vec3(transformCandidate + 0x30u, position);
 
                                     if (!positionRead ||
                                         !close(position.x, x) ||
@@ -617,9 +622,9 @@ bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string
                                 if (chainHit) {
                                     char hitBuffer[384]{};
                                     std::snprintf(hitBuffer, sizeof(hitBuffer),
-                                                  "[FrontierRemoteActor] chain-hit actor=0x%llX actor+0x%zX component=0x%llX transform=0x%llX position=(%.3f,%.3f,%.3f)",
+                                                  "[FrontierRemoteActor] chain-hit actor=0x%llX actor+0x%llX component=0x%llX transform=0x%llX position=(%.3f,%.3f,%.3f)",
                                                   static_cast<unsigned long long>(managerActor),
-                                                  hitActorOffset,
+                                                  static_cast<unsigned long long>(hitActorOffset),
                                                   static_cast<unsigned long long>(hitComponent),
                                                   static_cast<unsigned long long>(hitTransform),
                                                   x, y, z);
