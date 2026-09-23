@@ -35,6 +35,9 @@ private:
     static void create_player_actor_in_layout_hook(void* context);
     static void get_player_actor_hook(void* context);
     static void create_actor_in_layout_hook(void* context);
+    static void create_layout_hook(void* context);
+    static void find_named_layout_hook(void* context);
+    static void is_layoutref_valid_hook(void* context);
 
     static void log(const char* message);
 
@@ -61,6 +64,9 @@ private:
     NativeInvoker::NativeHandler originalCreatePlayerActorInLayout_{};
     NativeInvoker::NativeHandler originalGetPlayerActor_{};
     NativeInvoker::NativeHandler originalCreateActorInLayout_{};
+    NativeInvoker::NativeHandler originalCreateLayout_{};
+    NativeInvoker::NativeHandler originalFindNamedLayout_{};
+    NativeInvoker::NativeHandler originalIsLayoutrefValid_{};
     bool attached_{};
 };
 
