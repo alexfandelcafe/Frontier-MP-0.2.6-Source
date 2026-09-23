@@ -42,6 +42,11 @@ std::uint32_t gGetActorSlotTraceCount = 0;
 std::uint32_t gGetSlotActorTraceCount = 0;
 std::uint32_t gGetLocalSlotTraceCount = 0;
 std::uint32_t gIsSlotValidTraceCount = 0;
+bool gRemotePlayerProbeSpawned = false;
+bool gRemotePlayerProbeRequested = false;
+float gRemotePlayerProbeX = 0.0f;
+float gRemotePlayerProbeY = 0.0f;
+float gRemotePlayerProbeZ = 0.0f;
 
 void append_execution_identity(char* buffer, std::size_t capacity, std::size_t& used, void* context) {
     if (!buffer || capacity == 0 || used >= capacity) return;
@@ -141,6 +146,9 @@ constexpr std::uint32_t kGetActorSlot = 0xAABF3356u;
 constexpr std::uint32_t kGetSlotActor = 0xDB9B49D8u;
 constexpr std::uint32_t kGetLocalSlot = 0xAD68A22Eu;
 constexpr std::uint32_t kIsSlotValid = 0xD04480FEu;
+constexpr std::uint32_t kStreamingRequestActor = 0xB0A79FEEu;
+constexpr std::uint32_t kStreamingIsActorLoaded = 0x7DF72579u;
+constexpr std::uint32_t kIsActorPlayer = 0xB27E91E7u;
 
 struct NativeTraceContext final {
     void* returnBuffer{};
@@ -206,6 +214,51 @@ std::uintptr_t read_u64_arg_value(void* context, std::uint32_t index) {
     std::uintptr_t value = 0;
     (void)read_u64_arg(context, index, value);
     return value;
+}
+
+bool invoke_handler_in_existing_context(NativeInvoker::NativeHandler handler,
+                                         void* context,
+                                         std::uintptr_t* arguments,
+                                         std::size_t argumentCount,
+                                         std::uintptr_t& out) {
+    out = 0;
+    if (!handler || !context || argumentCount > 32u) return false;
+
+#ifdef _WIN32
+    auto* call = reinterpret_cast<NativeTraceContext*>(context);
+    if (!call) return false;
+
+    auto* savedArgumentBuffer = call->argumentBuffer;
+    const auto savedArgumentCount = call->argumentCount;
+    auto* savedReturnBuffer = call->returnBuffer;
+
+    std::uintptr_t returnValue = 0;
+    call->argumentBuffer = arguments;
+    call->argumentCount = static_cast<std::uint32_t>(argumentCount);
+    call->returnBuffer = &returnValue;
+
+    bool ok = false;
+    __try {
+        handler(context);
+        ok = true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        ok = false;
+    }
+
+    call->argumentBuffer = savedArgumentBuffer;
+    call->argumentCount = savedArgumentCount;
+    call->returnBuffer = savedReturnBuffer;
+
+    if (!ok) return false;
+    out = returnValue;
+    return true;
+#else
+    (void)handler;
+    (void)context;
+    (void)arguments;
+    (void)argumentCount;
+    return false;
+#endif
 }
 
 
@@ -1442,6 +1495,20 @@ void StartupNativeTracer::create_player_actor_in_layout_hook(void* context) {
     if (tracer->originalCreatePlayerActorInLayout_) {
         tracer->originalCreatePlayerActorInLayout_(context);
     }
+
+    char actorName[160]{};
+    const bool actorNameOk = read_c_string_pointer(preA1, actorName, sizeof(actorName));
+    if (actorNameOk &&
+        std::strcmp(actorName, "player") == 0 &&
+        static_cast<std::uint32_t>(preA2) == 0u) {
+        const auto posXYLow = static_cast<std::uint32_t>(preA3);
+        const auto posXYHigh = static_cast<std::uint32_t>(preA3 >> 32u);
+        const auto posZRaw = static_cast<std::uint32_t>(preA4);
+        std::memcpy(&gRemotePlayerProbeX, &posXYLow, sizeof(float));
+        std::memcpy(&gRemotePlayerProbeY, &posXYHigh, sizeof(float));
+        std::memcpy(&gRemotePlayerProbeZ, &posZRaw, sizeof(float));
+    }
+
     if (traceIndex >= 64) return;
 
     const auto postA0 = read_u64_arg_value(context, 0);
@@ -1533,6 +1600,132 @@ void StartupNativeTracer::get_player_actor_hook(void* context) {
         static_cast<unsigned long long>(result)));
     append_execution_identity(buffer, sizeof(buffer), used, context);
     log(buffer);
+
+    if (!gRemotePlayerProbeSpawned && playerOk && player > 0 && tracer->originalCreatePlayerActorInLayout_) {
+        char layoutName[] = "FrontierRemoteLayout";
+        char actorName[] = "FrontierRemoteTest";
+        std::uintptr_t args[8]{};
+        std::uintptr_t nativeResult = 0;
+
+        args[0] = reinterpret_cast<std::uintptr_t>(layoutName);
+        std::uintptr_t layoutResult = 0;
+        bool layoutOk = false;
+        if (tracer->originalFindNamedLayout_) {
+            layoutOk = invoke_handler_in_existing_context(
+                tracer->originalFindNamedLayout_, context, args, 1u, layoutResult);
+        }
+
+        std::uint32_t layoutId = layoutOk ? static_cast<std::uint32_t>(layoutResult) : 0u;
+        if (layoutId == 0u && tracer->originalCreateLayout_) {
+            args[0] = reinterpret_cast<std::uintptr_t>(layoutName);
+            layoutResult = 0;
+            layoutOk = invoke_handler_in_existing_context(
+                tracer->originalCreateLayout_, context, args, 1u, layoutResult);
+            if (layoutOk) layoutId = static_cast<std::uint32_t>(layoutResult);
+        }
+
+        bool layoutValid = false;
+        if (layoutId != 0u && tracer->originalIsLayoutrefValid_) {
+            args[0] = static_cast<std::uintptr_t>(layoutId);
+            std::uintptr_t validResult = 0;
+            if (invoke_handler_in_existing_context(
+                    tracer->originalIsLayoutrefValid_, context, args, 1u, validResult)) {
+                layoutValid = validResult != 0u;
+            }
+        }
+
+        bool streamRequested = false;
+        if (!gRemotePlayerProbeRequested && tracer->originalStreamingRequestActor_) {
+            args[0] = 837u;
+            args[1] = 1u;
+            args[2] = 0u;
+            std::uintptr_t streamRequestResult = 0;
+            streamRequested = invoke_handler_in_existing_context(
+                tracer->originalStreamingRequestActor_, context, args, 3u, streamRequestResult);
+            gRemotePlayerProbeRequested = true;
+        }
+
+        bool loaded = false;
+        std::uint32_t loadedArg = 0u;
+        if (tracer->originalStreamingIsActorLoaded_) {
+            const std::uint32_t probes[] = {0u, 1u, 0xFFFFFFFFu};
+            for (const auto probeArg : probes) {
+                args[0] = 837u;
+                args[1] = probeArg;
+                std::uintptr_t loadedResult = 0;
+                if (invoke_handler_in_existing_context(
+                        tracer->originalStreamingIsActorLoaded_, context, args, 2u, loadedResult) &&
+                    loadedResult != 0u) {
+                    loaded = true;
+                    loadedArg = probeArg;
+                    break;
+                }
+            }
+        }
+
+        if (layoutValid && loaded) {
+            const float x = gRemotePlayerProbeX + 2.0f;
+            const float y = gRemotePlayerProbeY;
+            const float z = gRemotePlayerProbeZ;
+
+            args[0] = 0x100000000ull | static_cast<std::uintptr_t>(layoutId);
+            args[1] = reinterpret_cast<std::uintptr_t>(actorName);
+            args[2] = 837u;
+            args[3] = pack_vec2_for_tracer(x, y);
+            args[4] = float_bits_for_tracer(z);
+            args[5] = pack_vec2_for_tracer(0.0f, 0.0f);
+            args[6] = float_bits_for_tracer(0.0f);
+            args[7] = 0u;
+
+            nativeResult = 0;
+            const bool createOk = invoke_handler_in_existing_context(
+                tracer->originalCreatePlayerActorInLayout_, context, args, 8u, nativeResult);
+
+            const std::uint32_t playerId = static_cast<std::uint32_t>(nativeResult);
+            const std::uintptr_t actorRef = args[0];
+            const std::uint32_t actorHandle = static_cast<std::uint32_t>(actorRef);
+
+            std::uintptr_t playerCheckArgs[1]{static_cast<std::uintptr_t>(actorHandle)};
+            std::uintptr_t playerCheckResult = 0;
+            const bool playerCheckOk =
+                actorHandle != 0u && tracer->originalIsActorPlayer_ &&
+                invoke_handler_in_existing_context(
+                    tracer->originalIsActorPlayer_, context, playerCheckArgs, 1u, playerCheckResult);
+
+            char probeLog[760]{};
+            std::snprintf(
+                probeLog, sizeof(probeLog),
+                "[FrontierRemotePlayerProbe] createOk=%u layout=0x%08X loaded=%u loadedArg=0x%08X "
+                "streamRequested=%u playerId=0x%08X actorRef=0x%llX actorHandle=0x%08X "
+                "isActorPlayer=%u position=(%.3f,%.3f,%.3f)",
+                createOk ? 1u : 0u,
+                layoutId,
+                loaded ? 1u : 0u,
+                loadedArg,
+                streamRequested ? 1u : 0u,
+                playerId,
+                static_cast<unsigned long long>(actorRef),
+                actorHandle,
+                playerCheckOk ? static_cast<unsigned>(playerCheckResult) : 0u,
+                x, y, z);
+            log(probeLog);
+
+            if (createOk && playerId != 0u && actorHandle != 0u) {
+                gRemotePlayerProbeSpawned = true;
+            }
+        } else {
+            char waitLog[420]{};
+            std::snprintf(
+                waitLog, sizeof(waitLog),
+                "[FrontierRemotePlayerProbe] waiting layoutValid=%u streamLoaded=%u "
+                "streamRequested=%u layout=0x%08X",
+                layoutValid ? 1u : 0u,
+                loaded ? 1u : 0u,
+                streamRequested ? 1u : 0u,
+                layoutId);
+            log(waitLog);
+        }
+    }
 }
 
 void StartupNativeTracer::get_actor_enum_hook(void* context) {
@@ -1566,6 +1759,16 @@ void StartupNativeTracer::get_actor_enum_hook(void* context) {
 
 
 namespace {
+std::uintptr_t float_bits_for_tracer(float value) {
+    std::uint32_t raw = 0;
+    std::memcpy(&raw, &value, sizeof(raw));
+    return static_cast<std::uintptr_t>(raw);
+}
+
+std::uintptr_t pack_vec2_for_tracer(float x, float y) {
+    return float_bits_for_tracer(x) | (float_bits_for_tracer(y) << 32u);
+}
+
 void trace_actor_bool_native(void* context,
                              NativeInvoker::NativeHandler original,
                              std::uint32_t traceIndex,
