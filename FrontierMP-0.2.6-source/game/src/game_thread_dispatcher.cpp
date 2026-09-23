@@ -6,7 +6,10 @@
 #include <atomic>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #ifdef _WIN32
+#include <windows.h>
 #include <intrin.h>
 #endif
 #ifdef _WIN32
@@ -33,6 +36,18 @@ struct NativeTraceContext final {
 };
 
 void write_script_trace_line(const char* message) {
+#ifdef _WIN32
+    char localAppData[MAX_PATH]{};
+    const DWORD n = GetEnvironmentVariableA("LOCALAPPDATA", localAppData, MAX_PATH);
+    if (n != 0 && n < MAX_PATH) {
+        const std::filesystem::path dir =
+            std::filesystem::path(localAppData) / "FrontierMP" / "logs";
+        std::error_code ec;
+        std::filesystem::create_directories(dir, ec);
+        std::ofstream file(dir / "client.log", std::ios::app);
+        if (file) file << message << "\n";
+    }
+#endif
     std::fprintf(stderr, "%s\n", message);
 }
 
