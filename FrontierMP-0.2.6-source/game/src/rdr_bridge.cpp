@@ -40,6 +40,7 @@ constexpr std::uint32_t kNativeIsActorLocalPlayer = 0x6542CF26;
 constexpr std::uint32_t kNativeGetActorSlot = 0xAABF3356;
 constexpr std::uint32_t kNativeGetActorUpdatePriority = 0x6D322CD3;
 constexpr std::uint32_t kNativeIsActorValid = 0xBA6C3E92u;
+constexpr std::uint32_t kNativeGetPosition = 0x99BD9D6Fu;
 constexpr std::uint32_t kNativeIsActorenumInstalled = 0x9B903F45;
 constexpr std::uint32_t kNativeGetActorEnum = 0x0B28E9EC;
 constexpr std::uint32_t kNativeStreamingRequestActor = 0xB0A79FEE;
@@ -941,6 +942,114 @@ bool RdrBridge::update_remote_actor_transform(
         return false;
     }
     return error.empty();
+}
+
+bool RdrBridge::is_remote_actor_valid(
+    std::uint32_t actorHandle,
+    bool& outValid,
+    std::string& error) const {
+    outValid = false;
+    error.clear();
+
+    if (actorHandle == 0u) {
+        error = "invalid remote actor handle";
+        return false;
+    }
+    if (!initialized_) {
+        error = "bridge not initialized";
+        return false;
+    }
+    if (!nativeInvoker_.ready()) {
+        error = "native invoker not ready";
+        return false;
+    }
+    if (!gameThreadDispatcher_.attached()) {
+        error = gameThreadDispatcherError_.empty()
+            ? "game-thread dispatcher not attached"
+            : gameThreadDispatcherError_;
+        return false;
+    }
+
+    std::string dispatchError;
+    const bool completed = gameThreadDispatcher_.submit_and_wait(
+        [this, actorHandle, &outValid, &error]() {
+            bool valid = false;
+            if (!nativeInvoker_.invoke_bool(kNativeIsActorValid, valid)) {
+                error = "IS_ACTOR_VALID invoke failed";
+                return;
+            }
+            outValid = valid;
+        },
+        250u,
+        dispatchError);
+
+    if (!completed) {
+        error = dispatchError.empty()
+            ? "remote actor validity task did not complete"
+            : dispatchError;
+        return false;
+    }
+    return error.empty();
+}
+
+bool RdrBridge::read_remote_actor_position(
+    std::uint32_t actorHandle,
+    Vec3& outPosition,
+    std::string& error) const {
+    outPosition = {};
+    error.clear();
+
+    if (actorHandle == 0u) {
+        error = "invalid remote actor handle";
+        return false;
+    }
+    if (!initialized_) {
+        error = "bridge not initialized";
+        return false;
+    }
+    if (!nativeInvoker_.ready()) {
+        error = "native invoker not ready";
+        return false;
+    }
+    if (!gameThreadDispatcher_.attached()) {
+        error = gameThreadDispatcherError_.empty()
+            ? "game-thread dispatcher not attached"
+            : gameThreadDispatcherError_;
+        return false;
+    }
+
+    Vec3 position{};
+    std::string dispatchError;
+    const bool completed = gameThreadDispatcher_.submit_and_wait(
+        [this, actorHandle, &position, &error]() {
+            // GET_POSITION(Actor, Vector3*) writes through its second argument.
+            std::uintptr_t args[2]{};
+            args[0] = static_cast<std::uintptr_t>(actorHandle);
+            args[1] = reinterpret_cast<std::uintptr_t>(&position);
+            std::uintptr_t result = 0u;
+            if (!nativeInvoker_.invoke_raw(kNativeGetPosition, args, 2u, result)) {
+                error = "GET_POSITION invoke failed";
+            }
+        },
+        250u,
+        dispatchError);
+
+    if (!completed) {
+        error = dispatchError.empty()
+            ? "remote actor position task did not complete"
+            : dispatchError;
+        return false;
+    }
+    if (!error.empty()) return false;
+
+    const auto finite = [](float value) { return std::isfinite(value); };
+    if (!finite(position.x) || !finite(position.y) || !finite(position.z)) {
+        error = "GET_POSITION returned non-finite coordinates";
+        return false;
+    }
+
+    outPosition = position;
+    return true;
 }
 
 bool RdrBridge::task_go_to_remote_coord(

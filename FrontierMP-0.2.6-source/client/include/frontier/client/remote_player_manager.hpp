@@ -21,6 +21,8 @@ struct RemotePlayer final {
     std::uint64_t lastSpawnAttemptMs{};
     bool locomotionTaskActive{};
     std::uint64_t lastLocomotionTaskAttemptMs{};
+    std::uint64_t lastActorValidationMs{};
+    std::uint64_t lastPositionReadMs{};
 };
 
 class RemotePlayerManager final {
@@ -29,7 +31,7 @@ public:
 
     void on_snapshot(const protocol::Snapshot& snapshot, std::uint64_t nowMs);
 
-    void update(std::uint64_t nowMs, frontier::game::RdrBridge& bridge);
+    void update(std::uint64_t nowMs, frontier::game::RdrBridge& bridge, bool sessionActive);
 
     void clear(frontier::game::RdrBridge& bridge);
 
@@ -46,6 +48,7 @@ private:
     std::uint64_t lastUpdateMs_{};
     std::unordered_map<std::uint16_t, RemotePlayer> players_;
     RemoteEntityInterpolator interpolator_{2, 4};
+    bool sessionActive_{};
 };
 
 } // namespace frontier::client

@@ -47,6 +47,7 @@ std::string environment_value(const char* key) {
 } // namespace
 
 bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, const std::string& playerName) {
+    stopRequested_.store(false, std::memory_order_release);
     frontier::game::ExecutableFingerprint fingerprint{};
     if (!frontier::game::BuildDetector::inspect_loaded_module(fingerprint)) {
         log_line("[FrontierClient] build inspection failed");
@@ -198,6 +199,14 @@ void ClientRuntime::shutdown() {
 }
 
 void ClientRuntime::update() {
+    // The runtime has both an internal worker and an exported Update() entry
+    // point. Serialize them so RemotePlayerManager state cannot race.
+    if (updateInProgress_.exchange(true, std::memory_order_acquire)) return;
+    struct UpdateGuard final {
+        std::atomic<bool>& flag;
+        ~UpdateGuard() { flag.store(false, std::memory_order_release); }
+    } updateGuard{updateInProgress_};
+
     const auto now = monotonic_ms();
     if (g_network) {
         g_network->update(now);
@@ -235,10 +244,11 @@ void ClientRuntime::update() {
                 lastBridgeLogMs_ = now;
             }
 
-            if (gameBridge_.initialized() &&
-                g_network->state() == ConnectionState::Connected) {
-                remotePlayers_.update(now, gameBridge_);
-            }
+        }
+        if (g_network->state() == ConnectionState::Connected && gameBridge_.initialized()) {
+            const bool sessionActive =
+                session_.runtime_state().state == frontier::game::FrontierSessionState::Active;
+            remotePlayers_.update(now, gameBridge_, sessionActive);
         }
     }
 }

@@ -1,12 +1,25 @@
 #include "frontier/client/interpolation.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 namespace frontier::client {
 
 namespace {
 float lerp(float a, float b, float t) { return a + (b - a) * t; }
 Vec3 lerp(const Vec3& a, const Vec3& b, float t) { return {lerp(a.x, b.x, t), lerp(a.y, b.y, t), lerp(a.z, b.z, t)}; }
+
+float lerp_angle_degrees(float a, float b, float t) {
+    constexpr float kFullTurnDegrees = 360.0f;
+    constexpr float kHalfTurnDegrees = 180.0f;
+    float delta = std::fmod(b - a, kFullTurnDegrees);
+    if (delta > kHalfTurnDegrees) delta -= kFullTurnDegrees;
+    if (delta < -kHalfTurnDegrees) delta += kFullTurnDegrees;
+    float result = a + delta * t;
+    result = std::fmod(result, kFullTurnDegrees);
+    if (result < 0.0f) result += kFullTurnDegrees;
+    return result;
+}
 }
 
 RemoteEntityInterpolator::RemoteEntityInterpolator(std::uint32_t interpolationDelayTicks, std::uint32_t maxExtrapolationTicks)
@@ -39,8 +52,12 @@ std::optional<InterpolatedState> RemoteEntityInterpolator::sample(std::uint16_t 
         PlayerState result = a.state;
         result.position = lerp(a.state.position, b.state.position, t);
         result.velocity = lerp(a.state.velocity, b.state.velocity, t);
-        result.yaw = lerp(a.state.yaw, b.state.yaw, t);
+        result.yaw = lerp_angle_degrees(a.state.yaw, b.state.yaw, t);
         return InterpolatedState{result, false};
+    }
+
+    if (targetTick < buffer.front().tick) {
+        return InterpolatedState{buffer.front().state, false};
     }
 
     const auto& latest = buffer.back();
@@ -56,8 +73,7 @@ std::optional<InterpolatedState> RemoteEntityInterpolator::sample(std::uint16_t 
         }
     }
 
-    return InterpolatedState{buffer.front().state, false};
-}
+    return InterpolatedState{latest.state, false};
 
 void RemoteEntityInterpolator::remove_player(std::uint16_t playerId) { buffers_.erase(playerId); }
 

@@ -3,11 +3,19 @@
 #include <cmath>
 #include <cstdio>
 #include <vector>
+#include <cstdarg>
+#include <filesystem>
+#include <fstream>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace frontier::client {
 
 namespace {
 constexpr std::uint64_t kRemotePlayerGraceMs = 750;
+constexpr std::uint64_t kActorValidationIntervalMs = 250;
+constexpr std::uint64_t kPositionTelemetryIntervalMs = 100;
 constexpr float kPositionUpdateThreshold = 0.02f;
 // Let the engine keep a locomotion task alive for several gait frames before
 // retargeting. The network target moves continuously, but restarting TASK_GO_TO_COORD
@@ -29,6 +37,28 @@ float yaw_delta(float a, float b) {
     if (delta > kHalfTurnDegrees) delta -= kFullTurnDegrees;
     if (delta < -kHalfTurnDegrees) delta += kFullTurnDegrees;
     return std::fabs(delta);
+}
+
+void log_remote(const char* format, ...) {
+    char buffer[768]{};
+    va_list args;
+    va_start(args, format);
+    std::vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+
+#ifdef _WIN32
+    char localAppData[MAX_PATH]{};
+    const DWORD n = GetEnvironmentVariableA("LOCALAPPDATA", localAppData, MAX_PATH);
+    if (n != 0 && n < MAX_PATH) {
+        const std::filesystem::path dir =
+            std::filesystem::path(localAppData) / "FrontierMP" / "logs";
+        std::error_code ec;
+        std::filesystem::create_directories(dir, ec);
+        std::ofstream file(dir / "client.log", std::ios::app);
+        if (file) file << buffer << "\n";
+    }
+#endif
+    std::fprintf(stderr, "%s\n", buffer);
 }
 } // namespace
 
@@ -77,10 +107,8 @@ bool RemotePlayerManager::ensure_spawned(RemotePlayer& player, std::uint64_t now
     player.spawnPending = false;
 
     if (!ok) {
-        std::fprintf(stderr,
-                     "[FrontierRemotePlayer] spawn failed playerId=%u error=%s\n",
-                     static_cast<unsigned>(player.playerId),
-                     error.c_str());
+        log_remote("[FrontierRemotePlayer] spawn failed playerId=%u error=%s",
+                   static_cast<unsigned>(player.playerId), error.c_str());
         return false;
     }
 
@@ -95,18 +123,31 @@ bool RemotePlayerManager::ensure_spawned(RemotePlayer& player, std::uint64_t now
         player.lastLocomotionTaskAttemptMs = 0;
     }
 
-    std::fprintf(stderr,
-                 "[FrontierRemotePlayer] spawned playerId=%u actorRef=0x%llX actorHandle=0x%08X position=(%.3f,%.3f,%.3f)\n",
-                 static_cast<unsigned>(player.playerId),
-                 static_cast<unsigned long long>(player.actor.actorRef),
-                 player.actor.actorHandle,
-                 player.renderedState.position.x,
-                 player.renderedState.position.y,
-                 player.renderedState.position.z);
+    log_remote("[FrontierRemotePlayer] spawned playerId=%u actorRef=0x%llX actorHandle=0x%08X position=(%.3f,%.3f,%.3f)",
+               static_cast<unsigned>(player.playerId),
+               static_cast<unsigned long long>(player.actor.actorRef),
+               player.actor.actorHandle,
+               player.renderedState.position.x,
+               player.renderedState.position.y,
+               player.renderedState.position.z);
     return true;
 }
 
-void RemotePlayerManager::update(std::uint64_t nowMs, frontier::game::RdrBridge& bridge) {
+void RemotePlayerManager::update(std::uint64_t nowMs, frontier::game::RdrBridge& bridge, bool sessionActive) {
+    if (!sessionActive) {
+        if (sessionActive_) {
+            log_remote("[FrontierRemotePlayer] session inactive; clearing remote actors");
+            clear(bridge);
+        }
+        sessionActive_ = false;
+        return;
+    }
+
+    if (!sessionActive_) {
+        sessionActive_ = true;
+        log_remote("[FrontierRemotePlayer] session active; remote actor lifecycle enabled");
+    }
+
     const std::uint64_t effectiveNow = nowMs < lastUpdateMs_ ? lastUpdateMs_ : nowMs;
 
     for (auto it = players_.begin(); it != players_.end();) {
@@ -122,8 +163,56 @@ void RemotePlayerManager::update(std::uint64_t nowMs, frontier::game::RdrBridge&
             continue;
         }
 
+        if (player.lastActorValidationMs == 0 ||
+            effectiveNow - player.lastActorValidationMs >= kActorValidationIntervalMs) {
+            bool actorValid = false;
+            std::string validationError;
+            const bool validationCallOk = bridge.is_remote_actor_valid(
+                player.actor.actorHandle, actorValid, validationError);
+            player.lastActorValidationMs = effectiveNow;
+
+            if (!validationCallOk || !actorValid) {
+                log_remote("[FrontierRemotePlayer] actor invalid playerId=%u actor=0x%08X reason=%s",
+                           static_cast<unsigned>(player.playerId),
+                           player.actor.actorHandle,
+                           validationError.empty() ? "engine invalidated actor" : validationError.c_str());
+                player.actor = {};
+                player.spawnPending = false;
+                player.lastSpawnAttemptMs = effectiveNow;
+                player.locomotionTaskActive = false;
+                player.lastLocomotionTaskAttemptMs = 0;
+                player.lastPositionReadMs = 0;
+                ++it;
+                continue;
+            }
+        }
+
         const auto sampled = interpolator_.sample(player.playerId, latestServerTick_);
         const PlayerState desired = sampled.has_value() ? sampled->state : player.targetState;
+
+        if (player.playerId == 65000u &&
+            (player.lastPositionReadMs == 0 ||
+             effectiveNow - player.lastPositionReadMs >= kPositionTelemetryIntervalMs)) {
+            Vec3 actualPosition{};
+            std::string positionError;
+            if (bridge.read_remote_actor_position(
+                    player.actor.actorHandle, actualPosition, positionError)) {
+                const float errorDistance =
+                    std::sqrt(distance_squared(actualPosition, desired.position));
+                log_remote("[FrontierRemotePlayer] actor-pos playerId=%u actor=0x%08X target=(%.3f,%.3f,%.3f) actual=(%.3f,%.3f,%.3f) error=%.3f extrapolated=%u",
+                           static_cast<unsigned>(player.playerId),
+                           player.actor.actorHandle,
+                           desired.position.x, desired.position.y, desired.position.z,
+                           actualPosition.x, actualPosition.y, actualPosition.z,
+                           errorDistance,
+                           sampled.has_value() && sampled->extrapolated ? 1u : 0u);
+            } else {
+                log_remote("[FrontierRemotePlayer] actor-pos failed playerId=%u actor=0x%08X error=%s",
+                           static_cast<unsigned>(player.playerId),
+                           player.actor.actorHandle, positionError.c_str());
+            }
+            player.lastPositionReadMs = effectiveNow;
+        }
 
         // The synthetic locomotion probe is driven by the sampled network target.
         // Keep the native TASK_GO_TO_COORD task as the movement owner and only
@@ -148,22 +237,16 @@ void RemotePlayerManager::update(std::uint64_t nowMs, frontier::game::RdrBridge&
                     // locomotion path; the Actor itself remains engine-controlled.
                     player.renderedState = desired;
 
-                    std::fprintf(stderr,
-                                 "[FrontierRemotePlayer] locomotion target playerId=%u "
-                                 "actor=0x%08X target=(%.3f,%.3f,%.3f)\n",
-                                 static_cast<unsigned>(player.playerId),
-                                 player.actor.actorHandle,
-                                 desired.position.x,
-                                 desired.position.y,
-                                 desired.position.z);
+                    log_remote("[FrontierRemotePlayer] locomotion target playerId=%u actor=0x%08X target=(%.3f,%.3f,%.3f)",
+                               static_cast<unsigned>(player.playerId),
+                               player.actor.actorHandle,
+                               desired.position.x, desired.position.y, desired.position.z);
                 } else {
                     player.locomotionTaskActive = false;
-                    std::fprintf(stderr,
-                                 "[FrontierRemotePlayer] locomotion target deferred "
-                                 "playerId=%u actor=0x%08X error=%s\n",
-                                 static_cast<unsigned>(player.playerId),
-                                 player.actor.actorHandle,
-                                 taskError.c_str());
+                    log_remote("[FrontierRemotePlayer] locomotion target deferred playerId=%u actor=0x%08X error=%s",
+                               static_cast<unsigned>(player.playerId),
+                               player.actor.actorHandle,
+                               taskError.c_str());
                 }
             }
 
@@ -180,11 +263,10 @@ void RemotePlayerManager::update(std::uint64_t nowMs, frontier::game::RdrBridge&
             if (bridge.update_remote_actor_transform(player.actor.actorHandle, desired, error)) {
                 player.renderedState = desired;
             } else {
-                std::fprintf(stderr,
-                             "[FrontierRemotePlayer] update failed playerId=%u actor=0x%08X error=%s\n",
-                             static_cast<unsigned>(player.playerId),
-                             player.actor.actorHandle,
-                             error.c_str());
+                log_remote("[FrontierRemotePlayer] update failed playerId=%u actor=0x%08X error=%s",
+                           static_cast<unsigned>(player.playerId),
+                           player.actor.actorHandle,
+                           error.c_str());
             }
         }
 
@@ -212,9 +294,8 @@ void RemotePlayerManager::remove_player(
     interpolator_.remove_player(player.playerId);
     players_.erase(it);
 
-    std::fprintf(stderr,
-                 "[FrontierRemotePlayer] removed playerId=%u\n",
-                 static_cast<unsigned>(player.playerId));
+    log_remote("[FrontierRemotePlayer] removed playerId=%u actor=0x%08X",
+               static_cast<unsigned>(player.playerId), player.actor.actorHandle);
 }
 
 void RemotePlayerManager::clear(frontier::game::RdrBridge& bridge) {
@@ -225,6 +306,7 @@ void RemotePlayerManager::clear(frontier::game::RdrBridge& bridge) {
     interpolator_.clear();
     latestServerTick_ = 0;
     lastUpdateMs_ = 0;
+    sessionActive_ = false;
 }
 
 } // namespace frontier::client
