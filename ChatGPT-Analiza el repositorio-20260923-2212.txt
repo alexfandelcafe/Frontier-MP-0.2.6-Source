@@ -1,0 +1,1992 @@
+Analiza el repositorio
+
+User: Anonymous
+Created: 9/23/2026 19:10:04
+Updated: 9/23/2026 22:09:08
+Exported: 9/23/2026 22:12:03
+Link: https://chatgpt.com/c/6ab44e3b-e27c-83e9-8604-427bb8fad690
+
+## Prompt:
+23/9/2026, 19:10:16
+
+analiza el repo https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/tree/game-thread/remote-actor-spawn-test-0.2.41 y el chat https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/ChatGPT-Analiza%20el%20repositorio-20260923-1908.txt para entender el ultimo contexto, el https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.log está actualizado
+
+## Response:
+23/9/2026, 19:10:19
+
+Voy a contrastar tres capas: el estado del branch, el chat de contexto y el client.log actualizado; después los cruzo con el código relevante para localizar la causa y no solo el síntoma.
+
+El client.log actualizado ya revela algo importante: el modo sintético sí llegó a players=2 / remoteEntities=1, y hay actividad nativa sobre un actor 0x321; ahora estoy aislando la secuencia exacta que falta para saber dónde se rompe el spawn.
+
+Investigado repositorio, código, commits y fallos remotos de Frontier-MP
+
+Analizando el repositorio
+
+Estoy intentando trabajar con el registro completo y el código asociado. Como el contenido es demasiado grande para revisarlo de una sola vez, voy a analizarlo localmente y contrastar los hallazgos con los archivos relevantes.
+
+Analizó el repositorio
+
+Inspeccionados registros, ramas y archivos para analizar errores de actores remotos
+
+Clonando y examinando el repositorio Frontier MP
+
+Cloné y examiné el repositorio Frontier MP
+
+Inspeccionó archivos del cliente y extrajo lógica del puente e interpolación
+
+Verificando la secuencia
+
+Estoy comprobando si el identificador remoto se crea correctamente y si la enumeración devuelta coincide con la esperada. También estoy separando trazas antiguas de los eventos generados durante la prueba actual.
+
+Revisando los datos
+
+Estoy intentando confirmar si el identificador remoto se crea con la clase esperada o si las trazas mezclan ejecuciones anteriores. Después compararé la inicialización, la creación y la consulta del actor para localizar la discrepancia.
+
+Verificada la secuencia y revisados los datos
+
+Buscando en la web
+
+Aclarando la prueba
+
+He confirmado dos puntos clave: los mensajes del gestor aparecen en la salida de error, no en el archivo principal, y la prueba sintética usa el mismo flujo de creación. También revisaré la validez persistente de los identificadores.
+
+Evaluando el diagnóstico
+
+La creación nativa del actor remoto parece funcionar: devuelve una referencia válida y la enumeración esperada. Las creaciones repetidas apuntan a reinicios del ciclo de vida, pero necesito distinguir expiración, limpieza o reintentos.
+
+Aclarada la prueba y evaluado el diagnóstico
+
+Diagnostiqué el spawn remoto y su ciclo de vida concurrente
+
+Ha pensado durante 3m 15s
+
+Ya crucé el branch, el chat ChatGPT-Analiza el repositorio-20260923-1908.txt y el client.log actualizado. El estado actual es bastante más claro que el que dejaba entrever el contexto anterior.
+
+Diagnóstico actual
+
+La creación nativa del actor remoto ya está funcionando.
+
+El client.log demuestra repetidamente esta secuencia para el jugador sintético 65000:
+
+CREATE_ACTOR_IN_LAYOUT
+  actorName=FrontierRemote_65000
+  actorEnum=837
+  result=0x1000000FC
+
+IS_ACTOR_VALID actor=0x000000FC result=1
+
+GET_ACTOR_ENUM actor=0xFC result=0x345 enum=837
+
+Eso aparece 14 veces para FrontierRemote_65000, entre los ticks ~8871 y ~10551. El enum 837 corresponde al ACTOR_MPPLAYER01 que estamos intentando usar. Esto está respaldado por rdr_bridge.cpp actual y por el tracer startup_native_tracer.cpp.
+
+Por tanto, el problema ya no está en CREATE_ACTOR_IN_LAYOUT devolviendo un actor inválido.
+
+Lo que además queda demostrado
+
+El test sintético está funcionando hasta llegar al RemotePlayerManager:
+
+[FrontierClient] solo remote-player test enabled
+[FrontierClient] snapshot tick=... players=2 remoteEntities=1
+
+Hay 1.270 snapshots con players=2 remoteEntities=1.
+
+Además, el actor local termina resolviéndose correctamente:
+
+[FrontierClient] local-player state replication active position=(-839.76, 92.5466, 2372.67)
+[FrontierClient] local-player ready chain ...
+
+Y el dispatcher del game thread también queda conectado:
+
+[FrontierSession] native invoker initialized
+[FrontierSession] game-thread dispatcher attached
+
+Es decir, la cadena general:
+
+servidor
+  ↓
+snapshot
+  ↓
+inyección playerId=65000
+  ↓
+RemotePlayerManager
+  ↓
+RdrBridge
+  ↓
+game thread
+  ↓
+CREATE_ACTOR_IN_LAYOUT
+
+está efectivamente ejecutándose.
+
+remote_player_manager.cpp@405a7bff... y rdr_bridge.cpp@8f4d1c4....
+
+Hay un error importante en el análisis anterior
+
+El chat anterior esperaba encontrar esto en client.log:
+
+[FrontierRemotePlayer] spawned ...
+
+Pero ese mensaje nunca se escribe en client.log.
+
+En remote_player_manager.cpp, tanto el éxito como el fallo se imprimen con:
+
+std::fprintf(stderr, ...)
+
+mientras que client_runtime.cpp usa log_line() para escribir en:
+
+%LOCALAPPDATA%\FrontierMP\logs\client.log
+
+Por eso el resultado:
+
+[FrontierRemotePlayer] count = 0
+
+no significa que ensure_spawned() no haya funcionado.
+
+Significa simplemente que estamos mirando un canal de log distinto.
+
+Esto es importante porque el client.log tampoco nos permite distinguir actualmente entre:
+
+spawn_remote_actor() -> true
+
+y:
+
+spawn_remote_actor() -> false
+
+aunque el native tracer sí demuestra que CREATE_ACTOR_IN_LAYOUT llegó a ejecutarse y produjo actores válidos.
+
+El detalle más sospechoso
+
+Hay 14 creaciones del mismo FrontierRemote_65000.
+
+Por ejemplo:
+
+trace=0  actorRef=...0FC
+trace=1  actorRef=...102
+trace=2  actorRef=...108
+trace=3  actorRef=...10E
+trace=4  actorRef=...10E
+trace=5  actorRef=...119
+trace=6  actorRef=...34A
+...
+trace=24 actorRef=...F3C
+trace=25 actorRef=...FDD
+...
+trace=30 actorRef=...1253
+
+Eso no es el comportamiento esperado de un único RemotePlayer.
+
+Una vez que ensure_spawned() tiene éxito, hace:
+
+player.actor = created;
+
+y en las siguientes actualizaciones:
+
+if (player.actor.valid()) return true;
+
+Por lo tanto, el mismo RemotePlayer no debería volver a llamar a spawn_remote_actor().
+
+Y hay otro dato fuerte: el snapshot no está perdiendo al jugador remoto de forma normal.
+
+kRemotePlayerGraceMs = 750.
+
+El protocolo tiene:
+
+kServerTickRate = 20;
+
+y el mayor salto observado entre snapshots es de 5 ticks:
+
+9218 -> 9223
+
+que equivale a unos 250 ms, muy por debajo de los 750 ms de gracia.
+
+Así que la explicación:
+
+"el fake player desapareció por timeout y luego volvió"
+
+no encaja con los datos del log.
+
+Qué significa esto
+
+Quedan esencialmente dos posibilidades importantes.
+
+1. spawn_remote_actor() está creando el actor pero su llamada al manager termina siendo considerada fallida
+
+Esta es actualmente una hipótesis fuerte.
+
+submit_and_wait() usa un timeout de 500 ms:
+
+gameThreadDispatcher_.submit_and_wait(..., 500u, ...)
+
+Si el game thread no procesa la tarea dentro de ese tiempo, el hilo del cliente puede recibir:
+
+game-thread task timed out
+
+mientras que la tarea puede llegar a ejecutarse después.
+
+Eso produciría exactamente un patrón peligroso:
+
+RemotePlayer intenta spawn
+        ↓
+task enviada al game thread
+        ↓
+timeout en el caller
+        ↓
+manager cree que falló
+        ↓
+manager reintenta
+        ↓
+la tarea anterior finalmente ejecuta CREATE_ACTOR
+        ↓
+otro retry vuelve a CREATE_ACTOR
+
+El tracer mostraría muchos CREATE_ACTOR_IN_LAYOUT válidos, aun cuando RemotePlayerManager no haya registrado ningún spawn exitoso.
+
+El client.log actual no puede confirmar ni descartar esto, porque el resultado de ensure_spawned() se manda a stderr.
+
+2. El RemotePlayerManager está perdiendo/recreando el objeto RemotePlayer
+
+El código actual no muestra una ruta normal que lo explique:
+
+players_
+
+solo pierde elementos mediante remove_player() / clear().
+
+remove_player() se ejecuta por el grace timeout o por clear().
+
+Pero en el log no tenemos evidencia de una desconexión:
+
+[FrontierClient] server timeout; reconnecting
+
+ni similar.
+
+Tampoco hay un salto de snapshots suficientemente grande para justificar el grace timeout.
+
+Por eso esta segunda explicación actualmente tiene menos evidencia.
+
+Y hay otro bug real en el diseño
+
+Incluso independientemente de las recreaciones, RemotePlayerManager tiene este problema:
+
+if (player.actor.valid()) return true;
+
+valid() solamente comprueba:
+
+actorHandle != 0
+
+No comprueba que el actor siga vivo/activo en el engine.
+
+Una vez creado el actor:
+
+actorHandle = 0x...
+
+queda considerado válido para siempre, aunque RDR lo destruya internamente.
+
+Así que falta un mecanismo de este tipo:
+
+handle no nulo
+       +
+IS_ACTOR_VALID(handle)
+       ↓
+¿sigue existiendo?
+       ↓
+no → limpiar y respawn
+
+No creo que esto explique por sí solo las 14 creaciones observadas, porque el manager actual no tiene una ruta para volver a crear simplemente porque el actor haya muerto. Pero sí es un defecto que tendremos que solucionar después.
+
+También corregiría el streaming
+
+El chat anterior dijo que habíamos replicado completamente el flujo Lua.
+
+No es exacto.
+
+El Lua hace conceptualmente:
+
+STREAMING_REQUEST_ACTOR(...)
+while not STREAMING_IS_ACTOR_LOADED(...) do
+    thread.wait(0)
+end
+CREATE_ACTOR_IN_LAYOUT(...)
+
+El C++ actual hace:
+
+STREAMING_REQUEST_ACTOR(...)
+
+STREAMING_IS_ACTOR_LOADED(...)
+
+if (!loadedResult) {
+    error = "remote actor asset still loading";
+    return;
+}
+
+Es decir, solo consulta una vez.
+
+Eso puede provocar reintentos innecesarios durante el streaming.
+
+No parece ser la causa principal de este log concreto, porque sí vemos posteriormente actores creados correctamente, pero la implementación no reproduce exactamente el comportamiento probado del resource.
+
+rdr_bridge.cpp@8f4d1c4....
+
+Otro hallazgo: el 0x321 no es nuestro remote actor
+
+Esto corrige una interpretación del contexto anterior.
+
+En varias partes del log aparece:
+
+GET_ACTOR_ENUM actor=0x321 result=0 enum=0
+
+Pero ese actor aparece en:
+
+ctx=0x14F320
+
+mientras que nuestros FrontierRemote_65000 aparecen en:
+
+ctx=0x14ED10
+
+y además pertenecen a otro flujo.
+
+Por tanto:
+
+0x321
+
+no es evidencia de que nuestro remote actor haya fallado.
+
+Es actividad del actor/player manager del propio juego.
+
+La rotación también está mejor de lo que parecía
+
+La corrección anterior sí quedó reflejada en el tracer.
+
+Nuestro C++ produce:
+
+orient=(218.125000,0.000000,0.000000)
+
+pero hay una diferencia importante respecto del ejemplo Lua.
+
+El Lua hace:
+
+vector3(0.0, heading + 180.0, 0.0)
+
+mientras el test sintético está generando el yaw directamente y el C++ lo empaqueta como:
+
+args[5] = pack_vec2(spawnState.yaw, 0.0f);
+args[6] = float_bits(0.0f);
+
+Eso ya coincide con el formato de Vector3 que dedujimos del tracer, pero todavía no estamos aplicando el +180 del resource Lua.
+
+Eso puede afectar hacia dónde mira el actor, pero no explica que CREATE_ACTOR_IN_LAYOUT genere 14 actores válidos.
+
+El punto en el que estamos ahora
+
+Yo separaría el problema en estas capas:
+
+[OK] conexión
+[OK] snapshots
+[OK] player sintético 65000
+[OK] RemotePlayerManager recibe el jugador
+[OK] game-thread dispatcher
+[OK] native invoker
+[OK] CREATE_ACTOR_IN_LAYOUT
+[OK] ActorRef no nulo
+[OK] IS_ACTOR_VALID = 1
+[OK] GET_ACTOR_ENUM = 837
+
+[NO CONFIRMADO] ensure_spawned() retorna true
+[NO CONFIRMADO] actor queda almacenado establemente en RemotePlayer
+[NO CONFIRMADO] TELEPORT_ACTOR_WITH_HEADING funciona
+[NO CONFIRMADO] actor es visualmente renderizado
+[NO CONFIRMADO] actor permanece vivo en el engine
+
+Eso cambia bastante el diagnóstico.
+
+Ya no estamos investigando "cómo crear un actor".
+
+Estamos investigando por qué el ciclo de vida del RemotePlayer no queda estable después de una creación que el engine claramente acepta.
+
+Qué haría como siguiente cambio
+
+Antes de tocar más natives, haría una modificación de instrumentación muy pequeña:
+
+remote_player_manager.cpp debe escribir en client.log, no solamente en stderr, estos cuatro eventos:
+
+spawn attempt playerId=65000
+spawn success playerId=65000 actor=...
+spawn failed playerId=65000 error=...
+remove playerId=65000
+
+Y rdr_bridge.cpp debe registrar explícitamente:
+
+spawn_remote_actor begin
+IS_ACTORENUM_INSTALLED result
+STREAMING_REQUEST_ACTOR result
+STREAMING_IS_ACTOR_LOADED result
+CREATE_ACTOR_IN_LAYOUT result
+IS_ACTOR_VALID result
+GET_ACTOR_ENUM result
+submit_and_wait completed/timeout
+spawn_remote_actor return true/false
+
+Con eso podremos distinguir inmediatamente entre:
+
+A) el actor se crea y el manager lo conserva
+
+y:
+
+B) el actor se crea pero `submit_and_wait()` termina en timeout/error
+
+y:
+
+C) el manager está eliminando/recreando el RemotePlayer
+
+y:
+
+D) el actor se crea correctamente pero posteriormente falla el transform/visualización
+
+Mi lectura del log actual es que A no está demostrado y B es ahora la hipótesis técnica que merece comprobarse primero, mientras que la parte nativa de creación ya está suficientemente demostrada como funcional.
+
+Fuentes del código analizado: client_runtime.cpp fe892d2..., remote_player_manager.cpp 405a7bf..., rdr_bridge.cpp 8f4d1c4..., game_thread_dispatcher.cpp fecd065..., startup_native_tracer.cpp 643f9bcb...; client.log SHA 001e1f94....
+
+## Prompt:
+23/9/2026, 19:16:37
+
+Yo cuando ejecuté el cliente vi al actor dando vueltas a mi alrededor, pero sin locomocion, se "tpeaba"
+
+## Response:
+23/9/2026, 19:16:42
+
+Eso cambia el diagnóstico: la creación y el render ya están probados visualmente. El problema que queda es de locomoción/actualización, no de spawn. Voy a cruzar el código de movimiento con los natives que ya usa el juego.
+
+Inspeccionando la arquitectura de nativos
+
+Ha pensado durante 17s
+
+Sí. Con ese dato visual, el diagnóstico se puede cerrar mucho más.
+
+Lo que viste —el actor aparece, orbita alrededor tuyo, pero se mueve a saltos/“teleports” y no tiene locomoción— es consistente con el estado actual del código.
+
+Qué está pasando
+
+El test sintético genera correctamente un PlayerState que cambia de posición y heading:
+
+fake.position.x += std::cos(angle) * kOrbitRadius;
+fake.position.z += std::sin(angle) * kOrbitRadius;
+
+fake.velocity = {
+    -std::sin(angle) * kOrbitRadius * kOrbitSpeedRadiansPerSecond,
+    0.0f,
+    std::cos(angle) * kOrbitRadius * kOrbitSpeedRadiansPerSecond
+};
+
+fake.yaw = ...
+
+Y RemotePlayerManager interpola ese estado.
+
+Pero cuando llega al actor de RDR, el código hace esencialmente esto:
+
+TELEPORT_ACTOR_WITH_HEADING(
+    actor,
+    position,
+    yaw
+);
+
+No existe en el flujo actual una orden de movimiento/locomoción equivalente.
+
+Por eso el comportamiento visual que describís tiene sentido:
+
+PlayerState cambia continuamente
+        ↓
+interpolación calcula posición nueva
+        ↓
+TELEPORT_ACTOR_WITH_HEADING
+        ↓
+actor aparece en la nueva posición
+        ↓
+RDR no está ejecutando una locomoción
+
+Resultado: se desplaza mediante sucesivos teleports, no mediante caminar/correr.
+
+Y hay una pista muy fuerte en nuestro propio repositorio
+
+La documentación de arquitectura que quedó en el repo ya identifica específicamente estos natives como relevantes:
+
+GET_ACTOR_VELOCITY
+SIMULATE_PLAYER_INPUT_GAIT
+SET_ACTOR_UPDATE_PRIORITY
+SET_ACTOR_STREAMING_HIGH_PRIORITY
+
+En particular:
+
+SIMULATE_PLAYER_INPUT_GAIT
+
+es exactamente el tipo de mecanismo que necesitamos investigar para transformar:
+
+posición + yaw + velocity + gait
+
+en movimiento/animación real del actor.
+
+Además, PlayerState ya transporta:
+
+Vec3 position;
+float yaw;
+Vec3 velocity;
+uint8_t gait;
+
+y el protocolo serializa esos campos. Es decir, la arquitectura ya contempla movimiento y gait; simplemente el RdrBridge todavía solo aplica transformaciones absolutas.
+
+Hay otro problema importante en el test actual
+
+El fake player tiene:
+
+fake.gait = 0;
+
+porque construimos:
+
+PlayerState fake{};
+
+y nunca asignamos gait.
+
+Por lo tanto, incluso aunque implementemos la llamada de locomoción, el test actual tampoco está indicando al actor:
+
+caminar / trotar / correr.
+
+El sim_client del repo, en cambio, usa explícitamente:
+
+state.gait = 2;
+
+Eso es una señal clara de que gait ya forma parte del modelo de movimiento previsto. tools/sim_client/main.cpp.
+
+Entonces hay dos niveles de movimiento que debemos separar
+
+Nivel 1 — sincronización espacial
+
+Ya funciona:
+
+posición
+yaw
+interpolación
+
+y lo vemos físicamente en pantalla.
+
+Nivel 2 — locomoción
+
+Todavía falta:
+
+velocity
+gait
+→ native(s) de movimiento/animación
+→ actor camina/corre de forma natural
+
+Este es ahora el trabajo relevante.
+
+No conviene simplemente eliminar el teleport
+
+Tampoco haría esto:
+
+// quitar TELEPORT_ACTOR_WITH_HEADING
+
+porque necesitamos alguna forma de corrección de deriva.
+
+El diseño apropiado probablemente será:
+
+┌── locomoción normal ──→ Actor
+PlayerState ───┤
+               └── corrección periódica ─→ Teleport
+
+Es decir:
+
+velocity + gait
+       ↓
+SIMULATE_PLAYER_INPUT_GAIT
+       ↓
+RDR mueve/amina el actor
+       ↓
+posición real ≈ posición deseada
+       ↓
+corrección ocasional con teleport
+
+Esto es muy distinto a teletransportarlo cada vez que llega un snapshot.
+
+Hay una cuestión que todavía tenemos que determinar técnicamente
+
+No sabemos todavía cómo espera RDR exactamente los argumentos de:
+
+SIMULATE_PLAYER_INPUT_GAIT
+
+Ni si gait=0/1/2/... corresponde directamente a las velocidades que estamos suponiendo.
+
+Tampoco tenemos todavía documentado en este branch el conjunto completo de natives de movimiento con sus hashes y firmas.
+
+Y no conviene inventarlos.
+
+La evidencia que tenemos actualmente permite afirmar:
+
+CREATE_ACTOR_IN_LAYOUT        ✅
+ACTOR_MPPLAYER01              ✅
+IS_ACTOR_VALID                 ✅
+GET_ACTOR_ENUM                 ✅
+posición remota visible        ✅
+interpolación                  ✅
+teleport con heading           ✅/aparentemente
+locomoción                     ❌
+gait aplicado al actor         ❌
+
+La lectura correcta de tu prueba
+
+Entonces la prueba que hiciste fue útil y, de hecho, salió bien en el sentido que necesitábamos:
+
+demostró que podemos crear un ACTOR_MPPLAYER01 visible como entidad remota y llevarlo a posiciones distintas alrededor del jugador.
+
+El "teleport" no es un fallo inesperado de CREATE_ACTOR_IN_LAYOUT. Es consecuencia directa de que todavía estamos implementando el remote player como:
+
+snapshot → transform absoluto
+
+en lugar de:
+
+snapshot → locomoción → corrección de posición
+
+Siguiente modificación que corresponde
+
+Yo ahora cambiaría el foco del branch a implementar el pipeline:
+
+PlayerState.velocity
+PlayerState.gait
+        ↓
+SIMULATE_PLAYER_INPUT_GAIT
+        ↓
+SET_ACTOR_UPDATE_PRIORITY
+SET_ACTOR_STREAMING_HIGH_PRIORITY
+        ↓
+corrección de posición únicamente cuando haya drift
+
+y mantendría TELEPORT_ACTOR_WITH_HEADING como mecanismo de resync, no como mecanismo principal de movimiento.
+
+Puedo localizar en el repo/tracer los hashes y la firma real de SIMULATE_PLAYER_INPUT_GAIT, compararla con las llamadas nativas ya observadas y preparar el cambio en rdr_bridge.cpp y el test sintético.
+
+## Prompt:
+23/9/2026, 19:30:28
+
+Okey avanza
+
+## Response:
+23/9/2026, 19:30:34
+
+Voy a seguir desde la evidencia visual: localizaré la implementación real de SIMULATE_PLAYER_INPUT_GAIT y las rutinas de update/streaming, y luego ajustaré el diagnóstico a lo que soporta realmente esta rama.
+
+Ya tenemos el dato que faltaba: la base de natives de RDR1 identifica SIMULATE_PLAYER_INPUT_GAIT como 0x0D77CC34 con cuatro argumentos, mientras que TELEPORT_ACTOR_WITH_HEADING está confirmado en 0xE4DE507C.
+
+Voy a cambiar la prueba de “posición como autoridad en cada frame” a “locomoción como mecanismo principal”, manteniendo el teletransporte solo como corrección cuando el actor se separa demasiado.
+
+Analizado el puente RDR y componentes de actores remotos
+
+Buscando la firma nativa
+
+Voy a verificar en fuentes públicas la firma exacta de la función nativa de RDR1 y contrastarla con la información del repositorio antes de proponer o aplicar cambios.
+
+Buscó la firma nativa
+
+Se ha buscado en 7 sitios web
+
+Obtuvo definiciones actuales del encabezado y tipos del puente
+
+Revisando la invocación
+
+Estoy comprobando cómo empaqueta el repositorio los argumentos nativos y qué representa cada parámetro de la función de RDR1. Quiero confirmar tipos y orden antes de modificar la implementación.
+
+Revisada la invocación
+
+Buscando en 2 sitios web
+
+Buscó recursos Lua y examinó la clase puente nativa
+
+Precisando la integración
+
+Estoy determinando si la función acepta directamente el identificador del actor remoto o si requiere un contexto de jugador. La implementación debe preservar la telemetría y evitar asumir una semántica que el repositorio aún no confirma.
+
+Precisada la integración
+
+Se ha buscado en 2 sitios web
+
+Implementado movimiento remoto con registros de depuración e interpolación
+
+Actualizado el movimiento remoto, reinicio de entrada y runtime del cliente
+
+Verificó métodos, commits, sincronización, invocación nativa y compilación de la rama
+
+Valorando compatibilidad
+
+Estoy considerando que la función podría exigir un jugador real, no cualquier actor remoto. Antes de aplicarla, verificaré esa compatibilidad y dejaré registrada cualquier limitación para evitar movimientos aparentemente correctos pero ineficaces.
+
+Evaluada la compatibilidad
+
+Comprobando la compatibilidad
+
+Estoy verificando si el movimiento nativo funciona con actores remotos genéricos o únicamente con entidades de jugador. También revisaré que la integración conserve la orientación, posición y telemetría existentes.
+
+Comprobada la compatibilidad
+
+Buscando "6A307D5F" "Frontier" actor layout
+
+Ha pensado durante 3m 19s
+
+He avanzado y dejé la rama game-thread/remote-actor-spawn-test-0.2.41 modificada. El último commit de esta iteración es 71103a80315ec578d83668bcaa88431d31fed92f.
+
+Qué cambió
+
+El flujo anterior era esencialmente:
+
+PlayerState
+   ↓
+interpolación
+   ↓
+TELEPORT_ACTOR_WITH_HEADING
+   ↓
+actor aparece en la posición objetivo
+
+Eso explica exactamente lo que viste: el actor existe y sigue la órbita, pero su movimiento visual es una sucesión de correcciones de posición.
+
+Ahora el flujo es:
+
+PlayerState
+   ↓
+heading
+   ↓
+SIMULATE_PLAYER_INPUT_GAIT
+   ↓
+locomoción del actor
+   ↓
+GET_POSITION
+   ↓
+solo si se desvía > 2.5 m → teleport de recuperación
+
+Añadí los natives:
+
+SIMULATE_PLAYER_INPUT_GAIT = 0x0D77CC34
+
+RESET_PLAYER_INPUT_GAIT = 0x4A701EE1
+
+SET_ACTOR_HEADING = 0xECE8520B
+
+GET_POSITION = 0x99BD9D6F
+
+La base de natives de RDR1 confirma esos hashes y TELEPORT_ACTOR_WITH_HEADING = 0xE4DE507C. (github.com)
+
+Además, el RemotePlayerManager ya no espera a que la posición cambie más de 0.02 m para actualizar: el camino de locomoción se ejecuta a la cadencia de 20 Hz que ya usa ClientRuntime.
+
+Para la prueba sintética añadí:
+
+fake.gait = 2;
+
+El propio sim_client de esta rama ya utilizaba gait = 2 junto con velocidad, así que estamos alineando ambas pruebas.
+
+Punto importante
+
+La firma histórica de RDR1 para SIMULATE_PLAYER_INPUT_GAIT está documentada como cuatro argumentos, pero sus parámetros permanecen sin nombrar. (GitHub)
+
+Por eso la rama está probando esta interpretación:
+
+actor, amount=1.0, gait, horizontalSpeed
+
+Es una hipótesis de ABI/parámetros, no algo que consideraría demostrado todavía.
+
+También hay una segunda incertidumbre: nuestro CREATE_ACTOR_IN_LAYOUT produce un actor donde el tracer había observado IS_ACTOR_PLAYER=0. Si SIMULATE_PLAYER_INPUT_GAIT exige internamente un actor respaldado por la infraestructura de Player, entonces tendremos que cambiar la estrategia de creación, no solo el movimiento.
+
+La próxima prueba debería producir en client.log entradas como:
+
+[FrontierRemoteMotion] gait actor=0x... gait=2 speed=2.400 yaw=...
+
+y las líneas hard correction deberían ser excepcionales, no una por actualización.
+
+Pásame el client.log de esta nueva prueba y lo contrasto con esos dos puntos: si SIMULATE_PLAYER_INPUT_GAIT está ejecutándose y si el actor realmente adquiere desplazamiento/locomoción o necesitamos pasar a CREATE_PLAYER_ACTOR_IN_LAYOUT.
+
+Sources:
+
+RDR-PC-Natives-DB/Natives.h at main · K3rhos/RDR-PC-Natives-DB · GitHub
+
+## Prompt:
+23/9/2026, 19:49:40
+
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.log el actor siguio moviendose alrededor mio sin hacer locomocion, y el jugador local era quien estaba teniendo el gait (que no lo movia, nose porque, pero cuando yo me intentaba mover la animacion se corta al milisegundo), nose si te sirva pero en fivem el simulate gait no sirve para nadie mas que el jugador local
+
+## Response:
+23/9/2026, 19:49:48
+
+Sí, ese dato cambia el diagnóstico: el síntoma apunta a que SIMULATE_PLAYER_INPUT_GAIT no está controlando el ActorRef remoto como suponíamos. Voy a verificarlo contra el log y aislar exactamente a qué actor está afectando.
+
+Tu observación encaja con la documentación que acabo de comprobar: SIMULATE_PLAYER_INPUT_GAIT pertenece al namespace PLAYER, no a ACTOR. Eso hace que nuestro último intento haya apuntado al subsistema equivocado.
+
+Además, voy a retirar el experimento con SIMULATE_PLAYER_INPUT_GAIT: no conviene dejar en la rama una llamada cuya semántica para un Actor remoto no está demostrada y que ya observamos interfiriendo con el jugador local.
+
+Inspeccioné logs y código de movimiento remoto
+
+Revisando el archivo
+
+Estoy intentando recuperar el contenido de client.log desde la URL proporcionada. La primera consulta no devuelve datos, así que estoy comprobando si la ruta, la rama o la indexación del repositorio están afectando el acceso.
+
+Revisado el archivo
+
+Buscando en la web
+
+Comparados cambios de código y commits, y recuperado client.log codificado
+
+Used container tool
+
+Comprobando la versión
+
+Sigo verificando si puedo obtener la versión actual de client.log. La referencia parece haber cambiado respecto a la revisión anterior, pero todavía no estoy recuperando contenido utilizable desde esa ruta.
+
+Comprobada la versión
+
+Buscando "FrontierRemoteMotion" "0x0D77CC34" github
+
+Verificó hashes y firmas nativas precisas del repositorio
+
+Reevaluando la hipótesis
+
+La evidencia sugiere que estoy interpretando mal el primer argumento: podría referirse al jugador y no al actor. Estoy descartando la ruta especulativa y evitando recomendar cambios que dejen el código en un estado incorrecto.
+
+Verificando la regresión
+
+Estoy comparando los cambios recientes con la versión anterior para aislar la regresión. Primero quiero restaurar un estado estable y después investigar una vía de locomoción remota que no interfiera con el movimiento local.
+
+Reevaluada la hipótesis y verificada la regresión
+
+Se ha buscado en 7 sitios web
+
+Buscando movimiento seguro
+
+Estoy buscando primitivas de movimiento específicas para actores remotos, en lugar de reutilizar una llamada cuyo contexto parece pertenecer al jugador local. Quiero confirmar la firma y el alcance antes de tocar más código.
+
+Se ha buscado en 2 sitios web
+
+Obtenido client.log del commit ce8d486
+
+Restaurado el código original y la compatibilidad de locomoción remota
+
+Explorando actores remotos
+
+Estoy evaluando si los actores remotos deben integrarse en el subsistema de jugadores para aceptar entradas de movimiento. Antes de recomendarlo, necesito confirmar qué identificador devuelve la creación y cómo afecta al control existente.
+
+Se buscó en 1 sitio web
+
+Revisado actores remotos genéricos y pruebas relacionadas
+
+Buscando "0x6A307D5F" RDR1
+
+Buscó referencias y documentación arquitectónica de CreatePlayerActor
+
+Proponiendo una prueba controlada
+
+Estoy considerando crear un actor mediante la ruta destinada a jugadores y comprobar si el motor lo reconoce como entidad controlable. Quiero validar esa hipótesis con una prueba aislada antes de modificar la locomoción general.
+
+Propuse una prueba controlada
+
+Aislando la prueba
+
+Estoy valorando una prueba mínima: verificar si el actor remoto pertenece realmente al subsistema de jugadores y registrar esa diferencia antes de aplicar controles. Así puedo confirmar la hipótesis sin alterar la locomoción local.
+
+Aisló la prueba
+
+Se ha buscado en 10 sitios web
+
+Confirmando cambios y estado actual del branch
+
+Ha pensado durante 2m 26s
+
+Sí, sirve mucho. Y de hecho el dato de FiveM coincide con lo que acabamos de comprobar en RDR1.
+
+El diagnóstico cambia
+
+SIMULATE_PLAYER_INPUT_GAIT está catalogado dentro de PLAYER, mientras que las primitivas que reciben directamente un Actor están en el bloque ACTOR. La base de natives de RDR1 conserva SIMULATE_PLAYER_INPUT_GAIT como:
+
+SIMULATE_PLAYER_INPUT_GAIT(Any p0, Any p1, Any p2, Any p3)
+
+y no como una API de locomoción genérica para cualquier Actor. (GitHub)
+
+Además, la referencia histórica describe el concepto como simulación de input del jugador. En GTA/FiveM la firma moderna incluso tipa el primer parámetro como Player, no Actor. (LCPDFR)
+
+Eso explica perfectamente tu observación:
+
+SIMULATE_PLAYER_INPUT_GAIT(...)
+        ↓
+subsistema PLAYER
+        ↓
+jugador local recibe gait/input
+        ↓
+tu personaje empieza a animarse o su locomoción queda interferida
+
+mientras nuestro:
+
+ActorRef remoto = 0x...
+        ↓
+SIMULATE_PLAYER_INPUT_GAIT(ActorRef, ...)
+
+no constituye una forma válida de conducir locomoción del actor remoto.
+
+El hecho de que al intentar moverte tu animación se corte casi inmediatamente es especialmente revelador: estábamos metiéndonos en el estado de input del jugador local.
+
+Ya retiré ese experimento
+
+Quité de la rama las llamadas a SIMULATE_PLAYER_INPUT_GAIT, RESET_PLAYER_INPUT_GAIT y toda la ruta update_remote_actor_motion que habíamos añadido. El estado funcional vuelve a ser el anterior, sin ese efecto colateral.
+
+Dejé solamente instrumentación diagnóstica en rdr_bridge.cpp.
+
+Ahora, cuando creemos el actor remoto, queremos descubrir algo mucho más importante:
+
+ActorRef
+ ├── IS_ACTOR_PLAYER
+ ├── IS_ACTOR_LOCAL_PLAYER
+ ├── GET_ACTOR_SLOT
+ └── GET_ACTOR_UPDATE_PRIORITY
+
+Eso nos va a decir si el ACTOR_MPPLAYER01 que estamos creando con CREATE_ACTOR_IN_LAYOUT es simplemente un actor visual normal o si puede quedar asociado al sistema interno de Player/Slot.
+
+Y aquí está probablemente el siguiente paso correcto
+
+La propia base de RDR1 distingue claramente:
+
+PLAYER
+    GET_PLAYER_ACTOR(Player)
+    SET_PLAYER_CONTROL(Player, ...)
+    SIMULATE_PLAYER_INPUT_GAIT(Player, ...)
+
+ACTOR
+    SET_ACTOR_HEADING(Actor, ...)
+    GET_POSITION(Actor)
+    IS_ACTOR_PLAYER(Actor)
+    IS_ACTOR_LOCAL_PLAYER(Actor)
+    GET_ACTOR_SLOT(Actor)
+
+(GitHub)
+
+Por tanto, no deberíamos seguir intentando “mover un Actor como si fuera un Player”.
+
+La arquitectura que tiene más sentido investigar ahora es:
+
+PlayerState remoto
+       ↓
+Actor remoto
+       ↓
+AI / Action / Task / gait del ACTOR
+       ↓
+locomoción real
+       ↓
+posición resultante
+       ↓
+corrección de red ocasional
+
+Hay una pista importante en la documentación antigua: RDR1 tiene ACTOR_POP_NEXT_GAIT, además de SET_ACTOR_UPDATE_PRIORITY y SET_ACTOR_STREAMING_HIGH_PRIORITY. No sabemos todavía qué parte exacta de la locomoción controla ACTOR_POP_NEXT_GAIT, pero pertenece al lado ACTOR, que es precisamente lo que necesitamos investigar. (Red Mods Docs)
+
+Y hay una segunda vía todavía más interesante: el propio ecosistema de scripts de RDR1 demuestra que los actores pueden recibir tareas de movimiento como goto, en vez de teleportarse. Eso apunta a que la solución final probablemente esté en el sistema de tareas/ActionScript del actor, no en PLAYER input. (GitHub)
+
+La rama queda ahora en este estado, con la instrumentación nueva en d60095611f501983d29523fb1e3a11fd13cac027; el siguiente experimento útil es medir IS_ACTOR_PLAYER/IS_ACTOR_LOCAL_PLAYER/GET_ACTOR_SLOT del remoto y, a partir de ahí, atacar el mecanismo de locomoción de ACTOR en lugar de volver a tocar el input del jugador local.
+
+Sources:
+
+RDR-PC-Natives-DB/Natives.h at main · K3rhos/RDR-PC-Natives-DB · GitHub
+
+SIMULATE_PLAYER_INPUT_GAIT - PLAYER - LCPDFR.com
+
+RDRMP Docs
+
+## Prompt:
+23/9/2026, 20:33:25
+
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.log
+
+## Response:
+23/9/2026, 20:33:55
+
+El log sí tiene información decisiva. La llamada de gait se ejecutó, pero el diagnóstico de posición también revela un fallo de ABI en nuestra prueba de GET_POSITION; no debemos interpretar ese 0,0,0 como la posición real del actor.
+
+Analizando el registro
+
+Estoy relacionando los valores de actor con el jugador local y revisando la semántica de los argumentos nativos. La posición cero sugiere una llamada ABI incorrecta, mientras que los diagnósticos usados no cubrían la ruta de creación remota.
+
+Analizado el registro
+
+Recuperado el contenido del blob de GitHub
+
+Inspeccionado el registro y analizados los argumentos nativos del actor local
+
+Ha pensado durante 36s
+
+Sí. Este client.log confirma bastante más de lo que parecía.
+
+Lo que demuestra el log
+
+Durante esa ejecución todavía estaba activa nuestra prueba con SIMULATE_PLAYER_INPUT_GAIT. Hay 1.868 eventos de FrontierRemoteMotion.
+
+Al principio aparece:
+
+[FrontierRemoteMotion] gait actor=0x000000FC gait=2 speed=2.400 yaw=333.837
+
+y enseguida:
+
+[FrontierRemoteMotion] hard correction actor=0x000000FC
+actual=(0.00,0.00,0.00)
+target=(-1.76,0.00,-3.59)
+
+Después ocurre lo mismo con 0x102, 0x108, 0x10E, 0x114, etc., y finalmente con 0x1001.
+
+Esto es muy importante: el movimiento que viste sigue siendo teleport/corrección, no locomoción.
+
+La prueba anterior intentaba evitar el teleport normal, pero nuestra propia comprobación de posición estaba fallando y provocaba la corrección prácticamente continuamente.
+
+Hay otro fallo interesante
+
+El GET_PLAYER_ACTOR trazado por el juego devuelve:
+
+GET_PLAYER_ACTOR player=992 result=0x3E0
+
+Mientras que nuestra prueba de gait usa:
+
+actor=0xFC
+actor=0x102
+...
+actor=0x1001
+
+Por tanto, esos valores no coinciden con el ActorRef que el juego está devolviendo para GET_PLAYER_ACTOR.
+
+Y eso refuerza mucho tu observación sobre SIMULATE_PLAYER_INPUT_GAIT: aunque nosotros le pasemos algo que creemos que es un actor, no tenemos evidencia de que el native lo esté tratando como Actor. Puede estar resolviendo internamente el Player local o utilizando otro contexto global de input.
+
+El hecho de que al moverte tú la animación se cortase inmediatamente es compatible con esa hipótesis.
+
+Hay una conclusión aún más fuerte
+
+Nuestro GET_POSITION tampoco estaba correctamente entendido.
+
+El resultado:
+
+actual=(0,0,0)
+
+repetido cientos de veces no puede interpretarse como que el actor realmente estuviera en (0,0,0), porque el actor era visible alrededor de tu personaje.
+
+Eso significa que esta llamada:
+
+GET_POSITION(actor, &Vec3)
+
+no está utilizando la ABI que asumimos.
+
+Por tanto, el experimento anterior mezcló dos cosas no verificadas:
+
+SIMULATE_PLAYER_INPUT_GAIT
+        ↓
+ABI dudosa
+
+GET_POSITION
+        ↓
+ABI dudosa
+
+        ↓
+hard correction
+        ↓
+TELEPORT
+
+y eso hace que el resultado visual no sirva para evaluar correctamente la locomoción.
+
+Lo que sí sabemos ahora
+
+Tenemos tres niveles bastante claros:
+
+1. CREATE_ACTOR_IN_LAYOUT
+   ✅ funciona
+   ✅ actor visible
+   ✅ actorEnum = 837
+
+2. TELEPORT_ACTOR_WITH_HEADING
+   ✅ funciona
+   ✅ mueve el actor
+
+3. locomoción auténtica del actor remoto
+   ❌ todavía no identificada
+
+Y además tenemos una señal muy buena:
+
+ACTOR
+ ├─ IS_ACTOR_PLAYER
+ ├─ GET_ACTOR_ENUM
+ ├─ GET_POSITION
+ ├─ SET_ACTOR_HEADING
+ └─ ...
+
+versus:
+
+PLAYER
+ ├─ GET_PLAYER_ACTOR
+ ├─ SIMULATE_PLAYER_INPUT_GAIT
+ └─ ...
+
+Así que el siguiente paso correcto no es seguir probando variantes de SIMULATE_PLAYER_INPUT_GAIT.
+
+Hay una pista importante en el propio diseño de RDR1
+
+Para conseguir un jugador remoto real, probablemente necesitamos que el objeto exista dentro de la infraestructura de Player, no solamente como:
+
+CREATE_ACTOR_IN_LAYOUT(ACTOR_MPPLAYER01)
+
+Nuestro tracer ya mostró que ese actor se crea correctamente, pero eso no significa que el motor lo haya registrado como un jugador.
+
+Eso encaja con el patrón:
+
+CREATE_ACTOR_IN_LAYOUT
+       ↓
+Actor genérico
+       ↓
+render / transform
+       ↓
+NO Player controller
+       ↓
+NO locomoción de Player
+
+Mientras que queremos algo más parecido a:
+
+Player/Slot
+       ↓
+PlayerActor
+       ↓
+Actor
+       ↓
+movement controller / tasks / animation
+
+Y ahí CREATE_PLAYER_ACTOR_IN_LAYOUT vuelve a ser especialmente interesante.
+
+No deberíamos descartarlo aunque todavía no conozcamos completamente su ABI.
+
+Hay además un error de análisis que ya podemos corregir
+
+La instrumentación que añadí para actorSlot/isLocalPlayer no aparece en este log porque estaba dentro de request_remote_actor_test(), mientras que el actor que realmente estás viendo procede de spawn_remote_actor().
+
+Así que ese log no nos dice todavía si FrontierRemote_65000 está asociado a un Player slot.
+
+Ese es precisamente el dato que necesitamos obtener antes de seguir.
+
+Mi siguiente movimiento sería instrumentar spawn_remote_actor() para comparar directamente:
+
+remote ActorRef
+→ IS_ACTOR_PLAYER
+→ GET_PLAYER_ACTOR para slots válidos
+→ relación Actor ↔ Player/slot
+
+y, en paralelo, capturar el ABI real de CREATE_PLAYER_ACTOR_IN_LAYOUT observando una creación de jugador legítima. Eso nos permitiría intentar crear el remoto como PlayerActor real, que es la vía que ahora tiene más sentido.
+
+## Prompt:
+23/9/2026, 20:50:21
+
+Pero no podemos crear players nativamente, estamos haciendo algo propio acordate
+
+## Response:
+23/9/2026, 20:50:39
+
+Correcto. Nuestro “player remoto” es una entidad propia de FrontierMP; no queremos registrar ni fabricar Player nativos de RDR1. Voy a reencuadrar la investigación exclusivamente alrededor del Actor que ya conseguimos crear.
+
+Replanteé la locomoción usando exclusivamente actores personalizados
+
+Ha pensado durante 21s
+
+Sí. Esa era una premisa importante y mi sugerencia anterior de CREATE_PLAYER_ACTOR_IN_LAYOUT iba en la dirección equivocada.
+
+Nuestro modelo es:
+
+FrontierMP PlayerState
+        ↓
+playerId propio
+        ↓
+ACTOR de RDR1
+        ↓
+nuestra sincronización / interpolación
+
+El playerId = 65000 no es un Player nativo de RDR1. Es un jugador de nuestro protocolo que representamos visualmente mediante un Actor.
+
+Por tanto, descartamos como arquitectura:
+
+Player nativo de RDR1
+└── SIMULATE_PLAYER_INPUT_GAIT
+
+y también la idea de “crear un Player nativo por cada jugador de FrontierMP”.
+
+Qué debemos buscar realmente
+
+Necesitamos encontrar una forma de hacer esto:
+
+PlayerState remoto
+   ├── position
+   ├── velocity
+   ├── yaw
+   └── gait
+        ↓
+     ACTOR remoto
+        ↓
+ movimiento/locomoción propia del Actor
+        ↓
+ animación de caminar/correr
+        ↓
+ posición resultante
+
+El Actor ya está demostrado: CREATE_ACTOR_IN_LAYOUT nos devuelve un ActorRef, IS_ACTOR_VALID lo acepta y GET_ACTOR_ENUM devuelve 837.
+
+El problema pendiente es cómo introducir movimiento en ese Actor sin pasar por el subsistema PLAYER.
+
+Y el log actual nos da otra pista: las correcciones están ocurriendo continuamente porque nuestro camino experimental de GET_POSITION también tenía una ABI incorrecta. Así que antes de volver a tocar locomoción necesitamos recuperar correctamente posición/velocidad reales del Actor remoto.
+
+La investigación correcta ahora queda reducida a tres cosas:
+
+1. Actor → posición real
+2. Actor → velocidad / estado de movimiento
+3. Actor → API de locomoción/tarea que NO sea PLAYER
+
+No tocaría CREATE_PLAYER_ACTOR_IN_LAYOUT ni volvería a usar SIMULATE_PLAYER_INPUT_GAIT para esta arquitectura.
+
+El siguiente paso útil es localizar en RDR1 la primitiva de movimiento/tarea que acepta Actor directamente y reproducir mediante tracer cómo la usa el propio juego.
+
+## Prompt:
+23/9/2026, 20:55:25
+
+Hace busqueda exaustiva de como hacer locomocion a un actor, fijate si sirven las funciones de AI
+
+## Response:
+23/9/2026, 20:55:33
+
+Voy a hacer la búsqueda desde dos frentes: el código de FrontierMP y las bases/documentación de natives de RDR1, incluyendo AI, TASK, ACTOR, GAIT, GOTO, PATH, FOLLOW y movimiento. Luego separaré APIs verificadas de simples candidatos.
+
+La búsqueda ya encontró algo más prometedor que gait: RDR1 tiene un subsistema TASK separado del PLAYER, con tareas explícitas de movimiento y overrides de velocidad/tipo de movimiento. Ahora estoy comprobando sus firmas y qué prerrequisitos necesita el Actor.
+
+La lista exhaustiva ya muestra que el motor tiene un sistema de TASK claramente separado del PLAYER. Ahora voy a contrastar esos natives con investigación de estructuras/implementación del actor para saber si el AI realmente conduce el Mover.
+
+Se buscó en 1 sitio web
+
+Consultada documentación y archivos GitHub sobre tareas, entidades y movimiento
+
+Investigando tareas nativas
+
+Estoy comprobando las firmas y el contexto de las funciones de tareas de IA para confirmar si aceptan cualquier personaje y cuántos argumentos requieren. Las fuentes actuales confirman que existen, pero aún necesito validar la semántica exacta.
+
+Investigó tareas nativas
+
+Se buscó en 1 sitio web
+
+Buscando "actor_pop_next_gait" "RDRMP" Lua
+
+Inspeccioné recursos RDRMP y busqué nombres de tareas
+
+Se ha buscado en 3 sitios web
+
+Consultada documentación de GitHub y funciones nativas de tareas, entidades e IA
+
+Contrastando las firmas
+
+Estoy comparando documentación y ejemplos de uso para precisar cómo funcionan estas tareas de IA. Las fuentes confirman su existencia, pero todavía no aclaran por completo sus tipos de argumentos ni su comportamiento exacto.
+
+Contrastadas las firmas
+
+Buscando RDR1 native "ACTOR_POP_NEXT_GAIT" EAE75C6F
+
+Investigó la semántica de IA y el movimiento en RDR1
+
+Evaluando fuentes disponibles
+
+Estoy ampliando la búsqueda hacia repositorios de scripts y documentación relacionada para encontrar ejemplos prácticos de estas tareas. Si no aparecen firmas fiables, separaré claramente los hechos confirmados de las hipótesis.
+
+Evaluadas las fuentes disponibles
+
+Se ha buscado en 2 sitios web
+
+Investigados natives y tareas de movimiento de RDR1 en el repositorio
+
+Se buscó en 1 sitio web
+
+Analizadas las tareas y el movimiento en RDR2
+
+Ha pensado durante 4m 20s
+
+Sí. Hice la búsqueda bastante más amplia y la conclusión cambia de forma importante:
+
+RDR1 sí tiene un camino de locomoción para un Actor que no depende de convertirlo en un Player nativo. El candidato principal no es SIMULATE_PLAYER_INPUT_GAIT; es el sistema TASKS + MOVER, con AI y NAV como soporte. La base pública de natives de RDR1 y la documentación de RDRMP exponen precisamente estas familias. (GitHub)
+
+1. La pieza que más nos interesa: TASKS
+
+La documentación de RDRMP tiene una familia completa de tareas que trabajan sobre actores:
+
+Función
+Hash
+Relevancia
+TASK_FOLLOW_ACTOR
+0x12F0911A
+Muy alta
+TASK_GO_TO_COORD
+0x8C574832
+Muy alta
+TASK_GO_TO_COORD_NONSTOP
+0xD62D6CE5
+Muy alta
+TASK_GO_TO_COORD_AND_STAY
+0x8636587A
+Alta
+TASK_GO_TO_COORD_PRECISELY
+0x6BDB3257
+Alta
+TASK_GO_NEAR_ACTOR
+0x3EB7590C
+Alta
+TASK_GO_NEAR_COORD
+0x55EC940B
+Alta
+TASK_FOLLOW_PATH
+0x973DCC5B
+Alta
+TASK_FOLLOW_PATH_FROM_NEAREST_POINT
+0x9591A996
+Alta
+TASK_WANDER
+0x17BCA08E
+Muy buena para prueba
+TASK_WANDER_IN_BOX
+0x6840D3C1
+Buena
+TASK_WANDER_IN_VOLUME
+0xA5F2BFAA
+Buena
+
+Hay una señal especialmente fuerte: TASK_FOLLOW_ACTOR aparece tipado explícitamente como:
+
+TASK_FOLLOW_ACTOR(Actor actor, Actor followActor)
+
+Es decir, no necesita un Player; recibe dos Actor. TASK_STAND_STILL también tiene su primer parámetro tipado como Actor. Documentación RDRMP de TASKS
+
+Eso encaja perfectamente con nuestra arquitectura:
+
+Frontier PlayerState
+       ↓
+Actor RDR1
+       ↓
+TASK
+       ↓
+Mover
+       ↓
+locomoción
+
+La prueba que haría primero
+
+No empezaría todavía con TASK_GO_TO_COORD, porque su base pública deja los parámetros como Any y no conocemos todavía su ABI exacta.
+
+Empezaría con:
+
+TASK_FOLLOW_ACTOR(remoteActor, localActor);
+
+Son solamente dos Actor.
+
+Eso nos permitiría probar una cosa fundamental:
+
+¿Un ACTOR_MPPLAYER01 creado por CREATE_ACTOR_IN_LAYOUT puede ejecutar una tarea de locomoción del motor?
+
+Si vemos que el remoto camina hacia el jugador local con animación normal, queda demostrado que tenemos el mecanismo.
+
+Y lo mejor es que no toca para nada el Player nativo.
+
+2. El segundo componente: MOVER
+
+Aquí encontré algo que me parece todavía más importante.
+
+RDR1 expone:
+
+ENABLE_MOVER(actor)
+SET_MOVER_FROZEN(actor, false)
+IS_MOVER_FROZEN(actor)
+SUSPEND_MOVER(actor)
+
+con:
+
+ENABLE_MOVER              0xE29F0A39
+SET_MOVER_FROZEN          0x13E6B5EE
+IS_MOVER_FROZEN            0x9C12BD5A
+SUSPEND_MOVER             0x017D270E
+
+El concepto Mover es exactamente el tipo de subsistema que esperaría detrás de una locomoción física/animada del Actor. La base de natives lo expone directamente. (GitHub)
+
+Por eso ahora veo una cadena mucho más probable:
+
+CREATE_ACTOR_IN_LAYOUT
+        ↓
+Actor
+        ↓
+ENABLE_MOVER
+        ↓
+TASK_FOLLOW_ACTOR / TASK_GO_TO_COORD
+        ↓
+AI/Nav
+        ↓
+Mover
+        ↓
+posición + velocidad + gait
+
+Antes estábamos saltándonos casi toda esa cadena y escribiendo directamente el transform.
+
+3. Los natives de velocidad del Actor también son reales
+
+Hay otro grupo muy interesante:
+
+GET_ACTOR_VELOCITY          0xAD6AF65C
+GET_ACTOR_GAIT_TYPE         0xAC232F6E
+
+SET_ACTOR_SPEED             0x09D78931
+
+SET_ACTOR_MAX_SPEED         0x9CB01B27
+SET_ACTOR_MAX_SPEED_ABSOLUTE 0x950B8870
+
+SET_ACTOR_MIN_SPEED         0xA854EE99
+SET_ACTOR_MIN_SPEED_ABSOLUTE 0x04D4A734
+
+Y además:
+
+CLEAR_ACTOR_MAX_SPEED
+CLEAR_ACTOR_MIN_SPEED
+GET_ACTOR_MAX_SPEED
+GET_ACTOR_MAX_SPEED_ABSOLUTE
+GET_ACTOR_MIN_SPEED
+
+Esto es importante porque demuestra que el motor tiene estado de velocidad propio del Actor, separado de nuestro PlayerState.
+
+La intención futura podría ser:
+
+network velocity
+       ↓
+task destination / movement intent
+       ↓
+Actor movement
+       ↓
+GET_ACTOR_VELOCITY
+       ↓
+presentation validation
+
+No necesariamente copiar PlayerState.velocity directamente al Actor.
+
+4. El sistema de gait del Actor existe
+
+Encontré:
+
+ACTOR_POP_NEXT_GAIT       0xEAE75C6F
+ACTOR_SET_MAX_GAIT        0x1ABFBFA3
+RESET_ACTOR_GAITS         0xDCC91F8C
+GET_ACTOR_GAIT_TYPE       0xAC232F6E
+
+Esto es mucho más interesante para nosotros que SIMULATE_PLAYER_INPUT_GAIT.
+
+Hay una diferencia conceptual:
+
+SIMULATE_PLAYER_INPUT_GAIT
+        ↓
+simulación de input del jugador
+
+frente a:
+
+ACTOR_POP_NEXT_GAIT
+ACTOR_SET_MAX_GAIT
+GET_ACTOR_GAIT_TYPE
+        ↓
+estado de gait del Actor
+
+No tenemos todavía la semántica completa de esos parámetros, pero están en el lado correcto de la arquitectura.
+
+La base pública de natives confirma tanto SIMULATE_PLAYER_INPUT_GAIT como ACTOR_POP_NEXT_GAIT y las primitivas de velocidad del Actor. (GitHub)
+
+5. AI sí sirve, pero como complemento
+
+Aquí la búsqueda fue bastante clara.
+
+Tenemos:
+
+AI_ACTOR_FORCE_SPEED
+    0x70B409D5
+
+AI_ACTOR_SET_MATCH_WALK_SPEED_ENABLED
+    0x7387772C
+
+AI_ACTOR_FORCE_SPEED acepta explícitamente un Actor:
+
+AI_ACTOR_FORCE_SPEED(Actor actor, int p1)
+
+Eso es significativo. (Pastebin)
+
+Pero yo no lo trataría como el comando primario de movimiento.
+
+Mi lectura actual es:
+
+TASK
+ ↓
+decide hacia dónde / qué hacer
+
+AI
+ ↓
+condiciona cómo moverse
+
+MOVER
+ ↓
+ejecuta el desplazamiento
+
+GAIT
+ ↓
+selecciona la locomoción
+
+Por eso AI_ACTOR_FORCE_SPEED me parece candidato a acelerar/fijar el régimen de movimiento de un Actor que ya tiene una tarea, no a reemplazar la tarea.
+
+6. AI_NAV es especialmente interesante
+
+Hay toda una familia dedicada a navegación:
+
+AI_SET_NAV_PATHFINDING_ENABLED
+    0x4495F5FC
+
+AI_SET_NAV_PATHFINDING_ENABLED_WHEN_DRIVING
+    0x98966941
+
+AI_SET_NAV_FAILSAFE_MOVEMENT_ENABLED
+    0xC900F0E8
+
+AI_SET_NAV_ACTOR_WIDTH
+    0x8404592D
+
+AI_SET_NAV_HAZARD_AVOIDANCE_ENABLED
+    0x5D752432
+
+AI_SET_NAV_ACTOR_AVOIDANCE_MODE
+    0x5B483036
+
+AI_SET_NAV_ACTOR_AVOIDANCE_ALLOW_TURNS
+    0xFCB31704
+
+AI_SET_NAV_MAX_SLOPE
+    0xF64D5452
+
+Esto me hace pensar que:
+
+TASK_GO_TO_COORD
+
+probablemente puede apoyarse en:
+
+NAV
+
+para realizar una locomoción verdaderamente integrada con el mundo.
+
+Y encontramos otra pieza todavía más concreta:
+
+SET_ACTOR_MOVABLE_NAV_MESH
+    0xECEE9E20
+
+junto con:
+
+STREAMING_REQUEST_MOVABLE_NAV_MESH
+    0x63334F63
+
+STREAMING_IS_MOVABLE_NAV_MESH_RESIDENT
+    0x8A0D3339
+
+Eso es exactamente el tipo de infraestructura que necesitaría una navegación de Actor. Referencia RDR1 NAVMESH
+
+7. Hay otra pieza que no debemos ignorar: “ready for action”
+
+En el grupo ENTITY aparecen:
+
+MAKE_ACTOR_READY_FOR_ACTION
+    0xF04335A6
+
+IS_ACTOR_READY_FOR_ACTION
+    0xFB2B0CCF
+
+Esto me parece potencialmente importante para nuestro Actor recién creado.
+
+Tenemos:
+
+CREATE_ACTOR_IN_LAYOUT
+        ↓
+¿Actor completamente preparado?
+        ↓
+MAKE_ACTOR_READY_FOR_ACTION
+        ↓
+TASK
+
+No afirmaría todavía que sea obligatorio, pero merece una prueba antes de concluir que los tasks no funcionan.
+
+8. Hay un camino adicional: GRINGO
+
+La búsqueda exhaustiva también encontró:
+
+GRINGO_ACTOR_MOVE_TO
+    0x698105FC
+
+GRINGO_ACTOR_MOVE_TO_AND_FACE
+    0x0AF4FCB9
+
+GRINGO_ACTOR_MOVE_TO_AND_FACE_WITH_USER_OFFSET
+    0xEEE9C799
+
+Estos sí parecen mover Actors con comportamiento/animación, pero están ligados al sistema GRINGO.
+
+Por eso los clasifico así:
+
+TASK/MOVER       → camino general
+AI/NAV            → soporte general
+GRINGO_MOVE_TO    → mecanismo contextual
+
+No los usaría todavía para el jugador remoto.
+
+9. TASK_ACTION_PERFORM también existe
+
+Tenemos:
+
+TASK_ACTION_PERFORM
+    0xE32F09B3
+
+TASK_ACTION_PERFORM_AT_POSITION
+    0x3F20B619
+
+TASK_ACTION_PERFORM_ON_TARGET
+    0xD7E582B1
+
+y además:
+
+TASK_TR_ACTION
+TASK_TR_ACTION_ON_ACTOR
+
+Esto abre otra posibilidad:
+
+Actor
+ ↓
+Action Tree / Task Action
+ ↓
+movimiento + animación
+
+Pero sin conocer los objetos/árboles de acciones que espera el juego, es demasiado indirecto para el primer experimento.
+
+10. Lo que descarto
+
+SIMULATE_PLAYER_INPUT_GAIT
+
+No seguiría por ahí.
+
+Y ahora tenemos una razón empírica, no solamente teórica:
+
+REMOTE ACTOR
+    ↓
+SIMULATE_PLAYER_INPUT_GAIT
+    ↓
+no locomoción remota
+
+LOCAL PLAYER
+    ↓
+recibe/interfiere con gait
+    ↓
+su animación se corta al intentar jugar
+
+Tu observación es precisamente el tipo de resultado que esperaría de una rutina relacionada con el estado de input del jugador.
+
+Además, las bases públicas dejan sus parámetros como Any, así que no teníamos un ABI suficientemente fiable para justificar seguir experimentando a ciegas. (GitHub)
+
+11. También tenemos que corregir GET_POSITION
+
+Esto es importante para las siguientes pruebas.
+
+La base de RDR1 define:
+
+GET_POSITION(
+    Actor actor,
+    float* x,
+    float* y,
+    float* z
+)
+
+No:
+
+GET_POSITION(actor, Vector3*)
+
+La prueba anterior estaba usando el segundo formato, por eso obteníamos:
+
+actual=(0,0,0)
+
+y después nuestro sistema pensaba:
+
+actor está a ~2400 metros del objetivo
+        ↓
+HARD CORRECTION
+        ↓
+TELEPORT
+
+Eso explica una parte importante del comportamiento del último log.
+
+La firma publicada para GET_POSITION es de Actor + tres punteros, y TELEPORT_ACTOR_WITH_HEADING utiliza el Vector2 + float + heading que ya habíamos observado. Base de natives RDR1
+
+12. La arquitectura de locomoción que ahora probaría
+
+Quedaría:
+
+FrontierMP
+                     │
+                PlayerState
+                     │
+        ┌────────────┴────────────┐
+        │                         │
+     position                 velocity/yaw/gait
+        │                         │
+        └────────────┬────────────┘
+                     ↓
+              Remote Actor
+                     │
+              ENABLE_MOVER
+                     │
+        MAKE_ACTOR_READY_FOR_ACTION
+                     │
+                TASK / AI
+                     │
+              NAV / pathfinding
+                     │
+                  MOVER
+                     │
+          animation + locomotion
+                     │
+         GET_POSITION / VELOCITY
+                     │
+              network correction
+
+Y el primer experimento debería ser deliberadamente mínimo:
+
+CREATE_ACTOR_IN_LAYOUT
+        ↓
+ENABLE_MOVER(actor)
+        ↓
+SET_MOVER_FROZEN(actor, false)
+        ↓
+IS_MOVER_FROZEN(actor)
+        ↓
+TASK_FOLLOW_ACTOR(remote, local)
+        ↓
+NO TELEPORTS
+        ↓
+observar:
+    posición
+    velocidad
+    gait
+    animación
+
+Esto es muchísimo mejor diagnóstico que nuestra órbita artificial.
+
+Por qué TASK_FOLLOW_ACTOR es la prueba ideal
+
+Porque tiene una firma conocida:
+
+TASK_FOLLOW_ACTOR(Actor actor, Actor followActor)
+
+No necesitamos averiguar inicialmente cómo empaqueta coordenadas, floats o estructuras.
+
+Si:
+
+remoteActor → TASK_FOLLOW_ACTOR(remoteActor, localActor)
+
+produce caminata real, ya demostramos:
+
+Actor genérico
++
+Mover
++
+Task AI
+=
+locomoción
+
+Y entonces pasamos al segundo problema: cómo convertir nuestro PlayerState en una tarea de movimiento continua.
+
+13. Para el multiplayer real no mantendría una tarea por snapshot
+
+Una vez demostrado el mecanismo, no haría:
+
+20 snapshots/sec
+    ↓
+TASK_GO_TO_COORD
+    ↓
+TASK_GO_TO_COORD
+    ↓
+TASK_GO_TO_COORD
+
+porque probablemente reiniciaríamos continuamente la tarea y la animación.
+
+Sería mejor:
+
+snapshot/interpolación
+       ↓
+posición futura 200-500 ms
+       ↓
+TASK_GO_TO_COORD_NONSTOP
+       ↓
+Actor camina
+       ↓
+actualización del destino
+
+y solo:
+
+error enorme
+    ↓
+TELEPORT_ACTOR_WITH_HEADING
+
+como recuperación.
+
+Así el servidor sigue siendo autoritativo, pero el motor hace la locomoción.
+
+Resultado de la búsqueda
+
+La jerarquía que ahora considero más prometedora es:
+
+1. TASK_FOLLOW_ACTOR / TASK_GO_TO_COORD
+Mecanismo primario de locomoción.
+
+2. ENABLE_MOVER + SET_MOVER_FROZEN(false)
+Infraestructura necesaria que tenemos que verificar.
+
+3. AI_NAV + SET_ACTOR_MOVABLE_NAV_MESH
+Soporte de navegación para los tasks que necesiten pathfinding.
+
+4. AI_ACTOR_FORCE_SPEED / ACTOR_SET_MAX_GAIT / SET_ACTOR_SPEED
+Control fino de velocidad/gait una vez que ya existe una tarea.
+
+5. ACTOR_POP_NEXT_GAIT / RESET_ACTOR_GAITS
+Control del gait state machine; todavía requiere pruebas.
+
+6. GRINGO_ACTOR_MOVE_TO / TASK_ACTION_PERFORM
+Vías alternativas más especializadas.
+
+7. SIMULATE_PLAYER_INPUT_GAIT
+Lo descartaría para nuestra arquitectura por el comportamiento observado.
+
+La investigación más productiva ahora no es buscar otra forma de teleportar: es hacer un experimento limpio con TASK_FOLLOW_ACTOR sobre nuestro Actor y, simultáneamente, instrumentar MOVER, velocidad, gait y estado de task.
+
+Sources:
+
+GitHub - TheRouletteBoi/rdr-nativedb-data: A database of all Red Dead Redemption 1 script commands ("natives"). Strictly for educational purposes! https://therouletteboi.github.io/rdr/nativedb/ · GitHub
+
+Red Dead Redemption Native Header - Pastebin.com
+
+## Prompt:
+23/9/2026, 21:11:40
+
+bueno avanza entonces
+
+## Response:
+23/9/2026, 21:12:12
+
+La mejor prueba salió bastante clara: GET_LOCAL_SLOT (0xAD68A22E) y GET_SLOT_ACTOR (0xDB9B49D8) permiten obtener el Actor local sin convertir nuestro remoto en Player. Voy a usar esa ruta como objetivo de TASK_FOLLOW_ACTOR.
+
+El experimento ya está cableado y el remoto 65000 queda completamente fuera del path de transform: una vez creado, TASK_FOLLOW_ACTOR pasa a ser quien controla su movimiento. Estoy haciendo la última revisión para evitar que algún update de red vuelva a “teletransportarlo” detrás de escena.
+
+Antes de probarlo, voy a darle al Actor las condiciones de ejecución que el motor expone: listo para acción, streaming de alta prioridad y un update forzado. No voy a inventar un valor de prioridad.
+
+Planteando la prueba
+
+Estoy preparando una prueba remota que obtenga el actor local, valide su identificador y use una tarea de seguimiento, evitando teletransportes. También estoy considerando activar este comportamiento solo en un modo de prueba explícito.
+
+Implementado diagnóstico de seguimiento e investigado acceso a actores locales y remotos
+
+Implementado seguimiento remoto de tareas y locomoción de jugadores
+
+Validada la locomoción, limpieza y seguimiento de actores remotos
+
+Actualizado y verificado el gestor remoto multijugador
+
+Ha pensado durante 2m 24s
+
+Avancé. Dejé implementada la siguiente prueba en la rama game-thread/remote-actor-spawn-test-0.2.41.
+
+Qué hace ahora el test
+
+El 65000 sigue siendo nuestro jugador remoto propio, representado por un Actor normal. No se crea ningún Player nativo.
+
+Al crear el actor:
+
+CREATE_ACTOR_IN_LAYOUT
+        ↓
+ENABLE_MOVER(actor)
+        ↓
+SET_MOVER_FROZEN(actor, false)
+        ↓
+MAKE_ACTOR_READY_FOR_ACTION(actor, true)
+        ↓
+SET_ACTOR_STREAMING_HIGH_PRIORITY(actor, true)
+        ↓
+ACTOR_FORCE_NEXT_UPDATE(actor)
+        ↓
+GET_LOCAL_SLOT()
+        ↓
+GET_SLOT_ACTOR(localSlot)
+        ↓
+TASK_FOLLOW_ACTOR(remoteActor, localActor)
+
+TASK_FOLLOW_ACTOR acepta explícitamente Actor, Actor, así que es mucho más coherente con nuestra arquitectura que SIMULATE_PLAYER_INPUT_GAIT. La documentación/base de natives también confirma ENABLE_MOVER, SET_MOVER_FROZEN, MAKE_ACTOR_READY_FOR_ACTION y las funciones de TASKS.
+
+Muy importante para esta prueba
+
+Para playerId == 65000 deshabilité completamente el update normal:
+
+network snapshot
+      ↓
+RemotePlayerManager
+      ↓
+65000
+      ↓
+NO TELEPORT
+      ↓
+NO TELEPORT
+      ↓
+NO TELEPORT
+      ↓
+TASK_FOLLOW_ACTOR
+
+Así, si ves al actor caminar, será el motor de RDR1 haciendo la locomoción, no nuestra interpolación.
+
+Y si TASK_FOLLOW_ACTOR no puede configurarse, el actor se destruye y se reintenta; no hay fallback silencioso a teleport.
+
+Qué mirar en client.log
+
+Debería aparecer algo de este estilo:
+
+[FrontierRemoteTask] follow actor=0x00000XXX target=0x00000YYY localSlot=Z moverFrozen=0
+
+El dato moverFrozen=0 confirma que el Mover quedó desbloqueado.
+
+La prueba visual que buscamos ahora es muy concreta:
+
+actor remoto inicialmente separado
+        ↓
+camina físicamente hacia el jugador
+        ↓
+se mueve suavemente
+        ↓
+aparecen animaciones de locomoción
+
+Si ocurre eso, ya habremos demostrado que un Actor genérico de FrontierMP puede usar la locomoción interna de RDR1 mediante Tasks.
+
+Y si funciona
+
+Entonces ya no necesitamos una locomoción artificial basada en teleport. La siguiente etapa sería convertir nuestro:
+
+PlayerState.position
+PlayerState.velocity
+PlayerState.yaw
+PlayerState.gait
+
+en una intención de movimiento para Tasks/Mover, actualizando el destino de forma controlada en lugar de imponer directamente el transform.
+
+Los cambios quedaron en estos commits finales:
+
+cd16d146ea4b2e00e568af4100d9aabfc94d5a87
+a8aff2549610048468a7670a3307c38ce12bd203
+86764ea2bb4e791a6c0fa61eabcee9cf66493131
+39a9f1452328b40d8a6611f37a52285744ab76e5
+
+No puedo ejecutar aquí el cliente RDR1 para validar el comportamiento en runtime, así que el siguiente client.log es el punto de verificación definitivo.
+
+## Prompt:
+23/9/2026, 22:08:46
+
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.log se borro un mensaje tuyo anterior, ahora hay un actor que me sigue
+
+## Response:
+23/9/2026, 22:08:56
+
+Voy a revisar el client.log de la rama actual y contrastarlo con la implementación de TASK_FOLLOW_ACTOR, para separar qué quedó demostrado y qué falta ajustar.
+
+
+
+Powered by ChatGPT Exporter (https://www.chatgptexporter.com)
