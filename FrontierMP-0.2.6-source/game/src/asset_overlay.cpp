@@ -31,6 +31,7 @@ using FullReadPathFn = std::uintptr_t (*)(
     std::uintptr_t,
     std::uintptr_t,
     std::uintptr_t,
+    std::uintptr_t,
     std::uintptr_t);
 
 FullReadPathFn g_originalFullReadPath = nullptr;
@@ -71,9 +72,7 @@ bool guarded_ascii(std::uintptr_t address, std::string& out) {
 
     for (std::size_t i = 0; i < bytesRead; ++i) {
         const unsigned char c = chars[i];
-        if (c == 0) {
-            return !out.empty();
-        }
+        if (c == 0) return !out.empty();
         if (c < 32 || c > 126) {
             out.clear();
             return false;
@@ -106,9 +105,7 @@ bool guarded_utf16(std::uintptr_t address, std::string& out) {
     const std::size_t charCount = bytesRead / sizeof(wchar_t);
     for (std::size_t i = 0; i < charCount; ++i) {
         const wchar_t c = chars[i];
-        if (c == L'\0') {
-            return !out.empty();
-        }
+        if (c == L'\0') return !out.empty();
         if (c < 32 || c > 126) {
             out.clear();
             return false;
@@ -122,6 +119,61 @@ bool guarded_utf16(std::uintptr_t address, std::string& out) {
     return false;
 }
 
+bool path_like(const std::string& value) {
+    return value.find("content") != std::string::npos ||
+           value.find("boot.sc.xml") != std::string::npos ||
+           value.find("boot") != std::string::npos ||
+           value.find(".rpf") != std::string::npos ||
+           value.find("\\") != std::string::npos ||
+           value.find("/") != std::string::npos;
+}
+
+std::string byte_string_probe(std::uintptr_t address) {
+    if (address < 0x10000u) return {};
+
+#ifdef _WIN32
+    std::array<unsigned char, 512> bytes{};
+    SIZE_T bytesRead = 0;
+    if (!ReadProcessMemory(GetCurrentProcess(),
+                           reinterpret_cast<const void*>(address),
+                           bytes.data(),
+                           bytes.size(),
+                           &bytesRead) ||
+        bytesRead == 0) {
+        return {};
+    }
+
+    for (std::size_t i = 0; i < bytesRead;) {
+        const std::size_t start = i;
+        while (i < bytesRead && bytes[i] >= 32 && bytes[i] <= 126) ++i;
+        if (i - start >= 6) {
+            const std::string candidate(
+                reinterpret_cast<const char*>(bytes.data() + start), i - start);
+            if (path_like(candidate)) return "ascii@" + std::to_string(start) + ":" + candidate;
+        }
+        ++i;
+    }
+
+    if (bytesRead >= 2) {
+        for (std::size_t start = 0; start + 1 < bytesRead; start += 2) {
+            std::string candidate;
+            std::size_t i = start;
+            while (i + 1 < bytesRead && bytes[i] >= 32 && bytes[i] <= 126 && bytes[i + 1] == 0) {
+                candidate.push_back(static_cast<char>(bytes[i]));
+                i += 2;
+            }
+            if (candidate.size() >= 6 && path_like(candidate)) {
+                return "utf16@" + std::to_string(start) + ":" + candidate;
+            }
+        }
+    }
+#else
+    (void)address;
+#endif
+
+    return {};
+}
+
 std::string pointer_candidates(std::initializer_list<std::uintptr_t> values) {
     std::ostringstream out;
     std::size_t index = 0;
@@ -130,22 +182,12 @@ std::string pointer_candidates(std::initializer_list<std::uintptr_t> values) {
         std::string utf16;
         bool emitted = false;
 
-        if (guarded_ascii(value, ascii) &&
-            (ascii.find("content") != std::string::npos ||
-             ascii.find("boot") != std::string::npos ||
-             ascii.find(".rpf") != std::string::npos ||
-             ascii.find("\\") != std::string::npos ||
-             ascii.find("/") != std::string::npos)) {
+        if (guarded_ascii(value, ascii) && path_like(ascii)) {
             out << " arg" << index << "=ascii:" << ascii;
             emitted = true;
         }
 
-        if (!emitted && guarded_utf16(value, utf16) &&
-            (utf16.find("content") != std::string::npos ||
-             utf16.find("boot") != std::string::npos ||
-             utf16.find(".rpf") != std::string::npos ||
-             utf16.find("\\") != std::string::npos ||
-             utf16.find("/") != std::string::npos)) {
+        if (!emitted && guarded_utf16(value, utf16) && path_like(utf16)) {
             out << " arg" << index << "=utf16:" << utf16;
         }
 
@@ -189,15 +231,26 @@ std::string memory_qword_probe(std::uintptr_t address) {
     return out.str();
 }
 
+void append_address_probe(std::ostringstream& out,
+                          const char* name,
+                          std::uintptr_t address) {
+    const auto bytes = byte_string_probe(address);
+    if (!bytes.empty()) out << " " << name << "Bytes=" << bytes;
+
+    const auto qwords = memory_qword_probe(address);
+    if (!qwords.empty()) out << " " << name << "Probe=" << qwords;
+}
+
 std::uintptr_t hooked_full_read_path(std::uintptr_t a,
                                      std::uintptr_t b,
                                      std::uintptr_t c,
-                                     std::uintptr_t d) {
+                                     std::uintptr_t d,
+                                     std::uintptr_t e) {
     if (!g_originalFullReadPath) return 0;
 
     thread_local bool insideHook = false;
     if (insideHook) {
-        return g_originalFullReadPath(a, b, c, d);
+        return g_originalFullReadPath(a, b, c, d, e);
     }
 
     insideHook = true;
@@ -210,28 +263,25 @@ std::uintptr_t hooked_full_read_path(std::uintptr_t a,
                << " b=0x" << b
                << " c=0x" << c
                << " d=0x" << d
+               << " e=0x" << e
                << std::dec
-               << pointer_candidates({a, b, c, d});
+               << pointer_candidates({a, b, c, d, e});
 
-        const auto bProbe = memory_qword_probe(b);
-        if (!bProbe.empty()) before << " bProbe=" << bProbe;
-
-        const auto cProbe = memory_qword_probe(c);
-        if (!cProbe.empty()) before << " cProbe=" << cProbe;
+        append_address_probe(before, "a", a);
+        append_address_probe(before, "b", b);
+        append_address_probe(before, "e", e);
 
         log_line(before.str());
     }
 
-    const auto result = g_originalFullReadPath(a, b, c, d);
+    const auto result = g_originalFullReadPath(a, b, c, d, e);
 
     if (callIndex < 128) {
         std::ostringstream after;
         after << "[FrontierAsset] fullReadPath return=0x" << std::hex << result << std::dec
-              << pointer_candidates({result, a, b, c, d});
+              << pointer_candidates({result, a, b, c, d, e});
 
-        const auto resultProbe = memory_qword_probe(result);
-        if (!resultProbe.empty()) after << " resultProbe=" << resultProbe;
-
+        append_address_probe(after, "return", result);
         log_line(after.str());
     }
 
