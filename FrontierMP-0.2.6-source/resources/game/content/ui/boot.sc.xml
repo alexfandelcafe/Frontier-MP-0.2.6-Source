@@ -548,6 +548,7 @@
 				<transition event="auth.fail_WrongDisc">
 					<action expr="Exit(SSConf_JoinWish)"></action>
 					<action expr="Enter(NetConf_JoinWishWrongDisc)"></action>
+				</transition>
 			</ifdef>
 			<transition event="auth.success">
 				<action expr="Exit(SSConf_JoinWish)"></action>
