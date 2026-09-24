@@ -20,6 +20,7 @@ struct RemotePlayer final {
     bool spawnPending{};
     std::uint64_t lastSpawnAttemptMs{};
     bool locomotionTaskActive{};
+    bool locomotionMoverPrepared{};
     std::uint64_t lastLocomotionTaskAttemptMs{};
     std::uint64_t lastActorValidationMs{};
     std::uint64_t lastPositionReadMs{};
