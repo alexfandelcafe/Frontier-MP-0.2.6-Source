@@ -48,7 +48,7 @@ constexpr std::uint32_t kNativeGetLocalSlot = 0xAD68A22E;
 constexpr std::uint32_t kNativeGetSlotActor = 0xDB9B49D8;
 constexpr std::uint32_t kNativeEnableMover = 0xE29F0A39;
 constexpr std::uint32_t kNativeSetMoverFrozen = 0x13E6B5EE;
-constexpr std::uint32_t kNativeTaskFollowActor = 0x12F0911A;
+constexpr std::uint32_t kNativeTaskGoToCoord = 0x8C574832;
 constexpr std::uint32_t kNativeMakeActorReadyForAction = 0xF04335A6;
 constexpr std::uint32_t kNativeSetActorStreamingHighPriority = 0x0911BA31;
 constexpr std::uint32_t kNativeActorForceNextUpdate = 0x5C7F63E3;
@@ -943,8 +943,9 @@ bool RdrBridge::update_remote_actor_transform(
     return error.empty();
 }
 
-bool RdrBridge::task_follow_remote_actor(
+bool RdrBridge::task_go_to_remote_coord(
     std::uint32_t actorHandle,
+    const Vec3& target,
     std::string& error) const {
     error.clear();
 
@@ -967,68 +968,16 @@ bool RdrBridge::task_follow_remote_actor(
         return false;
     }
 
+    const Vec3 destination = target;
     std::string dispatchError;
     const bool completed = gameThreadDispatcher_.submit_and_wait(
-        [this, actorHandle, &error]() {
-            // GET_LOCAL_SLOT is not reliable in the current runtime: it remains
-            // -1 even after the local player actor is fully initialized.
-            // Resolve the local Actor directly through GET_PLAYER_ACTOR instead.
-            std::uintptr_t playerArgs[1]{0u}; // native player 0 is the local player in this probe.
-            std::uintptr_t localActorResult = 0u;
-            if (!nativeInvoker_.invoke_raw(
-                    kNativeGetPlayerActor, playerArgs, 1u, localActorResult)) {
-                error = "GET_PLAYER_ACTOR(0) invoke failed";
-                return;
-            }
+        [this, actorHandle, destination, &error]() {
+            std::uintptr_t result = 0u;
 
-            std::uint32_t localPlayerIdUsed = 0u;
-            std::uint32_t localActor =
-                static_cast<std::uint32_t>(localActorResult);
-
-            // Keep a conservative fallback for runtimes that expose the local
-            // player under native Player 1 instead of Player 0.
-            if (localActor == 0u) {
-                playerArgs[0] = 1u;
-                localActorResult = 0u;
-                if (!nativeInvoker_.invoke_raw(
-                        kNativeGetPlayerActor, playerArgs, 1u, localActorResult)) {
-                    error = "GET_PLAYER_ACTOR(0) returned null; GET_PLAYER_ACTOR(1) invoke failed";
-                    return;
-                }
-                localPlayerIdUsed = 1u;
-                localActor = static_cast<std::uint32_t>(localActorResult);
-            }
-
-            // Keep GET_LOCAL_SLOT only as a diagnostic/fallback when it returns
-            // an actual non-negative slot. In the current runtime it is -1.
-            std::uint32_t localSlotRaw = 0xFFFFFFFFu;
-            std::uint32_t slotActor = 0u;
-            if (localActor == 0u) {
-                if (nativeInvoker_.invoke_u32(kNativeGetLocalSlot, localSlotRaw) &&
-                    static_cast<std::int32_t>(localSlotRaw) >= 0) {
-                    std::uintptr_t slotArgs[1]{
-                        static_cast<std::uintptr_t>(localSlotRaw)};
-                    std::uintptr_t slotActorResult = 0u;
-                    if (nativeInvoker_.invoke_raw(
-                            kNativeGetSlotActor, slotArgs, 1u, slotActorResult)) {
-                        slotActor = static_cast<std::uint32_t>(slotActorResult);
-                        if (slotActor != 0u) {
-                            localActor = slotActor;
-                        }
-                    }
-                }
-            }
-
-            if (localActor == 0u) {
-                error = "local player Actor unavailable via GET_PLAYER_ACTOR(0/1)";
-                return;
-            }
-
+            // Native locomotion needs an active, unfrozen generic Actor mover.
             std::uintptr_t moverArgs[2]{};
             moverArgs[0] = static_cast<std::uintptr_t>(actorHandle);
             moverArgs[1] = 0u; // false
-            std::uintptr_t result = 0u;
-
             if (!nativeInvoker_.invoke_raw(
                     kNativeEnableMover, moverArgs, 1u, result)) {
                 error = "ENABLE_MOVER invoke failed";
@@ -1059,37 +1008,42 @@ bool RdrBridge::task_follow_remote_actor(
                 return;
             }
 
-            std::uintptr_t forceUpdateArgs[1]{static_cast<std::uintptr_t>(actorHandle)};
+            std::uintptr_t forceUpdateArgs[1]{
+                static_cast<std::uintptr_t>(actorHandle)};
             if (!nativeInvoker_.invoke_raw(
                     kNativeActorForceNextUpdate, forceUpdateArgs, 1u, result)) {
                 error = "ACTOR_FORCE_NEXT_UPDATE invoke failed";
                 return;
             }
 
-            std::uintptr_t frozenCheckArgs[1]{static_cast<std::uintptr_t>(actorHandle)};
+            std::uintptr_t frozenCheckArgs[1]{
+                static_cast<std::uintptr_t>(actorHandle)};
             std::uintptr_t frozenResult = 0u;
             const bool frozenReadOk = nativeInvoker_.invoke_raw(
                 kNativeIsMoverFrozen, frozenCheckArgs, 1u, frozenResult);
 
-            std::uintptr_t taskArgs[2]{};
+            // TASK_GO_TO_COORD is the conservative coordinate-task probe:
+            // Actor + Vector3, where Vector3 occupies XY + Z native slots.
+            std::uintptr_t taskArgs[3]{};
             taskArgs[0] = static_cast<std::uintptr_t>(actorHandle);
-            taskArgs[1] = static_cast<std::uintptr_t>(localActor);
+            taskArgs[1] = pack_vec2(destination.x, destination.y);
+            taskArgs[2] = float_bits(destination.z);
 
             if (!nativeInvoker_.invoke_raw(
-                    kNativeTaskFollowActor, taskArgs, 2u, result)) {
-                error = "TASK_FOLLOW_ACTOR invoke failed";
+                    kNativeTaskGoToCoord, taskArgs, 3u, result)) {
+                error = "TASK_GO_TO_COORD invoke failed";
                 return;
             }
 
-            char message[280]{};
+            char message[360]{};
             std::snprintf(
                 message, sizeof(message),
-                "[FrontierRemoteTask] follow actor=0x%08X target=0x%08X nativePlayer=%u "
-                "fallbackSlot=%d moverFrozen=%s%u",
+                "[FrontierRemoteTask] go-to actor=0x%08X target=(%.3f,%.3f,%.3f) "
+                "moverFrozen=%s%u",
                 actorHandle,
-                localActor,
-                localPlayerIdUsed,
-                static_cast<std::int32_t>(localSlotRaw),
+                destination.x,
+                destination.y,
+                destination.z,
                 frozenReadOk ? "" : "<unreadable>",
                 frozenReadOk ? static_cast<unsigned>(frozenResult != 0u) : 0u);
             write_bridge_log_line(message);
@@ -1099,7 +1053,7 @@ bool RdrBridge::task_follow_remote_actor(
 
     if (!completed) {
         error = dispatchError.empty()
-            ? "remote actor task did not complete"
+            ? "remote actor go-to task did not complete"
             : dispatchError;
         return false;
     }
