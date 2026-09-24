@@ -314,7 +314,7 @@
 					</ifdef>
 				</UILayer>
 			</UIPanel>
-			<P UIPanel id="SinglePlayerPrompts" movie="startscreen">
+			<UIPanel id="SinglePlayerPrompts" movie="startscreen">
 				<onactivate expr="Exit(MainMenuPrompts)"          ></onactivate>
 				<onactivate expr="Exit(background)" ></onactivate>
 				<UIScrollableList id="SinglePlayerList" MaxHeight="2" allowWrap="true" allowMouseHoverSelect="true" allowMouseAutoSelect="true">
@@ -548,7 +548,6 @@
 				<transition event="auth.fail_WrongDisc">
 					<action expr="Exit(SSConf_JoinWish)"></action>
 					<action expr="Enter(NetConf_JoinWishWrongDisc)"></action>
-				</action>
 			</ifdef>
 			<transition event="auth.success">
 				<action expr="Exit(SSConf_JoinWish)"></action>
@@ -627,7 +626,6 @@
 			<data name="description" expr="Preset_Selection_Message"></data>
 			<onhide expr="Exit(PresetSelectTest)"></onhide>
 			<onshow expr="Enter(PresetSelectTest)"></onshow>
-			<UIProgressBar id="unused_placeholder" />
 			<UIList id="PresetSelectTest" allowRepeat="false">
 				<onfocused expr="focus(TestPresetOption)"></onfocused>
 				<UIOption id="TestPresetOption" allowWrap="true">
