@@ -136,8 +136,9 @@ bool InlineHook::install(std::uintptr_t target,
                 trampolineOffset += sizeof(branchTarget);
                 trampoline[trampolineOffset++] = 0xFF;
                 trampoline[trampolineOffset++] = 0xD0;
-            sourceOffset += 5;
-            continue;
+                sourceOffset += 5;
+                continue;
+            }
         }
 
         trampoline[trampolineOffset++] = originalBytes_[sourceOffset++];
