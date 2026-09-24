@@ -1,3 +1,8 @@
+## 0.2.64
+- Stage the freeroam frontend bootstrap explicitly across RDRMP's two observed UI states: send `startScreenExit` while `GET_GAME_STATE=5`, then send `net.EnterOnlineForInvite` after the frontend reaches `gameState=3`.
+- Log each bootstrap stage separately so a failed transition can be distinguished from a failure to leave the frontend.
+- Reset the staged bootstrap state on client initialization and shutdown.
+
 ## 0.2.63
 - Replace the one-shot remote actor test with a RemotePlayerManager driven by server snapshots.
 - Keep each remote identity keyed by NetworkPlayerId while backing it with a normal ACTOR_MPPLAYER01 Actor.
