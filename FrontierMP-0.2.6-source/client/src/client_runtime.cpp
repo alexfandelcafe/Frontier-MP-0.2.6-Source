@@ -268,6 +268,7 @@ void ClientRuntime::shutdown() {
     session_.reset();
     lastSessionUpdateMs_ = 0;
     lastFrontendBootstrapAttemptMs_ = 0;
+    frontendStartScreenExitSent_ = false;
     frontendBootstrapTriggered_ = false;
 }
 
@@ -292,17 +293,45 @@ void ClientRuntime::update() {
 
             if (sessionMode_ == "freeroam" &&
                 session_.runtime_state().state == frontier::game::FrontierSessionState::Frontend &&
-                !frontendBootstrapTriggered_ &&
                 (lastFrontendBootstrapAttemptMs_ == 0 ||
-                 now - lastFrontendBootstrapAttemptMs_ >= 1500)) {
+                 now - lastFrontendBootstrapAttemptMs_ >= 750)) {
                 lastFrontendBootstrapAttemptMs_ = now;
 
+                const auto gameState = session_.runtime_state().gameState;
                 std::string bootstrapError;
-                if (gameBridge_.send_ui_event("net.EnterOnlineForInvite", bootstrapError)) {
-                    frontendBootstrapTriggered_ = true;
-                    log_line("[FrontierSession] frontend bootstrap event sent: net.EnterOnlineForInvite");
-                } else {
-                    log_line("[FrontierSession] frontend bootstrap event failed: " + bootstrapError);
+
+                // RDRMP's boot.xml performs this in two UI stages. On the
+                // initial start screen, net.EnterOnlineForInvite first sends
+                // startScreenExit and then queues the actual multiplayer
+                // event. We reproduce those stages explicitly so the second
+                // event is delivered after StartScreen2 is active.
+                if (gameState == 5 && !frontendStartScreenExitSent_) {
+                    if (gameBridge_.send_ui_event("startScreenExit", bootstrapError)) {
+                        frontendStartScreenExitSent_ = true;
+                        log_line("[FrontierSession] frontend bootstrap stage=1 sent: startScreenExit");
+                    } else {
+                        log_line("[FrontierSession] frontend bootstrap stage=1 failed: " + bootstrapError);
+                    }
+                } else if (gameState <= 3 &&
+                           frontendStartScreenExitSent_ &&
+                           !frontendBootstrapTriggered_) {
+                    if (gameBridge_.send_ui_event("net.EnterOnlineForInvite", bootstrapError)) {
+                        frontendBootstrapTriggered_ = true;
+                        log_line("[FrontierSession] frontend bootstrap stage=2 sent: net.EnterOnlineForInvite");
+                    } else {
+                        log_line("[FrontierSession] frontend bootstrap stage=2 failed: " + bootstrapError);
+                    }
+                } else if (gameState <= 3 &&
+                           !frontendStartScreenExitSent_ &&
+                           !frontendBootstrapTriggered_) {
+                    // If the first observable sample is already StartScreen2,
+                    // skip stage 1 and send the actual multiplayer event.
+                    if (gameBridge_.send_ui_event("net.EnterOnlineForInvite", bootstrapError)) {
+                        frontendBootstrapTriggered_ = true;
+                        log_line("[FrontierSession] frontend bootstrap stage=2 sent directly: net.EnterOnlineForInvite");
+                    } else {
+                        log_line("[FrontierSession] frontend bootstrap direct stage=2 failed: " + bootstrapError);
+                    }
                 }
             }
         }
