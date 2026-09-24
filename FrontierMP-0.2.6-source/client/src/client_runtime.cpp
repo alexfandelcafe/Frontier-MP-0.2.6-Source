@@ -92,9 +92,22 @@ bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, cons
 
         if (debugRemoteTestEnabled_ && localPlayerId_ != 0) {
             constexpr std::uint16_t kSoloRemotePlayerId = 65000;
-            constexpr float kOrbitRadius = 4.0f;
-            constexpr float kOrbitSpeedRadiansPerSecond = 0.6f;
+            constexpr float kTestSpeed = 2.4f; // m/s
             constexpr float kPi = 3.14159265358979323846f;
+
+            // Controlled locomotion test cycle:
+            //   0-6s  : walk +X
+            //   6-8s  : stop
+            //   8-14s : walk -X
+            //  14-16s : stop
+            //  16-22s : walk +Z
+            //  22-24s : stop
+            //  24-30s : walk -Z
+            //  30-32s : stop, then repeat.
+            constexpr float kMoveDurationSeconds = 6.0f;
+            constexpr float kStopDurationSeconds = 2.0f;
+            constexpr float kCycleSeconds =
+                (kMoveDurationSeconds + kStopDurationSeconds) * 4.0f;
 
             const auto localIt = std::find_if(
                 effectiveSnapshot.players.begin(),
@@ -107,25 +120,83 @@ bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, cons
                 const float seconds =
                     static_cast<float>(effectiveSnapshot.serverTick) /
                     static_cast<float>(frontier::kServerTickRate);
-                const float angle = seconds * kOrbitSpeedRadiansPerSecond;
-                const float radiansToDegrees = 180.0f / kPi;
+                const float cycleTime = std::fmod(seconds, kCycleSeconds);
 
                 PlayerState fake{};
                 fake.playerId = kSoloRemotePlayerId;
                 fake.clientTick = effectiveSnapshot.serverTick;
                 fake.position = localIt->position;
-                fake.position.x += std::cos(angle) * kOrbitRadius;
-                fake.position.z += std::sin(angle) * kOrbitRadius;
-                fake.velocity = {
-                    -std::sin(angle) * kOrbitRadius * kOrbitSpeedRadiansPerSecond,
-                    0.0f,
-                    std::cos(angle) * kOrbitRadius * kOrbitSpeedRadiansPerSecond
-                };
-                fake.yaw = std::fmod(angle * radiansToDegrees + 90.0f, 360.0f);
 
-                if (fake.yaw < 0.0f) fake.yaw += 360.0f;
+                float offsetX = 0.0f;
+                float offsetZ = 0.0f;
+                float velocityX = 0.0f;
+                float velocityZ = 0.0f;
+                float yaw = 0.0f;
+                const char* phase = "stop";
+
+                const float move0End = kMoveDurationSeconds;
+                const float stop0End = move0End + kStopDurationSeconds;
+                const float move1End = stop0End + kMoveDurationSeconds;
+                const float stop1End = move1End + kStopDurationSeconds;
+                const float move2End = stop1End + kMoveDurationSeconds;
+                const float stop2End = move2End + kStopDurationSeconds;
+                const float move3End = stop2End + kMoveDurationSeconds;
+
+                if (cycleTime < move0End) {
+                    offsetX = kTestSpeed * cycleTime;
+                    velocityX = kTestSpeed;
+                    yaw = 90.0f;
+                    phase = "walk+X";
+                } else if (cycleTime < stop0End) {
+                    offsetX = kTestSpeed * kMoveDurationSeconds;
+                    yaw = 90.0f;
+                    phase = "stop@+X";
+                } else if (cycleTime < move1End) {
+                    const float t = cycleTime - stop0End;
+                    offsetX = kTestSpeed * (kMoveDurationSeconds - t);
+                    velocityX = -kTestSpeed;
+                    yaw = 270.0f;
+                    phase = "walk-X";
+                } else if (cycleTime < stop1End) {
+                    yaw = 270.0f;
+                    phase = "stop@-X";
+                } else if (cycleTime < move2End) {
+                    const float t = cycleTime - stop1End;
+                    offsetZ = kTestSpeed * t;
+                    velocityZ = kTestSpeed;
+                    yaw = 0.0f;
+                    phase = "walk+Z";
+                } else if (cycleTime < stop2End) {
+                    offsetZ = kTestSpeed * kMoveDurationSeconds;
+                    yaw = 0.0f;
+                    phase = "stop@+Z";
+                } else if (cycleTime < move3End) {
+                    const float t = cycleTime - stop2End;
+                    offsetZ = kTestSpeed * (kMoveDurationSeconds - t);
+                    velocityZ = -kTestSpeed;
+                    yaw = 180.0f;
+                    phase = "walk-Z";
+                } else {
+                    yaw = 180.0f;
+                    phase = "stop@-Z";
+                }
+
+                fake.position.x += offsetX;
+                fake.position.z += offsetZ;
+                fake.velocity = {velocityX, 0.0f, velocityZ};
+                fake.yaw = yaw;
 
                 effectiveSnapshot.players.push_back(fake);
+
+                static const char* lastPhase = nullptr;
+                if (lastPhase != phase) {
+                    std::ostringstream phaseMessage;
+                    phaseMessage << "[FrontierClient] locomotion test phase=" << phase
+                                 << " cycleTime=" << cycleTime
+                                 << " playerId=" << kSoloRemotePlayerId;
+                    log_line(phaseMessage.str());
+                    lastPhase = phase;
+                }
             }
         }
 
