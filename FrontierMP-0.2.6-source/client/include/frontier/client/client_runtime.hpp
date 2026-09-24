@@ -30,6 +30,7 @@ private:
     frontier::game::FrontierSession session_{};
     std::uint64_t lastSessionUpdateMs_{};
     std::uint64_t lastFrontendBootstrapAttemptMs_{};
+    bool frontendStartScreenExitSent_{};
     bool frontendBootstrapTriggered_{};
     std::string sessionMode_{"freeroam"};
     RemotePlayerManager remotePlayers_{};
