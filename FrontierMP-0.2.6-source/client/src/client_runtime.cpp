@@ -267,6 +267,8 @@ void ClientRuntime::shutdown() {
     bridgeStateReady_ = false;
     session_.reset();
     lastSessionUpdateMs_ = 0;
+    lastFrontendBootstrapAttemptMs_ = 0;
+    frontendBootstrapTriggered_ = false;
 }
 
 void ClientRuntime::update() {
@@ -287,6 +289,22 @@ void ClientRuntime::update() {
             session_.update(gameBridge_, sessionLog);
             if (!sessionLog.empty()) log_line(sessionLog);
             lastSessionUpdateMs_ = now;
+
+            if (sessionMode_ == "freeroam" &&
+                session_.runtime_state().state == frontier::game::FrontierSessionState::Frontend &&
+                !frontendBootstrapTriggered_ &&
+                (lastFrontendBootstrapAttemptMs_ == 0 ||
+                 now - lastFrontendBootstrapAttemptMs_ >= 1500)) {
+                lastFrontendBootstrapAttemptMs_ = now;
+
+                std::string bootstrapError;
+                if (gameBridge_.send_ui_event("net.EnterOnlineForInvite", bootstrapError)) {
+                    frontendBootstrapTriggered_ = true;
+                    log_line("[FrontierSession] frontend bootstrap event sent: net.EnterOnlineForInvite");
+                } else {
+                    log_line("[FrontierSession] frontend bootstrap event failed: " + bootstrapError);
+                }
+            }
         }
 
         if (g_network->state() == ConnectionState::Connected && gameBridge_.initialized() &&
