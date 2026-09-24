@@ -283,11 +283,10 @@ void RemotePlayerManager::remove_player(
     if (player.actor.valid()) {
         std::string error;
         if (!bridge.destroy_remote_actor(player.actor.actorHandle, error)) {
-            std::fprintf(stderr,
-                         "[FrontierRemotePlayer] destroy failed playerId=%u actor=0x%08X error=%s\n",
-                         static_cast<unsigned>(player.playerId),
-                         player.actor.actorHandle,
-                         error.c_str());
+            log_remote("[FrontierRemotePlayer] destroy failed playerId=%u actor=0x%08X error=%s",
+                       static_cast<unsigned>(player.playerId),
+                       player.actor.actorHandle,
+                       error.c_str());
         }
     }
 
