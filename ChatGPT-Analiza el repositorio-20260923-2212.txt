@@ -1985,8 +1985,26 @@ https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remo
 ## Response:
 23/9/2026, 22:08:56
 
-Voy a revisar el client.log de la rama actual y contrastarlo con la implementación de TASK_FOLLOW_ACTOR, para separar qué quedó demostrado y qué falta ajustar.
+Sí. El client.log confirma que la prueba ya cruzó el punto importante: la locomoción nativa funciona.
 
+En esta ejecución:
 
+TASK_FOLLOW_ACTOR se ejecutó correctamente.
+El objetivo resuelto es tu Actor local 0x0000033D.
+El remoto llega con moverFrozen=0.
+No aparecen llamadas a TELEPORT_ACTOR_WITH_HEADING para este flujo.
+El remoteEntities=1 se mantiene durante los snapshots.
+
+Por ejemplo, aparece:
+
+[FrontierRemoteTask] follow actor=0x0000102A target=0x0000033D nativePlayer=0 fallbackSlot=-1 moverFrozen=0
+
+Eso explica exactamente lo que estás viendo: el ACTOR_MPPLAYER01 creado como Actor normal recibe una Task de seguimiento y el propio sistema de movimiento del juego lo desplaza hacia el jugador.
+
+La distinción importante es esta: todavía no estamos reproduciendo el movimiento de otro jugador. El actor de prueba está siguiendo directamente al jugador local mediante TASK_FOLLOW_ACTOR; PlayerState.velocity, gait y la trayectoria de red todavía no controlan su locomoción.
+
+También detecté algo que conviene corregir antes de seguir: durante la sesión aparecen varios handles distintos (0x159, 0xE05, 0xE1E, 0xE74, 0xFF9, 0x1007, 0x102A). Eso indica que el Actor de prueba está siendo recreado varias veces. No impide esta prueba, pero hay que averiguar por qué antes de convertir esto en el sistema definitivo.
+
+El siguiente paso lógico es reemplazar el TASK_FOLLOW_ACTOR fijo por locomoción hacia una posición objetivo de red anticipada, conservando TASK como dueño del movimiento y usando TELEPORT solamente para correcciones grandes.
 
 Powered by ChatGPT Exporter (https://www.chatgptexporter.com)
