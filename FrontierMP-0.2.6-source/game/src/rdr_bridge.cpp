@@ -24,6 +24,7 @@ constexpr const char* kLocalPlayerPattern =
     "48 89 15 ? ? ? ? E9 ? ? ? ?";
 
 constexpr std::uint32_t kNativeGetGameState = 0xDD9BD22B;
+constexpr std::uint32_t kNativeUiSendEvent = 0xB58825F5;
 constexpr std::uint32_t kNativeStreamingIsWorldLoaded = 0x87B74064;
 constexpr std::uint32_t kNativeIsSimulateStartMultiplayer = 0x9A73C2CD;
 constexpr std::uint32_t kNativeIsStartPosInCommandLine = 0x814D97E8;
@@ -1265,6 +1266,51 @@ bool RdrBridge::destroy_remote_actor(
     if (!completed) {
         error = dispatchError.empty()
             ? "remote actor destroy task did not complete"
+            : dispatchError;
+        return false;
+    }
+    return error.empty();
+}
+
+bool RdrBridge::send_ui_event(const std::string& eventName, std::string& error) const {
+    error.clear();
+
+    if (eventName.empty()) {
+        error = "UI event name is empty";
+        return false;
+    }
+    if (!initialized_) {
+        error = "bridge not initialized";
+        return false;
+    }
+    if (!nativeInvoker_.ready()) {
+        error = "native invoker not ready";
+        return false;
+    }
+    if (!gameThreadDispatcher_.attached()) {
+        error = gameThreadDispatcherError_.empty()
+            ? "game-thread dispatcher not attached"
+            : gameThreadDispatcherError_;
+        return false;
+    }
+
+    const std::string event = eventName;
+    std::string dispatchError;
+    const bool completed = gameThreadDispatcher_.submit_and_wait(
+        [this, &event, &error]() {
+            std::uintptr_t args[1]{};
+            args[0] = reinterpret_cast<std::uintptr_t>(event.c_str());
+            std::uintptr_t result = 0u;
+            if (!nativeInvoker_.invoke_raw(kNativeUiSendEvent, args, 1u, result)) {
+                error = "UI_SEND_EVENT invoke failed";
+            }
+        },
+        500u,
+        dispatchError);
+
+    if (!completed) {
+        error = dispatchError.empty()
+            ? "UI_SEND_EVENT task did not complete"
             : dispatchError;
         return false;
     }
