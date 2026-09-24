@@ -12,14 +12,23 @@ namespace frontier::game {
 #ifdef _WIN32
 namespace {
 
-constexpr std::size_t kAbsoluteJumpSize = 12;
+// FF 25 00 00 00 00
+// <8-byte absolute target>
+//
+// Unlike "mov rax, imm64; jmp rax", this form does not clobber a GPR.
+// The hooked function may legitimately rely on RAX across the trampoline
+// return (for example, when a call in the stolen prologue produced a value
+// consumed by the following instruction).
+constexpr std::size_t kAbsoluteJumpSize = 14;
 
 void write_absolute_jump(std::uint8_t* destination, std::uintptr_t target) {
-    destination[0] = 0x48; // mov rax, imm64
-    destination[1] = 0xB8;
-    std::memcpy(destination + 2, &target, sizeof(target));
-    destination[10] = 0xFF; // jmp rax
-    destination[11] = 0xE0;
+    destination[0] = 0xFF; // jmp qword ptr [rip+0]
+    destination[1] = 0x25;
+    destination[2] = 0x00;
+    destination[3] = 0x00;
+    destination[4] = 0x00;
+    destination[5] = 0x00;
+    std::memcpy(destination + 6, &target, sizeof(target));
 }
 
 bool executable_region(std::uintptr_t address, std::size_t size) {
@@ -101,12 +110,14 @@ bool InlineHook::install(std::uintptr_t target,
         error = name + ": target is not an executable memory region";
         return false;
     }
+
     originalBytes_.resize(patchSize);
     std::memcpy(originalBytes_.data(), reinterpret_cast<const void*>(target), patchSize);
 
-    // Build a trampoline. The known RDR fullReadPath entry contains an E8 rel32 call
-    // in the first 16 bytes. Re-encode relative calls as absolute calls so the
-    // trampoline does not depend on being within +/-2 GiB of the original function.
+    // Build a trampoline. The known RDR fullReadPath entry contains an E8 rel32
+    // call in the first 16 bytes. Re-encode that relative call with volatile R11
+    // so the trampoline does not depend on +/-2 GiB and, importantly, does not
+    // destroy RAX.
     const std::size_t trampolineCapacity = patchSize + 32;
     auto* trampoline = static_cast<std::uint8_t*>(
         VirtualAlloc(nullptr, trampolineCapacity, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
@@ -120,25 +131,28 @@ bool InlineHook::install(std::uintptr_t target,
     std::size_t trampolineOffset = 0;
     while (sourceOffset < patchSize) {
         const auto opcode = originalBytes_[sourceOffset];
+
         if (opcode == 0xE8 && sourceOffset == 4 && sourceOffset + 5 <= patchSize) {
             std::int32_t displacement = 0;
-            std::memcpy(&displacement, originalBytes_.data() + sourceOffset + 1, sizeof(displacement));
-            const auto sourceInstruction =
-                target + sourceOffset;
+            std::memcpy(&displacement,
+                        originalBytes_.data() + sourceOffset + 1,
+                        sizeof(displacement));
+
+            const auto sourceInstruction = target + sourceOffset;
             const auto branchTarget =
                 sourceInstruction + 5 + static_cast<std::intptr_t>(displacement);
 
-            if (opcode == 0xE8) {
-                // mov rax, imm64; call rax
-                trampoline[trampolineOffset++] = 0x48;
-                trampoline[trampolineOffset++] = 0xB8;
-                std::memcpy(trampoline + trampolineOffset, &branchTarget, sizeof(branchTarget));
-                trampolineOffset += sizeof(branchTarget);
-                trampoline[trampolineOffset++] = 0xFF;
-                trampoline[trampolineOffset++] = 0xD0;
-                sourceOffset += 5;
-                continue;
-            }
+            // mov r11, imm64; call r11
+            trampoline[trampolineOffset++] = 0x49;
+            trampoline[trampolineOffset++] = 0xBB;
+            std::memcpy(trampoline + trampolineOffset, &branchTarget, sizeof(branchTarget));
+            trampolineOffset += sizeof(branchTarget);
+            trampoline[trampolineOffset++] = 0x41;
+            trampoline[trampolineOffset++] = 0xFF;
+            trampoline[trampolineOffset++] = 0xD3;
+
+            sourceOffset += 5;
+            continue;
         }
 
         trampoline[trampolineOffset++] = originalBytes_[sourceOffset++];
