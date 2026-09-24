@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace frontier::game {
 
@@ -29,6 +30,7 @@ private:
     std::uintptr_t target_{};
     std::uintptr_t trampoline_{};
     std::size_t patchSize_{};
+    std::vector<std::uint8_t> originalBytes_{};
 };
 
 } // namespace frontier::game
