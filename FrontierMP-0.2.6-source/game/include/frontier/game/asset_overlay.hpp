@@ -10,6 +10,8 @@ namespace frontier::game {
 
 class AssetOverlay final {
 public:
+    ~AssetOverlay();
+
     bool initialize(std::uintptr_t moduleBase,
                     std::uint32_t textRva,
                     std::uint32_t textSize,
