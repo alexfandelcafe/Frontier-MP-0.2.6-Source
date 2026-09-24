@@ -6,7 +6,6 @@
 #endif
 
 #include <cstring>
-#include <limits>
 
 namespace frontier::game {
 
@@ -115,11 +114,6 @@ bool InlineHook::install(std::uintptr_t target,
         error = name + ": target is not an executable memory region";
         return false;
     }
-    if (!writable_region(reinterpret_cast<std::uintptr_t>(&error), sizeof(error))) {
-        // The check above is intentionally conservative but the target is what matters;
-        // std::string lives in process memory and does not need executable permissions.
-    }
-
     originalBytes_.resize(patchSize);
     std::memcpy(originalBytes_.data(), reinterpret_cast<const void*>(target), patchSize);
 
