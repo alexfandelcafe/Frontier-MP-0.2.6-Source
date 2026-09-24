@@ -83,6 +83,8 @@ if(WIN32 AND FRONTIER_BUILD_CLIENT)
         game/src/rdr_bridge.cpp
         game/src/native_invoker.cpp
         game/src/game_thread_dispatcher.cpp
+        game/src/inline_hook.cpp
+        game/src/asset_overlay.cpp
         game/src/startup_native_tracer.cpp
         game/src/frontier_session.cpp
     )
