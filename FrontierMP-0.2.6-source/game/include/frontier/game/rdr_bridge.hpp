@@ -24,6 +24,7 @@ public:
     bool initialize(const ExecutableFingerprint& fingerprint, KnownBuild build);
     bool read_local_player_state(PlayerState& outState, std::string& error) const;
     bool request_remote_actor_test(const PlayerState& origin, std::string& error) const;
+    bool send_ui_event(const std::string& eventName, std::string& error) const;
     bool spawn_remote_actor(std::uint16_t playerId, const PlayerState& state,
                             RemoteActorHandle& outActor, std::string& error) const;
     bool update_remote_actor_transform(std::uint32_t actorHandle, const PlayerState& state,
