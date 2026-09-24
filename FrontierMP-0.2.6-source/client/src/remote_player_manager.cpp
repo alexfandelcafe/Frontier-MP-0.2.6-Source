@@ -92,6 +92,11 @@ bool RemotePlayerManager::ensure_spawned(RemotePlayer& player, std::uint64_t now
                          static_cast<unsigned>(player.playerId),
                          player.actor.actorHandle,
                          taskError.c_str());
+
+            std::string destroyError;
+            bridge.destroy_remote_actor(player.actor.actorHandle, destroyError);
+            player.actor = {};
+            player.locomotionTaskActive = false;
             return false;
         }
         player.locomotionTaskActive = true;
