@@ -1056,9 +1056,8 @@ bool RdrBridge::read_remote_actor_position(
     return true;
 }
 
-bool RdrBridge::task_go_to_remote_coord(
+bool RdrBridge::prepare_remote_actor_for_locomotion(
     std::uint32_t actorHandle,
-    const Vec3& target,
     std::string& error) const {
     error.clear();
 
@@ -1081,13 +1080,13 @@ bool RdrBridge::task_go_to_remote_coord(
         return false;
     }
 
-    const Vec3 destination = target;
     std::string dispatchError;
     const bool completed = gameThreadDispatcher_.submit_and_wait(
-        [this, actorHandle, destination, &error]() {
+        [this, actorHandle, &error]() {
             std::uintptr_t result = 0u;
 
-            // Native locomotion needs an active, unfrozen generic Actor mover.
+            // One-time locomotion prerequisites for this Actor. These must not
+            // be repeated for every TASK_GO_TO_COORD retarget.
             std::uintptr_t moverArgs[2]{};
             moverArgs[0] = static_cast<std::uintptr_t>(actorHandle);
             moverArgs[1] = 0u; // false
@@ -1135,6 +1134,58 @@ bool RdrBridge::task_go_to_remote_coord(
             const bool frozenReadOk = nativeInvoker_.invoke_raw(
                 kNativeIsMoverFrozen, frozenCheckArgs, 1u, frozenResult);
 
+            char message[360]{};
+            std::snprintf(
+                message, sizeof(message),
+                "[FrontierRemoteTask] prepare actor=0x%08X moverFrozen=%s%u",
+                actorHandle,
+                frozenReadOk ? "" : "<unreadable>",
+                frozenReadOk ? static_cast<unsigned>(frozenResult != 0u) : 0u);
+            write_bridge_log_line(message);
+        },
+        500u,
+        dispatchError);
+
+    if (!completed) {
+        error = dispatchError.empty()
+            ? "remote actor locomotion preparation did not complete"
+            : dispatchError;
+        return false;
+    }
+    return error.empty();
+}
+
+bool RdrBridge::task_go_to_remote_coord(
+    std::uint32_t actorHandle,
+    const Vec3& target,
+    std::string& error) const {
+    error.clear();
+
+    if (actorHandle == 0u) {
+        error = "invalid remote actor handle";
+        return false;
+    }
+    if (!initialized_) {
+        error = "bridge not initialized";
+        return false;
+    }
+    if (!nativeInvoker_.ready()) {
+        error = "native invoker not ready";
+        return false;
+    }
+    if (!gameThreadDispatcher_.attached()) {
+        error = gameThreadDispatcherError_.empty()
+            ? "game-thread dispatcher not attached"
+            : gameThreadDispatcherError_;
+        return false;
+    }
+
+    const Vec3 destination = target;
+    std::string dispatchError;
+    const bool completed = gameThreadDispatcher_.submit_and_wait(
+        [this, actorHandle, destination, &error]() {
+            std::uintptr_t result = 0u;
+
             // G.R.E-Lab's RDR1 native declaration identifies the ABI as:
             // TASK_GO_TO_COORD(Actor, const Vector3*, MoveType).
             // The Vector3 is therefore passed by pointer, not packed into native
@@ -1157,14 +1208,11 @@ bool RdrBridge::task_go_to_remote_coord(
             char message[360]{};
             std::snprintf(
                 message, sizeof(message),
-                "[FrontierRemoteTask] go-to actor=0x%08X target=(%.3f,%.3f,%.3f) "
-                "moverFrozen=%s%u",
+                "[FrontierRemoteTask] go-to actor=0x%08X target=(%.3f,%.3f,%.3f)",
                 actorHandle,
                 destination.x,
                 destination.y,
-                destination.z,
-                frozenReadOk ? "" : "<unreadable>",
-                frozenReadOk ? static_cast<unsigned>(frozenResult != 0u) : 0u);
+                destination.z);
             write_bridge_log_line(message);
         },
         500u,
