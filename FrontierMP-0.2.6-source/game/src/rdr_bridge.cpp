@@ -970,24 +970,57 @@ bool RdrBridge::task_follow_remote_actor(
     std::string dispatchError;
     const bool completed = gameThreadDispatcher_.submit_and_wait(
         [this, actorHandle, &error]() {
-            std::uint32_t localSlot = 0u;
-            if (!nativeInvoker_.invoke_u32(kNativeGetLocalSlot, localSlot)) {
-                error = "GET_LOCAL_SLOT invoke failed";
-                return;
-            }
-
-            std::uintptr_t slotArgs[1]{static_cast<std::uintptr_t>(localSlot)};
+            // GET_LOCAL_SLOT is not reliable in the current runtime: it remains
+            // -1 even after the local player actor is fully initialized.
+            // Resolve the local Actor directly through GET_PLAYER_ACTOR instead.
+            std::uintptr_t playerArgs[1]{0u}; // native player 0 is the local player in this probe.
             std::uintptr_t localActorResult = 0u;
             if (!nativeInvoker_.invoke_raw(
-                    kNativeGetSlotActor, slotArgs, 1u, localActorResult)) {
-                error = "GET_SLOT_ACTOR invoke failed";
+                    kNativeGetPlayerActor, playerArgs, 1u, localActorResult)) {
+                error = "GET_PLAYER_ACTOR(0) invoke failed";
                 return;
             }
 
-            const std::uint32_t localActor =
+            std::uint32_t localPlayerIdUsed = 0u;
+            std::uint32_t localActor =
                 static_cast<std::uint32_t>(localActorResult);
+
+            // Keep a conservative fallback for runtimes that expose the local
+            // player under native Player 1 instead of Player 0.
             if (localActor == 0u) {
-                error = "GET_SLOT_ACTOR returned null";
+                playerArgs[0] = 1u;
+                localActorResult = 0u;
+                if (!nativeInvoker_.invoke_raw(
+                        kNativeGetPlayerActor, playerArgs, 1u, localActorResult)) {
+                    error = "GET_PLAYER_ACTOR(0) returned null; GET_PLAYER_ACTOR(1) invoke failed";
+                    return;
+                }
+                localPlayerIdUsed = 1u;
+                localActor = static_cast<std::uint32_t>(localActorResult);
+            }
+
+            // Keep GET_LOCAL_SLOT only as a diagnostic/fallback when it returns
+            // an actual non-negative slot. In the current runtime it is -1.
+            std::uint32_t localSlotRaw = 0xFFFFFFFFu;
+            std::uint32_t slotActor = 0u;
+            if (localActor == 0u) {
+                if (nativeInvoker_.invoke_u32(kNativeGetLocalSlot, localSlotRaw) &&
+                    static_cast<std::int32_t>(localSlotRaw) >= 0) {
+                    std::uintptr_t slotArgs[1]{
+                        static_cast<std::uintptr_t>(localSlotRaw)};
+                    std::uintptr_t slotActorResult = 0u;
+                    if (nativeInvoker_.invoke_raw(
+                            kNativeGetSlotActor, slotArgs, 1u, slotActorResult)) {
+                        slotActor = static_cast<std::uint32_t>(slotActorResult);
+                        if (slotActor != 0u) {
+                            localActor = slotActor;
+                        }
+                    }
+                }
+            }
+
+            if (localActor == 0u) {
+                error = "local player Actor unavailable via GET_PLAYER_ACTOR(0/1)";
                 return;
             }
 
@@ -1048,13 +1081,15 @@ bool RdrBridge::task_follow_remote_actor(
                 return;
             }
 
-            char message[240]{};
+            char message[280]{};
             std::snprintf(
                 message, sizeof(message),
-                "[FrontierRemoteTask] follow actor=0x%08X target=0x%08X localSlot=%u moverFrozen=%s%u",
+                "[FrontierRemoteTask] follow actor=0x%08X target=0x%08X nativePlayer=%u "
+                "fallbackSlot=%d moverFrozen=%s%u",
                 actorHandle,
                 localActor,
-                localSlot,
+                localPlayerIdUsed,
+                static_cast<std::int32_t>(localSlotRaw),
                 frozenReadOk ? "" : "<unreadable>",
                 frozenReadOk ? static_cast<unsigned>(frozenResult != 0u) : 0u);
             write_bridge_log_line(message);
