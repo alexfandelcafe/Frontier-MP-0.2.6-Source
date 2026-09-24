@@ -32,7 +32,6 @@ using FullReadPathFn = std::uintptr_t (*)(
     std::uintptr_t,
     std::uintptr_t);
 
-InlineHook g_fullReadPathHook{};
 FullReadPathFn g_originalFullReadPath = nullptr;
 std::atomic<std::uint32_t> g_observedCalls{0};
 
@@ -139,6 +138,53 @@ std::string pointer_candidates(std::initializer_list<std::uintptr_t> values) {
     return out.str();
 }
 
+std::string memory_qword_probe(std::uintptr_t address) {
+    std::ostringstream out;
+    if (address < 0x10000u) return out.str();
+
+#ifdef _WIN32
+    __try {
+        const auto* words = reinterpret_cast<const std::uintptr_t*>(address);
+        for (std::size_t i = 0; i < 4; ++i) {
+            const auto value = words[i];
+            out << " q" << i << "=0x" << std::hex << value << std::dec;
+
+            std::string ascii;
+            std::string utf16;
+            if (guarded_ascii(value, ascii) && !ascii.empty()) {
+                out << ":ascii=" << ascii;
+            } else if (guarded_utf16(value, utf16) && !utf16.empty()) {
+                out << ":utf16=" << utf16;
+            }
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        out << " <unreadable>";
+    }
+#else
+    (void)address;
+#endif
+
+    return out.str();
+}
+
+std::string compact_path_candidate(std::initializer_list<std::uintptr_t> values) {
+    std::ostringstream out;
+    for (const auto value : values) {
+        std::string ascii;
+        std::string utf16;
+
+        if (guarded_ascii(value, ascii) && !ascii.empty()) {
+            out << " ascii=" << ascii;
+        }
+        if (guarded_utf16(value, utf16) && !utf16.empty()) {
+            out << " utf16=" << utf16;
+        }
+
+        if (!out.str().empty()) break;
+    }
+    return out.str();
+}
+
 std::uintptr_t hooked_full_read_path(std::uintptr_t a,
                                      std::uintptr_t b,
                                      std::uintptr_t c,
@@ -162,6 +208,13 @@ std::uintptr_t hooked_full_read_path(std::uintptr_t a,
                << " d=0x" << d
                << std::dec
                << pointer_candidates({a, b, c, d});
+
+        const auto bProbe = memory_qword_probe(b);
+        if (!bProbe.empty()) before << " bProbe=" << bProbe;
+
+        const auto cProbe = memory_qword_probe(c);
+        if (!cProbe.empty()) before << " cProbe=" << cProbe;
+
         log_line(before.str());
     }
 
@@ -169,8 +222,12 @@ std::uintptr_t hooked_full_read_path(std::uintptr_t a,
 
     if (callIndex < 128) {
         std::ostringstream after;
-        after << "[FrontierAsset] fullReadPath return=" << std::hex << result << std::dec
+        after << "[FrontierAsset] fullReadPath return=0x" << std::hex << result << std::dec
               << pointer_candidates({result, a, b, c, d});
+
+        const auto resultProbe = memory_qword_probe(result);
+        if (!resultProbe.empty()) after << " resultProbe=" << resultProbe;
+
         log_line(after.str());
     }
 
@@ -179,6 +236,10 @@ std::uintptr_t hooked_full_read_path(std::uintptr_t a,
 }
 
 } // namespace
+
+AssetOverlay::~AssetOverlay() {
+    g_originalFullReadPath = nullptr;
+}
 
 bool AssetOverlay::initialize(std::uintptr_t moduleBase,
                               std::uint32_t textRva,
@@ -215,11 +276,11 @@ bool AssetOverlay::initialize(std::uintptr_t moduleBase,
     log_line(found.str());
 
     std::string hookError;
-    if (!g_fullReadPathHook.install(*target,
-                                    reinterpret_cast<std::uintptr_t>(&hooked_full_read_path),
-                                    kFullReadPathPatchSize,
-                                    "fiAssetManager::fullReadPath",
-                                    hookError)) {
+    if (!hook_.install(*target,
+                       reinterpret_cast<std::uintptr_t>(&hooked_full_read_path),
+                       kFullReadPathPatchSize,
+                       "fiAssetManager::fullReadPath",
+                       hookError)) {
         error = hookError;
         lastError_ = error;
         log_line("[FrontierAsset] hook failed: " + error);
@@ -227,7 +288,7 @@ bool AssetOverlay::initialize(std::uintptr_t moduleBase,
     }
 
     g_originalFullReadPath =
-        reinterpret_cast<FullReadPathFn>(g_fullReadPathHook.trampoline());
+        reinterpret_cast<FullReadPathFn>(hook_.trampoline());
 
     if (std::filesystem::exists(bootOverridePath_)) {
         log_line("[FrontierAsset] boot override file present");
