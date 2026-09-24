@@ -280,7 +280,7 @@ bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild 
                 GetModuleFileNameW(clientModule, clientPath, MAX_PATH);
             if (clientPathLength != 0 && clientPathLength < MAX_PATH) {
                 const std::filesystem::path overlayRoot =
-                    std::filesystem::path(clientPath, clientPathLength)
+                    std::filesystem::path(std::wstring(clientPath, clientPathLength))
                         .parent_path() / L"data" / L"game";
                 std::string assetOverlayError;
                 if (!assetOverlay_.initialize(
