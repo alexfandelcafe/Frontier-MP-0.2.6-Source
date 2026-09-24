@@ -44,6 +44,11 @@ constexpr std::uint32_t kNativeIsActorenumInstalled = 0x9B903F45;
 constexpr std::uint32_t kNativeGetActorEnum = 0x0B28E9EC;
 constexpr std::uint32_t kNativeStreamingRequestActor = 0xB0A79FEE;
 constexpr std::uint32_t kNativeStreamingIsActorLoaded = 0x7DF72579;
+constexpr std::uint32_t kNativeGetLocalSlot = 0xAD68A22E;
+constexpr std::uint32_t kNativeGetSlotActor = 0xDB9B49D8;
+constexpr std::uint32_t kNativeEnableMover = 0xE29F0A39;
+constexpr std::uint32_t kNativeSetMoverFrozen = 0x13E6B5EE;
+constexpr std::uint32_t kNativeTaskFollowActor = 0x12F0911A;
 constexpr std::uintptr_t kTaggedLayoutRef = 0x100000000ull;
 constexpr std::int32_t kRemoteTestActorEnum = 837; // ACTOR_MPPLAYER01
 
@@ -928,6 +933,102 @@ bool RdrBridge::update_remote_actor_transform(
     if (!completed) {
         error = dispatchError.empty()
             ? "remote actor transform task did not complete"
+            : dispatchError;
+        return false;
+    }
+    return error.empty();
+}
+
+bool RdrBridge::task_follow_remote_actor(
+    std::uint32_t actorHandle,
+    std::string& error) const {
+    error.clear();
+
+    if (actorHandle == 0u) {
+        error = "invalid remote actor handle";
+        return false;
+    }
+    if (!initialized_) {
+        error = "bridge not initialized";
+        return false;
+    }
+    if (!nativeInvoker_.ready()) {
+        error = "native invoker not ready";
+        return false;
+    }
+    if (!gameThreadDispatcher_.attached()) {
+        error = gameThreadDispatcherError_.empty()
+            ? "game-thread dispatcher not attached"
+            : gameThreadDispatcherError_;
+        return false;
+    }
+
+    std::string dispatchError;
+    const bool completed = gameThreadDispatcher_.submit_and_wait(
+        [this, actorHandle, &error]() {
+            std::uint32_t localSlot = 0u;
+            if (!nativeInvoker_.invoke_u32(kNativeGetLocalSlot, localSlot)) {
+                error = "GET_LOCAL_SLOT invoke failed";
+                return;
+            }
+
+            std::uintptr_t slotArgs[1]{static_cast<std::uintptr_t>(localSlot)};
+            std::uintptr_t localActorResult = 0u;
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeGetSlotActor, slotArgs, 1u, localActorResult)) {
+                error = "GET_SLOT_ACTOR invoke failed";
+                return;
+            }
+
+            const std::uint32_t localActor =
+                static_cast<std::uint32_t>(localActorResult);
+            if (localActor == 0u) {
+                error = "GET_SLOT_ACTOR returned null";
+                return;
+            }
+
+            std::uintptr_t moverArgs[2]{};
+            moverArgs[0] = static_cast<std::uintptr_t>(actorHandle);
+            moverArgs[1] = 0u; // false
+            std::uintptr_t result = 0u;
+
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeEnableMover, moverArgs, 1u, result)) {
+                error = "ENABLE_MOVER invoke failed";
+                return;
+            }
+
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeSetMoverFrozen, moverArgs, 2u, result)) {
+                error = "SET_MOVER_FROZEN(false) invoke failed";
+                return;
+            }
+
+            std::uintptr_t taskArgs[2]{};
+            taskArgs[0] = static_cast<std::uintptr_t>(actorHandle);
+            taskArgs[1] = static_cast<std::uintptr_t>(localActor);
+
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeTaskFollowActor, taskArgs, 2u, result)) {
+                error = "TASK_FOLLOW_ACTOR invoke failed";
+                return;
+            }
+
+            char message[240]{};
+            std::snprintf(
+                message, sizeof(message),
+                "[FrontierRemoteTask] follow actor=0x%08X target=0x%08X localSlot=%u",
+                actorHandle,
+                localActor,
+                localSlot);
+            write_bridge_log_line(message);
+        },
+        500u,
+        dispatchError);
+
+    if (!completed) {
+        error = dispatchError.empty()
+            ? "remote actor task did not complete"
             : dispatchError;
         return false;
     }
