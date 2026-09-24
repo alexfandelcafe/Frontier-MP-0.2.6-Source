@@ -28,7 +28,7 @@ public:
                             RemoteActorHandle& outActor, std::string& error) const;
     bool update_remote_actor_transform(std::uint32_t actorHandle, const PlayerState& state,
                                        std::string& error) const;
-    bool task_follow_remote_actor(std::uint32_t actorHandle, std::string& error) const;
+    bool task_go_to_remote_coord(std::uint32_t actorHandle, const Vec3& target, std::string& error) const;
     bool destroy_remote_actor(std::uint32_t actorHandle, std::string& error) const;
     std::string local_player_chain_diagnostic() const;
     bool local_player_pointer_available() const;
