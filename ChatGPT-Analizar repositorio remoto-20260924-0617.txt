@@ -1,0 +1,1293 @@
+Analizar repositorio remoto
+
+User: Anonymous
+Created: 9/23/2026 22:14:39
+Updated: 9/24/2026 6:10:24
+Exported: 9/24/2026 6:17:54
+Link: https://chatgpt.com/c/6ab4797f-1d50-83e9-a9e7-6245290476ea
+
+## Prompt:
+23/9/2026, 22:14:39
+
+lee https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/ChatGPT-Analiza%20el%20repositorio-20260923-2212.txt como contexto para despues analizar el repo  https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/tree/game-thread/remote-actor-spawn-test-0.2.41 y saber como continuar
+
+el ultimo mensaje es
+
+Sí. El client.log confirma que la prueba ya cruzó el punto importante: la locomoción nativa funciona.
+
+En esta ejecución:
+
+TASK_FOLLOW_ACTOR se ejecutó correctamente.
+El objetivo resuelto es tu Actor local 0x0000033D.
+El remoto llega con moverFrozen=0.
+No aparecen llamadas a TELEPORT_ACTOR_WITH_HEADING para este flujo.
+El remoteEntities=1 se mantiene durante los snapshots.
+
+Por ejemplo, aparece:
+
+[FrontierRemoteTask] follow actor=0x0000102A target=0x0000033D nativePlayer=0 fallbackSlot=-1 moverFrozen=0
+
+Eso explica exactamente lo que estás viendo: el ACTOR_MPPLAYER01 creado como Actor normal recibe una Task de seguimiento y el propio sistema de movimiento del juego lo desplaza hacia el jugador.
+
+La distinción importante es esta: todavía no estamos reproduciendo el movimiento de otro jugador. El actor de prueba está siguiendo directamente al jugador local mediante TASK_FOLLOW_ACTOR; PlayerState.velocity, gait y la trayectoria de red todavía no controlan su locomoción.
+
+También detecté algo que conviene corregir antes de seguir: durante la sesión aparecen varios handles distintos (0x159, 0xE05, 0xE1E, 0xE74, 0xFF9, 0x1007, 0x102A). Eso indica que el Actor de prueba está siendo recreado varias veces. No impide esta prueba, pero hay que averiguar por qué antes de convertir esto en el sistema definitivo.
+
+El siguiente paso lógico es reemplazar el TASK_FOLLOW_ACTOR fijo por locomoción hacia una posición objetivo de red anticipada, conservando TASK como dueño del movimiento y usando TELEPORT solamente para correcciones grandes.
+
+## Response:
+23/9/2026, 22:14:42
+
+Voy a tomar el TXT como contexto previo y luego contrastarlo con el estado real de la rama remote-actor-spawn-test-0.2.41, centrándome en locomoción, snapshots y recreación de actores.
+
+El log actual aporta una corrección importante: los siete TASK_FOLLOW_ACTOR no equivalen a siete sesiones limpias; seis corresponden a recreaciones del remoto durante la misma ejecución. Estoy aislando ahora qué código puede provocar ese ciclo.
+
+Inspeccionó el repositorio, código remoto y registros de actores
+
+Buscando en la web
+
+Analizando la reutilización
+
+Estoy revisando por qué se crean varios actores remotos aunque parezcan válidos. Las llamadas siguen a cada creación, así que sospecho eliminaciones por tiempo de inactividad o intervalos entre instantáneas; necesito comparar los ticks cercanos y la lógica de actualización.
+
+Analizada la reutilización
+
+Analizados logs completos y patrones de actores remotos
+
+Rastreando los reintentos
+
+Estoy comprobando si las recreaciones provienen de eliminaciones por tiempo de espera. La actualización de red parece ejecutarse en el mismo hilo, así que una carrera es menos probable; ahora necesito revisar la entrada principal y los ticks cercanos a cada creación.
+
+Rastreé los reintentos
+
+Investigadas carreras de concurrencia y spawns remotos en el código fuente
+
+Contrastando nativos
+
+Estoy comprobando documentación externa sobre las tareas de movimiento y seguimiento para confirmar firmas y hashes antes de proponer cambios. Quiero separar lo verificado del contexto del repositorio y evitar basarme solo en suposiciones.
+
+Contrastando hablantes nativos
+
+Sintetizando hallazgos
+
+Estoy separando lo confirmado de lo pendiente: el seguimiento funciona y el movimiento directo queda bloqueado, pero las recreaciones persisten. La próxima comprobación debe centrarse en el ciclo de vida del jugador remoto, no en una carrera de hilos ni en la replicación habitual.
+
+Se buscó en 1 sitio web
+
+Investigada la firma nativa de TASK_GO_TO_COORD
+
+Priorizando la depuración
+
+Estoy proponiendo estabilizar primero el ciclo de actualización y añadir trazas de creación, eliminación y tareas. Después comprobaré que un actor permanezca estable durante treinta segundos y, solo entonces, sustituiré el seguimiento por movimiento hacia destinos concretos.
+
+Confirmando la siguiente fase
+
+Estoy evitando adivinar la firma del movimiento hacia coordenadas. Primero voy a instrumentar y estabilizar el ciclo de vida; después probaré un nativo únicamente cuando su ABI esté verificado, para no introducir fallos difíciles de rastrear.
+
+Priorizada la depuración y confirmada la siguiente fase
+
+Buscando "8C574832" "TASK_GO_TO_COORD" "RDRMP" OR "rdr2" OR "red dead redemption"
+
+Ha pensado durante 3m 15s
+
+Ya tengo incorporado el TXT como contexto y contrasté ese diagnóstico con el estado actual de la rama y el client.log. La conclusión principal cambia un poco respecto del último mensaje: la locomoción está demostrada; antes de convertirla en locomoción de red hay que estabilizar el ciclo de vida del RemotePlayer.
+
+Estado real ahora
+
+La rama actual está en el commit 0beb8e..., pero ese commit solamente actualiza el TXT de contexto. El último commit que cambió el código es 833088f.... Después de la prueba de locomoción aparecen los cambios de ff1387e, c410f87 y 2b479809, que son precisamente los que dejaron funcionando TASK_FOLLOW_ACTOR y sus reintentos. Commits de la rama remote-actor-spawn-test-0.2.41
+
+La prueba actual demuestra:
+
+ACTOR_MPPLAYER01 enum=837
+CREATE_ACTOR_IN_LAYOUT → ActorRef válido
+GET_ACTOR_ENUM → 837
+ENABLE_MOVER
+SET_MOVER_FROZEN(false)
+MAKE_ACTOR_READY_FOR_ACTION
+SET_ACTOR_STREAMING_HIGH_PRIORITY
+ACTOR_FORCE_NEXT_UPDATE
+TASK_FOLLOW_ACTOR
+
+Y el log contiene:
+
+[FrontierRemoteTask] follow actor=0x0000102A target=0x0000033D
+nativePlayer=0 fallbackSlot=-1 moverFrozen=0
+
+Así que el experimento importante ya salió bien: un Actor normal puede recibir una Task y caminar mediante el motor de RDR1. Eso ya no es una hipótesis. rdr_bridge.cpp
+
+El problema que ahora sí debemos resolver
+
+El client.log actual tiene 17.657 líneas y 847 snapshots. Los snapshots terminan todavía con:
+
+players=2 remoteEntities=1
+
+No hay una desconexión registrada ni server timeout.
+
+Pero hay 7 ejecuciones de TASK_FOLLOW_ACTOR con handles diferentes:
+
+0x159
+0xE05
+0xE1E
+0xE74
+0xFF9
+0x1007
+0x102A
+
+Los seis últimos corresponden al mismo flujo de la ejecución actual, con CREATE_ACTOR_IN_LAYOUT para FrontierRemote_65000 seguido por TASK_FOLLOW_ACTOR. En particular:
+
+tick 2049 → 0xE05
+tick 2063 → 0xE1E
+tick 2070 → 0xE74
+tick 2348 → 0xFF9
+tick 2374 → 0x1007
+tick 2443 → 0x102A
+
+client.log actual
+
+Esto es importante porque el código actual de RemotePlayerManager no tiene una ruta normal que produzca ese comportamiento mientras el objeto permanezca vivo:
+
+if (player.actor.valid()) return true;
+
+y valid() solamente comprueba:
+
+actorHandle != 0
+
+Además, el mayor salto observado entre snapshots es de 5 ticks, mientras el grace timeout es de 750 ms y el protocolo usa 20 Hz según el contexto anterior. Por tanto, el patrón observado no encaja bien con una simple desaparición normal del jugador remoto. remote_player_manager.cpp
+
+Hay un candidato técnico muy concreto
+
+frontier_client.cpp crea un worker:
+
+CreateThread(...)
+
+ese worker hace:
+
+g_runtime.run_loop();
+
+y run_loop() ejecuta:
+
+update();
+
+cada 10 ms.
+
+Pero la DLL también exporta:
+
+FrontierClient_Update()
+
+que vuelve a llamar:
+
+g_runtime.update();
+
+No existe ningún mutex, atomic_flag ni otro mecanismo que impida dos update() simultáneos.
+
+frontier_client.cpp
+
+El launcher del repositorio no llama a FrontierClient_Update, por lo que esto no demuestra que el duplicado esté ocurriendo en tu ejecución. Pero si el juego, otra capa de integración o algún host externo está llamando a esa función, tenemos exactamente el tipo de carrera que puede producir:
+
+update A:
+    actor todavía vacío
+    spawnPending = false
+
+update B:
+    actor todavía vacío
+    spawnPending = false
+
+A → CREATE_ACTOR
+B → CREATE_ACTOR
+
+y terminar con múltiples Actors creados para 65000.
+
+Es, ahora mismo, la primera cosa que investigaría.
+
+Qué haría antes de tocar TASK_GO_TO_COORD
+
+Primero dejaría el test en un estado en el que durante una sesión de 30-60 segundos solo pueda existir:
+
+playerId 65000
+    ↓
+1 CREATE_ACTOR_IN_LAYOUT
+    ↓
+1 TASK_FOLLOW_ACTOR
+    ↓
+actor estable
+
+Para conseguirlo haría tres cambios pequeños.
+
+1. Serializar ClientRuntime::update()
+
+Preferiría un atomic_flag/atomic_bool de entrada en vez de un mutex bloqueante. Así una segunda llamada concurrente simplemente se descarta y no puede producir una segunda cadena de RemotePlayerManager.
+
+2. Pasar todo el lifecycle del manager a client.log
+
+Ahora mismo remote_player_manager.cpp escribe spawned, spawn failed, removed, etc. solamente en stderr. Eso deja el diagnóstico incompleto.
+
+Necesitamos ver directamente:
+
+spawn attempt
+spawn success actor=...
+spawn failed ...
+task follow success
+remove
+destroy
+
+3. Registrar thread ID + transición de handle
+
+Por ejemplo:
+
+[FrontierRemotePlayer] update thread=XXXX
+[FrontierRemotePlayer] spawn attempt playerId=65000
+[FrontierRemotePlayer] spawn success playerId=65000 actor=0x...
+[FrontierRemotePlayer] remove playerId=65000 reason=grace
+
+Con eso podremos distinguir definitivamente entre carrera, clear(), reinitialización o algún estado externo.
+
+Después de estabilizarlo: locomoción de red
+
+Ahí sí pasaría a la segunda etapa.
+
+El código actual ya tiene exactamente los datos que necesitamos:
+
+PlayerState.position
+PlayerState.velocity
+PlayerState.yaw
+PlayerState.gait
+
+y el interpolador ya hace:
+
+2 ticks de delay
+hasta 4 ticks de extrapolación
+
+interpolation.cpp
+
+El pipeline que usaría es:
+
+Snapshot
+   ↓
+Interpolación
+   ↓
+posición prevista
+   ↓
+TASK_GO_TO_COORD_NONSTOP
+   ↓
+Mover / locomoción del RDR
+   ↓
+posición real del Actor
+   ↓
+medición del error
+   ↓
+corrección solo si el drift es grande
+
+No haría:
+
+snapshot
+ ↓
+TASK_GO_TO_COORD
+ ↓
+snapshot
+ ↓
+TASK_GO_TO_COORD
+ ↓
+snapshot
+ ↓
+TASK_GO_TO_COORD
+
+porque estaríamos reiniciando continuamente la Task y probablemente degradando precisamente la locomoción que acabamos de demostrar.
+
+El contexto del repo identifica TASK_GO_TO_COORD como 0x8C574832 y TASK_GO_TO_COORD_NONSTOP como 0xD62D6CE5, pero también deja claro que la ABI exacta de esos natives todavía no está demostrada. Por eso no introduciría todavía esos hashes con parámetros inventados. TXT de contexto analizado
+
+Hay además un detalle que corregir antes de usar heading de red: el interpolador hace lerp() lineal de yaw; al cruzar 359° → 1° puede interpolar pasando por 180°. Para la locomoción definitiva habrá que hacer interpolación angular wrap-aware.
+
+Mi orden de trabajo
+
+1. Estabilizar update()/RemotePlayer lifecycle
+2. Confirmar 1 Actor = 1 RemotePlayer durante toda una sesión
+3. Añadir IS_ACTOR_VALID periódico
+4. Medir posición real del Actor mediante GET_POSITION
+5. Obtener ABI demostrada de TASK_GO_TO_COORD_NONSTOP
+6. Probar destino fijo
+7. Probar destino dinámico
+8. Introducir posición prevista + velocity
+9. Introducir gait/speed
+10. Añadir teleport únicamente como resync
+
+En otras palabras: no volvería a investigar cómo hacer que el Actor camine. Esa parte ya quedó demostrada. El cuello de botella inmediato es conseguir que el mismo RemotePlayer conserve de forma determinista el mismo Actor; después de eso, el problema pasa a ser puramente de control de locomoción y sincronización de red.
+
+Puedo preparar ahora el parche de instrumentación + protección contra update() concurrente y dejar la siguiente prueba diseñada para demostrar que 65000 mantiene un único Actor estable.
+
+## Prompt:
+24/9/2026, 1:56:57
+
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.logel actor se movia con locomocion (creo que estaba moviendose hacia mi misma coordenada)
+
+## Response:
+24/9/2026, 1:57:01
+
+Voy a contrastar esa observación con el client.log actual y con la implementación de TASK_FOLLOW_ACTOR, para separar “locomoción real” de “locomoción siguiendo al jugador local”.
+
+Confirmando el movimiento
+
+La evidencia encaja: el actor remoto aparece aproximadamente a 4 metros del jugador local y recibe una tarea para seguirlo. No hay teletransporte, así que el movimiento parece caminar hacia la posición local real, no una coordenada de red falsificada.
+
+Analicé movimientos, tareas y seguimiento entre actores locales y remotos
+
+Ha pensado durante 27s
+
+Sí. Al revisar el client.log actual, tu interpretación es correcta y ahora podemos precisar bastante mejor qué ocurrió.
+
+Lo que realmente hizo el Actor
+
+En la prueba se ejecutó:
+
+[FrontierRemoteTask] follow actor=0x00000CF9 target=0x0000032F nativePlayer=0 fallbackSlot=-1 moverFrozen=0
+
+Aquí:
+
+0x00000CF9 = nuestro ACTOR_MPPLAYER01 remoto.
+
+0x0000032F = el Actor del jugador local.
+
+moverFrozen=0 = el Mover estaba desbloqueado.
+
+No hay TELEPORT_ACTOR_WITH_HEADING en esta ejecución.
+
+El propio código confirma que TASK_FOLLOW_ACTOR recibe exactamente esos dos handles:
+
+taskArgs[0] = actorHandle; // remoto
+taskArgs[1] = localActor;  // jugador local
+
+TASK_FOLLOW_ACTOR(taskArgs)
+
+Implementación actual de task_follow_remote_actor
+
+Y hay una comprobación especialmente buena en el log
+
+En esa misma ejecución, el jugador local se creó en:
+
+(-839.760010, 92.546570, 2372.669922)
+
+y el remoto 65000 fue creado en:
+
+(-841.133484, 92.546570, 2376.426270)
+
+La separación es aproximadamente 4 metros.
+
+Eso no es casualidad: el test sintético genera el remoto con:
+
+fake.position = local.position;
+fake.position.x += cos(angle) * 4.0f;
+fake.position.z += sin(angle) * 4.0f;
+
+Es decir:
+
+Jugador local
+     ↓
+posición local
+     +
+órbita artificial de 4 m
+     ↓
+spawn del remoto
+     ↓
+TASK_FOLLOW_ACTOR(remoto, jugador local)
+
+Por eso lo que viste en pantalla tiene mucho sentido: el remoto aparece separado ~4 m y después el motor intenta caminarlo hacia el Actor local.
+
+Esto es importante para el proyecto
+
+Ya podemos afirmar algo más fuerte que antes:
+
+No solamente sabemos que TASK_FOLLOW_ACTOR fue aceptado; sabemos que el experimento utilizó como objetivo el Actor real del jugador local y que el remoto se creó inicialmente a unos 4 m de él.
+
+Por tanto, la locomoción que viste no era una serie de teleports producida por FrontierMP. El RemotePlayerManager desactiva explícitamente el transform update mientras locomotionTaskActive está activo:
+
+if (player.locomotionTaskActive) {
+    ++it;
+    continue;
+}
+
+remote_player_manager.cpp
+
+Pero todavía hay una diferencia crucial
+
+Esto todavía no es locomoción de red.
+
+Ahora mismo tenemos:
+
+PlayerState remoto
+       ↓
+spawn inicial
+       ↓
+TASK_FOLLOW_ACTOR
+       ↓
+objetivo = jugador local
+       ↓
+RDR hace caminar al Actor
+
+Lo que necesitamos finalmente es:
+
+PlayerState remoto
+       ↓
+posición prevista de red
+       ↓
+objetivo de locomoción
+       ↓
+RDR hace caminar al Actor
+
+Y aquí aparece una estrategia muy interesante.
+
+En vez de intentar saltar inmediatamente a una ABI desconocida de TASK_GO_TO_COORD, podemos hacer una prueba intermedia:
+
+Jugador remoto
+      ↓
+Remote Actor
+      ↓
+TASK_FOLLOW_ACTOR
+      ↓
+Actor objetivo cuya posición representa
+la posición prevista de red
+
+Es decir, crearíamos un Actor objetivo de navegación y moveríamos ese objetivo según el PlayerState, mientras el Actor remoto continúa teniendo TASK_FOLLOW_ACTOR.
+
+Eso permitiría probar:
+
+network position
+      ↓
+target Actor
+      ↓
+TASK_FOLLOW_ACTOR
+      ↓
+locomoción nativa
+
+sin introducir todavía la ABI incierta de TASK_GO_TO_COORD_NONSTOP.
+
+Además, nos resolvería una cuestión importante: podríamos comprobar si un TASK_FOLLOW_ACTOR puede seguir correctamente un objetivo que se mueve continuamente, que conceptualmente es casi exactamente lo que necesitamos para un jugador remoto.
+
+Mi conclusión ahora es: la locomoción nativa ya está suficientemente demostrada; el siguiente experimento debería convertir el objetivo del TASK_FOLLOW_ACTOR en un objetivo de red móvil, no volver a tocar SIMULATE_PLAYER_INPUT_GAIT ni volver al teleport del remoto.
+
+## Prompt:
+24/9/2026, 2:00:39
+
+Pero follow actor no es para seguir al jugador local? yo no quiero eso, yo quiero que se sincronice con el movimiento que haga el actor remoto
+
+## Response:
+24/9/2026, 2:00:55
+
+Sí. TASK_FOLLOW_ACTOR está siguiendo al jugador local, así que no resuelve el problema que quieres resolver.
+
+En el código actual la cadena es literalmente:
+
+GET_PLAYER_ACTOR(0)        -> obtiene el Actor local
+TASK_FOLLOW_ACTOR(
+    remoteActor,
+    localActor
+)
+
+Por eso el comportamiento que viste era válido como prueba de locomoción nativa, pero no era sincronización del actor remoto.
+
+Lo que realmente necesitas
+
+La dirección correcta es:
+
+snapshot de red
+    ↓
+posición/velocidad/rotación del jugador remoto
+    ↓
+interpolación / predicción
+    ↓
+objetivo de movimiento
+    ↓
+TASK de locomoción sobre el remoteActor
+
+Es decir, el remoteActor debe intentar reproducir la trayectoria que viene de:
+
+PlayerState.position
+PlayerState.velocity
+PlayerState.yaw
+PlayerState.gait
+
+y nunca tomar al jugador local como target.
+
+Qué está mal en la implementación actual
+
+Ahora mismo tienes dos sistemas separados:
+
+Network snapshot
+      ↓
+targetState / interpolator
+      ↓
+(remoteActor NO usa esto cuando locomotionTaskActive)
+
+y:
+
+remoteActor
+      ↓
+TASK_FOLLOW_ACTOR
+      ↓
+localActor
+
+Por eso remoteEntities=1 y el actor caminando no significaban todavía que la red estuviera conduciendo su movimiento.
+
+La arquitectura que yo probaría ahora
+
+La solución correcta es hacer que el actor remoto tenga un objetivo de locomoción derivado del snapshot remoto.
+
+Hay dos caminos:
+
+A. TASK_GO_TO_COORD...
+
+Cada vez que cambia suficientemente el objetivo interpolado:
+
+remoteTarget = interpolatedState.position;
+remoteYaw    = interpolatedState.yaw;
+
+se actualiza la tarea de movimiento del actor hacia esa posición.
+
+Conceptualmente:
+
+remote snapshot
+      ↓
+Interpolator
+      ↓
+predicted position
+      ↓
+TASK_GO_TO_COORD_NONSTOP(remoteActor, x, y, z, ...)
+      ↓
+native locomotion
+
+Y cuando el error entre actor real y posición de red sea demasiado grande:
+
+error pequeño  → locomoción normal
+error grande   → corrección/teleport
+
+Ese sería el modelo que realmente buscamos.
+
+B. Actor proxy como experimento intermedio
+
+Como todavía no hemos demostrado el ABI exacto de TASK_GO_TO_COORD_NONSTOP, podemos hacer una prueba muy controlada:
+
+network position
+      ↓
+proxy actor
+      ↓
+TASK_FOLLOW_ACTOR(remoteActor, proxyActor)
+
+Así TASK_FOLLOW_ACTOR ya no seguiría al jugador local; seguiría un actor cuyo movimiento representa la posición remota recibida por red.
+
+Eso serviría para demostrar:
+
+network → target remoto → locomoción del actor
+
+Pero no lo usaría como solución final, porque FOLLOW_ACTOR está pensado para mantener una relación de seguimiento, no para reproducir exactamente una trayectoria sincronizada.
+
+La prueba importante ahora
+
+Yo eliminaría conceptualmente esta parte:
+
+task_follow_remote_actor(...)
+
+que obtiene:
+
+GET_PLAYER_ACTOR(0)
+
+y la sustituiría por un controlador que use renderedState.position.
+
+Entonces podremos comprobar algo mucho más significativo:
+
+Jugador remoto:
+posición A → B → C → D
+
+Actor remoto:
+A' → locomoción → B' → C' → D'
+
+sin que el jugador local intervenga en absoluto.
+
+Y hay una cosa importante: no deberíamos usar TELEPORT_ACTOR_WITH_HEADING en cada snapshot. Eso volvería a convertirlo en una representación cinemática. El objetivo es que la red determine hacia dónde debe ir, y que el motor determine cómo locomociona.
+
+La siguiente modificación que tiene más sentido en este repo es implementar ese controlador de movimiento remoto y dejar TASK_FOLLOW_ACTOR fuera de la ruta de sincronización.
+
+## Prompt:
+24/9/2026, 2:03:48
+
+No quiero usar follow actor, el A. TASK_GO_TO_COORD...  como funcionaria entonces?
+
+## Response:
+24/9/2026, 2:03:54
+
+Sí. En ese esquema TASK_GO_TO_COORD... sería el que hace que el motor locomote hacia la posición que llega de red, en vez de seguir a otro Actor. Voy a aterrizarlo al flujo actual del repo.
+
+Explicando el seguimiento remoto
+
+Estoy planteando un controlador que actualice periódicamente el objetivo remoto, usando posición interpolada, velocidad y un pequeño margen predictivo. La firma exacta sigue sin estar confirmada, así que conviene encapsularla y evitar inventar argumentos.
+
+Explicado el seguimiento remoto
+
+Explicada la arquitectura, creación de actores y navegación por coordenadas
+
+Ha pensado durante 20s
+
+Sí. La idea de TASK_GO_TO_COORD... es bastante distinta de FOLLOW_ACTOR:
+
+FOLLOW_ACTOR
+remoteActor ──────► localActor
+
+mientras que:
+
+GO_TO_COORD
+remoteActor ──────► (x, y, z)
+
+Ese (x, y, z) sería la posición del jugador remoto que recibiste por red, no la posición del jugador local.
+
+Cómo funcionaría en tu caso
+
+Supongamos que por red recibes:
+
+PlayerState remote{
+    .position = {100.0f, 50.0f, 12.0f},
+    .velocity = {2.0f, 0.0f, 0.0f},
+    .yaw = 90.0f
+};
+
+El interpolador ya produce una posición suavizada:
+
+renderedState.position
+
+Entonces el flujo sería:
+
+snapshot remoto
+       ↓
+RemoteEntityInterpolator
+       ↓
+renderedState.position
+       ↓
+TASK_GO_TO_COORD...
+       ↓
+remoteActor locomota hacia esa posición
+
+Por ejemplo, conceptualmente:
+
+auto target = player.renderedState.position;
+
+bridge.task_go_to_coord(
+    player.actor.actorHandle,
+    target.x,
+    target.y,
+    target.z
+);
+
+El motor sería responsable de hacer que el Actor camine/corra hacia ese punto.
+
+Lo importante: no llamar la tarea cada frame
+
+No haríamos:
+
+cada 10 ms:
+    TASK_GO_TO_COORD(remoteActor, target.x, target.y, target.z);
+
+porque estarías reiniciando constantemente la tarea y probablemente producirías una locomoción poco natural.
+
+Sería más parecido a:
+
+if (!taskActive ||
+    distance(currentTarget, newTarget) > TARGET_UPDATE_THRESHOLD)
+{
+    issue_go_to_coord(newTarget);
+    currentTarget = newTarget;
+    taskActive = true;
+}
+
+Así el Actor empieza a desplazarse hacia A mientras llegan nuevos snapshots:
+
+Red:
+A ─── B ─── C ─── D ─── E
+       ↓
+Interpolador
+       ↓
+A' ─── B' ─── C' ─── D'
+       ↓
+         GO_TO_COORD
+       ↓
+Actor remoto locomota
+
+Hay otro detalle importante: usar velocity
+
+No necesariamente conviene hacer que el Actor vaya simplemente hacia la posición actual.
+
+Imagina que el jugador remoto está corriendo:
+
+posición actual: 100
+velocidad:       +5 m/s
+
+Cuando recibes el snapshot, esa posición ya tiene cierta antigüedad.
+
+Entonces puedes construir un objetivo ligeramente adelantado:
+
+predictedPosition =
+    renderedState.position +
+    renderedState.velocity * predictionTime;
+
+Por ejemplo:
+
+posición recibida       = 100
+velocidad               = +5
+predictionTime          = 0.15 s
+
+objetivo locomoción     = 100.75
+
+Entonces:
+
+objetivo predicho
+                       ↓
+100 ----------- 100.75
+ ↑
+actor remoto
+
+Eso reduce el efecto de ir siempre "persiguiendo" una posición que ya quedó atrás.
+
+En tu código ya tenemos justamente position y velocity en PlayerState, y el interpolador ya trabaja con ambos.
+
+¿Qué hace entonces el Actor?
+
+Aquí está la diferencia fundamental.
+
+Con TELEPORT_ACTOR_WITH_HEADING haces:
+
+red → posición → colocación instantánea
+
+Con TASK_GO_TO_COORD haces:
+
+red → objetivo → motor de locomoción → desplazamiento físico
+
+Por eso el segundo es mucho más cercano a lo que estás buscando.
+
+El motor decide cosas como:
+
+caminar
+acelerar
+desacelerar
+animación de movimiento
+navegación hacia el punto
+
+en lugar de que nosotros cambiemos directamente su transformación.
+
+Pero hay una limitación
+
+Esto no significa que el Actor vaya a reproducir exactamente la trayectoria del jugador remoto.
+
+Por ejemplo, la red puede decir:
+
+tick 100: X=0
+tick 101: X=1
+tick 102: X=2
+tick 103: X=3
+
+y el TASK_GO_TO_COORD puede hacer:
+
+Actor: 0 → 0.4 → 1.1 → 2.0 → 2.7 → 3.2
+
+porque el sistema de locomoción tiene su propia aceleración, velocidad, navegación, etc.
+
+Por eso necesitamos una política de corrección:
+
+error pequeño
+    ↓
+seguir locomoción
+
+error moderado
+    ↓
+actualizar objetivo
+
+error grande
+    ↓
+corrección de posición
+
+Por ejemplo:
+
+if (error < 1.0f)
+{
+    // locomoción normal
+}
+else if (error < 5.0f)
+{
+    // actualizar/reemitir target
+}
+else
+{
+    // resync fuerte
+}
+
+Los valores son ejemplos; tendríamos que medirlos en el juego.
+
+¿Y el yaw?
+
+TASK_GO_TO_COORD... principalmente resuelve movimiento hacia una coordenada.
+
+El yaw de red es otro problema.
+
+No conviene hacer:
+
+set_position(...)
+set_yaw(...)
+
+cada snapshot, porque volveríamos a una solución cinemática.
+
+Lo ideal sería que el Actor obtenga su orientación naturalmente de la locomoción, y usar el yaw recibido principalmente para determinar la dirección/objetivo cuando sea necesario.
+
+En tu repo, la arquitectura quedaría así
+
+Ahora tienes:
+
+RemoteEntityInterpolator
+        ↓
+renderedState
+        ↓
+TASK_FOLLOW_ACTOR
+        ↓
+localActor
+
+Eso es lo que debemos quitar.
+
+Quedaría:
+
+RemoteEntityInterpolator
+        ↓
+renderedState
+        ↓
+predicción usando velocity
+        ↓
+target X/Y/Z
+        ↓
+TASK_GO_TO_COORD...
+        ↓
+remoteActor
+
+y aparte:
+
+error pequeño ──► continúa locomoción
+                       │
+                       │
+                 error grande
+                       ↓
+                resync/teleport
+
+Esto sí estaría haciendo:
+
+"el actor remoto se mueve según la trayectoria recibida por red"
+
+en vez de:
+
+"el actor remoto sigue al jugador local".
+
+Una precaución antes de implementarlo
+
+En este branch tenemos identificado TASK_GO_TO_COORD (0x8C574832) y TASK_GO_TO_COORD_NONSTOP (0xD62D6CE5), pero todavía no hemos demostrado la firma/ABI exacta que espera este RDR1 build. No conviene inventar los argumentos y meterlos directamente en rdr_bridge.cpp.
+
+El siguiente paso técnico correcto es determinar esa firma y entonces implementar algo como:
+
+task_move_remote_actor(
+    actor,
+    predictedNetworkPosition
+);
+
+y reemplazar completamente task_follow_remote_actor() en el camino del jugador remoto.
+
+## Prompt:
+24/9/2026, 2:30:43
+
+oket avanza entonces
+
+## Response:
+24/9/2026, 2:30:56
+
+Voy a hacerlo como un cambio aislado: añadir la ruta GO_TO_COORD y dejar intacta la ruta de teletransporte como mecanismo de resync. Primero estoy verificando la firma nativa antes de tocar el branch.
+
+La firma ya quedó mejor sustentada: las bases públicas de natives para RDR1 confirman 0xD62D6CE5 como TASK_GO_TO_COORD_NONSTOP y muestran cuatro slots de argumentos; el tercer/fourth slot adicional es el que tenemos que tratar como parámetro de movimiento, no como otro Actor.
+
+Ya encontré una base más segura para el primer experimento: TASK_GO_TO_COORD usa solo actor + posición, mientras NONSTOP añade un cuarto parámetro cuyo significado no está establecido en este build. Voy a probar primero la variante de 3 argumentos.
+
+Consultado código y commits de GitHub para diagnosticar error 404
+
+Clonando rama remota del repositorio GitHub
+
+Cloné la rama remota del repositorio GitHub
+
+Revisando el acceso
+
+Estoy intentando recuperar el estado actual del proyecto para aplicar los cambios solicitados. La primera ruta no está devolviendo el archivo esperado, así que estoy comprobando si el problema está en la rama o en la ubicación del fichero antes de modificar nada.
+
+Revisado el acceso
+
+Buscando en la web
+
+Analizada rama GitHub, código RDR2 y firmas nativas relacionadas
+
+Se ha buscado en 12 sitios web
+
+Afinando la navegación
+
+Estoy comprobando la firma exacta de la orden de movimiento y cómo se empaquetan las coordenadas tridimensionales. Quiero confirmar qué representa el cuarto argumento antes de tocar el código, porque podría ser velocidad, tolerancia u otra opción.
+
+Afinada la navegación
+
+Investigaste firmas nativas y convenciones de coordenadas en repositorios RDR
+
+Concretando la firma
+
+Estoy comparando la orden con variantes conocidas para inferir si el último valor controla la velocidad u otra opción. Mantendré el cambio mínimo y validaré la compilación para evitar romper el comportamiento existente.
+
+Concretada la firma
+
+Buscando "8C574832" "TASK_GO_TO_COORD" native
+
+Investigó e implementó movimiento nativo de actores remotos
+
+Implementado movimiento sintético, redirección y seguimiento de actores nativos
+
+Implementada y actualizada la locomoción sintética remota de jugadores
+
+Verificada la compilación, configuración y cambios de locomoción
+
+Ha pensado durante 3m 18s
+
+Avancé en el branch game-thread/remote-actor-spawn-test-0.2.41.
+
+Cambios realizados:
+
+Eliminé TASK_FOLLOW_ACTOR de la ruta de locomoción remota.
+
+Añadí TASK_GO_TO_COORD (0x8C574832) al RdrBridge.
+
+El destino ahora es desired.position, obtenido del snapshot/interpolador.
+
+El Actor mantiene la locomoción nativa y solo recibe un nuevo destino cuando cambia aproximadamente 0,30 m, con un intervalo mínimo de 150 ms.
+
+El probe 65000 ya no consulta ni sigue GET_PLAYER_ACTOR(0).
+
+El probe tampoco utiliza TELEPORT_ACTOR_WITH_HEADING.
+
+Dejé la ruta de teleport intacta para los demás actores, para no mezclar todavía este experimento con el sistema de resync.
+
+Los dos commits de esta modificación son:
+
+a67b812c0fec57efc5a39f4700458eb1a4d3e242
+8567e4f0d7d488b7989cddbe6ef9bc573402e18a
+
+Archivos modificados:
+
+game/include/frontier/game/rdr_bridge.hpp
+game/src/rdr_bridge.cpp
+client/src/remote_player_manager.cpp
+
+Todavía no está validado en runtime porque aquí no puedo ejecutar el RDR1 Windows/build del juego. La prueba que toca ahora es mirar client.log: deberíamos empezar a ver entradas como:
+
+[FrontierRemoteTask] go-to actor=... target=(x,y,z) moverFrozen=0
+[FrontierRemotePlayer] locomotion target playerId=65000 actor=... target=(x,y,z)
+
+y comprobar que el Actor realmente recorre la órbita del 65000 mediante locomoción, en lugar de quedarse siguiendo al jugador local.
+
+## Prompt:
+24/9/2026, 2:47:16
+
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.log
+
+## Response:
+24/9/2026, 2:47:26
+
+El log nuevo sí contiene la ruta TASK_GO_TO_COORD. Ahora estoy separando dos cosas: si la tarea se está ejecutando correctamente y si el Actor está siendo recreado, porque eso último puede arruinar la locomoción aunque el native funcione.
+
+Descargado y analizado client.log y registros de FrontierRemoteTask
+
+Analizando la sincronización local
+
+Estoy reconstruyendo la secuencia: los desplazamientos parecen comenzar antes de que el estado local sea válido, usando una posición inicial cercana al origen. Después, el estado local se actualiza y las órdenes de movimiento dejan de continuar, así que debo revisar esa transición.
+
+Analizada la sincronización local
+
+Evaluando la prueba de movimiento
+
+Reconozco comandos de desplazamiento válidos, pero no prueban que el actor se haya movido. Las recreaciones repetidas reinician su control, y las órdenes desaparecen cuando el estado local queda disponible; debo revisar esa propiedad.
+
+Analizada la recreación y recuperación de actores remotos y locales
+
+Ha pensado durante 1m 17s
+
+Sí. Revisé el client.log nuevo y hay evidencia clara de que TASK_GO_TO_COORD está siendo invocado, pero también aparece un problema importante que debemos resolver antes de considerar la prueba válida.
+
+Lo que sí funciona
+
+En el log aparecen 35 ejecuciones de:
+
+[FrontierRemoteTask] go-to actor=... target=(...)
+
+Por ejemplo:
+
+actor=0x0000010E target=(-2.111,0.000,3.398)
+actor=0x0000010E target=(-2.503,0.000,3.120)
+actor=0x0000010E target=(-2.858,0.000,2.798)
+actor=0x0000010E target=(-3.173,0.000,2.436)
+...
+actor=0x0000010E target=(-3.986,0.000,0.339)
+
+Los targets siguen claramente la trayectoria circular del test sintético de radio ~4 m. Además, todos reportan:
+
+moverFrozen=0
+
+Así que la parte:
+
+Actor
+  ↓
+ENABLE_MOVER
+SET_MOVER_FROZEN(false)
+MAKE_ACTOR_READY_FOR_ACTION
+  ↓
+TASK_GO_TO_COORD
+
+está siendo aceptada por el juego.
+
+La documentación pública de natives también identifica 0x8C574832 como TASK_GO_TO_COORD y 0xD62D6CE5 como TASK_GO_TO_COORD_NONSTOP; en este experimento usamos la variante de tres argumentos.
+
+Pero hay un problema serio
+
+El último TASK_GO_TO_COORD del log ocurre alrededor de:
+
+tick 5168
+
+Después hay snapshots continuamente:
+
+5170
+5172
+...
+5185
+...
+6000+
+
+pero no vuelve a aparecer ningún go-to.
+
+Y justo después de eso aparece:
+
+[FrontierClient] local-player state replication active position=(-839.76, 92.5466, 2372.67)
+
+Es decir, en este log la primera confirmación de que el Actor local quedó realmente listo ocurre después de que dejaron de emitirse los GO_TO.
+
+Esto es importante porque el client_runtime.cpp actual solamente ejecuta:
+
+remotePlayers_.update(...)
+
+después de que:
+
+read_local_player_state(...)
+
+devuelve correctamente. Por tanto, este client.log no parece corresponder exactamente al binario construido a partir del código actual, o bien mezcla ejecuciones/versiones diferentes.
+
+Hay otro problema: recreación del Actor
+
+En esta misma sesión aparecen múltiples:
+
+CREATE_ACTOR_IN_LAYOUT
+
+para FrontierRemote_65000.
+
+Por ejemplo:
+
+0x000000FC
+0x00000102
+0x00000108
+0x0000010E
+0x00000114
+0x0000011A
+0x00000120
+0x0000012C
+
+Eso son varios Actors distintos.
+
+Y además hay creaciones iniciales alrededor de:
+
+( 3.98, 0, -0.37 )
+( 3.98, 0,  0.35 )
+( 3.70, 0,  1.51 )
+( 2.77, 0,  2.89 )
+...
+
+y después aparecen otras alrededor del mundo real:
+
+(-839.59, 92.55, 2368.67)
+...
+
+Esto también encaja con que el log contiene transiciones entre estados/runs diferentes o que el Actor está siendo recreado durante el arranque.
+
+Lo que todavía NO demuestra el log
+
+El log demuestra:
+
+network target
+      ↓
+TASK_GO_TO_COORD
+      ↓
+native acepta la tarea
+
+pero no demuestra todavía:
+
+TASK_GO_TO_COORD
+      ↓
+Actor realmente camina
+      ↓
+posición física del Actor cambia
+      ↓
+posición física sigue al target de red
+
+Para demostrar eso necesitamos registrar la posición real del Actor 65000 después de cada tarea, idealmente:
+
+tick=4890
+target=(-2.111,0,3.398)
+actorPos=(-2.80,0,2.90)
+
+tick=4892
+target=(-2.503,0,3.120)
+actorPos=(-2.65,0,2.99)
+
+tick=4894
+target=(-2.858,0,2.798)
+actorPos=(-2.48,0,3.07)
+
+Entonces podremos saber con certeza si el motor está locomotando hacia esos targets.
+
+Mi conclusión sobre este client.log
+
+La prueba de TASK_GO_TO_COORD sí está llegando al native y el mover está desbloqueado.
+
+Pero la sesión todavía no es una prueba limpia de sincronización porque:
+
+los GO_TO desaparecen en mitad de la sesión;
+
+el Actor se crea repetidas veces;
+
+los primeros targets están alrededor de (0,0,0) y después aparecen coordenadas del mundo real;
+
+no estamos registrando la posición física del Actor después de ejecutar la tarea.
+
+El siguiente cambio que haría no es otro ajuste de TASK_GO_TO_COORD: añadir lectura de GET_POSITION del Actor remoto y loggear target vs actual. Eso nos dirá inmediatamente si TASK_GO_TO_COORD realmente está haciendo caminar al Actor y cuánto error mantiene respecto de la posición de red.
+
+## Prompt:
+24/9/2026, 2:50:58
+
+Yo lo que vi es el el actor no se movia realmente, de vez en cuando spawneaba cerca otra vez, pero no movimiento con locomocion
+
+## Response:
+24/9/2026, 2:51:23
+
+Sí. Esa observación cambia el diagnóstico: el native se ejecuta, pero TASK_GO_TO_COORD no está consiguiendo locomoción sostenida; el síntoma dominante es recreación/reaparición del Actor. Voy a localizar por qué se pierde el Actor y separar eso del problema del task.
+
+Encontré el dato que explica el comportamiento. En G.R.E-Lab, la firma real de este RDR1 native aparece como TASK_GO_TO_COORD(Actor, const Vector3*, MoveType). Nuestro experimento anterior estaba pasando X/Y/Z como slots, así que el segundo argumento estaba mal empaquetado.
+
+Analizando los respawns
+
+Estoy intentando explicar por qué una entidad falsa reaparece: podría haber desconexiones, expiración por falta de actualizaciones o destrucción automática del actor. Necesito revisar el registro temporal para distinguir entre reinicios reales y recreaciones dentro de la misma sesión.
+
+Analizados los respawns
+
+Rastreando la locomoción
+
+Estoy comprobando dos problemas relacionados: la recreación repetida del actor y la ausencia de movimiento. Las hipótesis principales son expiración por falta de instantáneas, pérdida de estado, condiciones de carrera o múltiples instancias del cliente.
+
+Rastreaste la locomoción
+
+Investigadas recreaciones y respawns repetidos de actores remotos
+
+Comprobando los argumentos
+
+Estoy revisando si la orden de movimiento recibe las coordenadas con el formato correcto. Si estoy empaquetando el vector de manera equivocada, el actor podría crearse bien pero permanecer inmóvil.
+
+Comprobados los argumentos
+
+Se ha buscado en 10 sitios web
+
+Investigada la disposición y los argumentos nativos de TaskGoToCoord
+
+Corregí firmas nativas, puntero Vector3 y enumeración MoveType
+
+Buscando "MoveType" "TASK_GO_TO_COORD" "RDR1" "0x8C574832" -GTA
+
+Validando compilación del puente Vec3 nativo
+
+Ha pensado durante 1m 11s
+
+Sí. Con lo que acabas de observar, el problema quedó mucho más claro.
+
+El test anterior de TASK_GO_TO_COORD estaba mal implementado. La definición encontrada en G.R.E-Lab para RDR1 es:
+
+TASK_GO_TO_COORD(Actor_t actor, const Vector3* position, int moveType)
+
+y nosotros estábamos pasando:
+
+actor, packed(X,Y), Z
+
+cuando el segundo argumento debía ser un puntero a Vector3. (Red Mods Docs)
+
+Eso explica perfectamente el síntoma:
+
+Actor aparece
+   ↓
+TASK_GO_TO_COORD se llama
+   ↓
+no hay locomoción real
+   ↓
+más tarde aparece otro Actor cerca
+
+El native estaba siendo invocado, pero con el ABI equivocado.
+
+Ya corregí el branch:
+
+TASK_GO_TO_COORD
+    actorHandle
+    &taskPosition   ← Vector3*
+    moveType = 0
+
+Commit:
+
+efdb4b48429c134f6dafe035592e17224224f6dc
+
+Además, mantuve fuera TASK_FOLLOW_ACTOR. El Actor remoto ahora solo recibe coordenadas provenientes del estado/interpolador de red.
+
+Lo que espero ver en el próximo log
+
+Algo como:
+
+[FrontierRemoteTask] go-to actor=0x... target=(...)
+
+pero esta vez el comportamiento visual debería ser distinto:
+
+posición inicial
+      ↓
+Actor empieza a caminar
+      ↓
+continúa locomoción
+      ↓
+nuevo target de red
+      ↓
+corrige dirección
+      ↓
+continúa caminando
+
+Y no simplemente:
+
+spawn → quieto → spawn otra vez
+
+Hay una segunda cuestión que todavía queda abierta: por qué el Actor estaba siendo recreado varias veces. El log muestra 14 creaciones de FrontierRemote_65000; eso merece una investigación separada una vez que probemos el ABI corregido.
+
+Primero esta ejecución es importante: ahora sí estaremos probando TASK_GO_TO_COORD con la firma correcta para RDR1.
+
+Sources:
+
+RDRMP Docs
+
+## Prompt:
+24/9/2026, 6:10:04
+
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.log analiza el cambio que hiciste porque se te desapareció el ultimo mensaje ahi te dejé el log de lo probé de la ultima version
+
+## Response:
+24/9/2026, 6:10:15
+
+Voy a comparar este client.log con el comportamiento esperado de la última corrección: llamadas a TASK_GO_TO_COORD, movimiento real del actor y recreaciones/spawns inesperados.
+
+
+
+Powered by ChatGPT Exporter (https://www.chatgptexporter.com)
