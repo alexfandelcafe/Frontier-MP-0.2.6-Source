@@ -17,11 +17,11 @@ constexpr std::uint64_t kRemotePlayerGraceMs = 750;
 constexpr std::uint64_t kActorValidationIntervalMs = 250;
 constexpr std::uint64_t kPositionTelemetryIntervalMs = 100;
 constexpr float kPositionUpdateThreshold = 0.02f;
-// Let the engine keep a locomotion task alive for several gait frames before
-// retargeting. The network target moves continuously, but restarting TASK_GO_TO_COORD
-// every ~200 ms visibly chops the walk animation into half-steps.
-constexpr float kLocomotionTargetUpdateThreshold = 0.80f;
-constexpr std::uint64_t kLocomotionTaskRetryMs = 500;
+// Let the engine keep a locomotion task alive long enough to complete several
+// gait frames. Restarting TASK_GO_TO_COORD too frequently visibly chops the
+// walk animation into short step bursts.
+constexpr float kLocomotionTargetUpdateThreshold = 1.80f;
+constexpr std::uint64_t kLocomotionTaskRetryMs = 1000;
 
 float distance_squared(const Vec3& a, const Vec3& b) {
     const float dx = a.x - b.x;
