@@ -48,6 +48,9 @@ std::string environment_value(const char* key) {
 
 bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, const std::string& playerName) {
     stopRequested_.store(false, std::memory_order_release);
+    lastFrontendBootstrapAttemptMs_ = 0;
+    frontendStartScreenExitSent_ = false;
+    frontendBootstrapTriggered_ = false;
     frontier::game::ExecutableFingerprint fingerprint{};
     if (!frontier::game::BuildDetector::inspect_loaded_module(fingerprint)) {
         log_line("[FrontierClient] build inspection failed");
