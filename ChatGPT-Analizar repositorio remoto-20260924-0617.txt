@@ -1286,8 +1286,151 @@ https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remo
 ## Response:
 24/9/2026, 6:10:15
 
-Voy a comparar este client.log con el comportamiento esperado de la última corrección: llamadas a TASK_GO_TO_COORD, movimiento real del actor y recreaciones/spawns inesperados.
+Sí. Leí el client.log nuevo y el cambio de la última versión queda bastante claro.
 
+Qué cambió realmente
+
+Entre efdb4b4 y e185122 se modificó únicamente la política de retarget:
+
+kLocomotionTargetUpdateThreshold = 0.80f;
+kLocomotionTaskRetryMs = 500;
+
+Es decir, dejamos que TASK_GO_TO_COORD sobreviva más tiempo antes de reemplazarlo. Ese cambio sí está presente en el binario que probaste. Commit de ajuste de locomoción
+
+Lo que demuestra este log
+
+Hay 98 llamadas go-to y 13 creaciones de FrontierRemote_65000.
+
+Lo importante es la secuencia:
+
+Actor	Aproximación	go-to antes del siguiente spawn
+0xFC	tick 1215	1
+0x102	1221	1
+0x108	1227	6
+0x10E	1286	4
+0x114	1322	1
+0x11F	1380	1
+0x13B	1386	9
+0x15C	1469	3
+0x162	1499	28
+0xEDF	1800	4
+0xF16	1844	17
+0xFE8	2025	8
+0x1060	2114	15
+
+Por ejemplo, el 0x162 recibe una larga secuencia de objetivos y después el destino salta desde la órbita cerca de (0,0,0) hasta aproximadamente (-843,92,2375). Después aparece un Actor nuevo en esa zona. Eso encaja con lo que viste visualmente: no hay una locomoción continua que puedas observar; reaparece otro Actor ya colocado cerca del destino. Log probado
+
+Lo que queda descartado
+
+Hay tres cosas que el log descarta bastante bien:
+
+1. No es falta de snapshots.
+Hay 807 snapshots y los 807 son:
+
+players=2 remoteEntities=1
+
+Nunca desaparece el remoto durante ese log. Por lo tanto, el kRemotePlayerGraceMs = 750 no explica las recreaciones.
+
+2. No es un disconnect/reconnect de red.
+Sólo aparece una conexión:
+
+connected as player 1 serverTick=781
+
+No hay posterior server timeout, disconnected ni nuevo connected.
+
+3. No es una carrera entre on_snapshot() y update().
+Revisé NetworkClient: update() recibe el paquete y ejecuta onSnapshot_() directamente dentro de ese mismo hilo. No hay un thread de recepción separado en esta implementación.
+
+La señal más fuerte: el juego está reseteando el mundo
+
+Las recreaciones coinciden con transiciones del estado del juego.
+
+Por ejemplo:
+
+tick ~1745  state=frontend
+tick ~1800  CREATE_ACTOR_IN_LAYOUT -> 0xEDF
+tick ~1878  state=active
+
+Y después hay varias oscilaciones:
+
+worldLoaded=0
+worldLoaded=1
+worldLoaded=0
+worldLoaded=1
+...
+
+durante las siguientes recreaciones.
+
+Eso apunta a que el engine está invalidando/destruyendo los Actors durante cambios de mundo/session/layout. El problema es que nuestro RemotePlayerManager no comprueba la validez del Actor una vez creado.
+
+Actualmente hace básicamente esto:
+
+if (player.actor.valid()) return true;
+
+y valid() sólo significa:
+
+return actorHandle != 0;
+
+O sea, si el juego destruyó el Actor 0x162, para nuestro manager sigue siendo "válido" porque el número 0x162 sigue almacenado.
+
+Y hay una segunda parte que todavía no tenemos medida: el log muestra nuevos spawns, así que en algún punto el estado del manager está volviendo a un Actor vacío/recreándose, pero client.log no registra quién lo provoca. No debemos asumir todavía que sea remove_player().
+
+Y sobre TASK_GO_TO_COORD
+
+La corrección del ABI sí fue correcta.
+
+La fuente de G.R.E-Lab declara:
+
+TASK_GO_TO_COORD(Actor_t _Actor, const Vector3* _Position, int _MoveType)
+
+y nuestro código ahora pasa un Vector3*, no el antiguo XY + Z empaquetado. También verifiqué en ese mismo código que:
+
+ENABLE_MOVER(Actor)
+SET_MOVER_FROZEN(Actor, bool)
+MAKE_ACTOR_READY_FOR_ACTION(...)
+SET_ACTOR_STREAMING_HIGH_PRIORITY(...)
+ACTOR_FORCE_NEXT_UPDATE(...)
+
+tienen precisamente las formas que estamos usando. G.R.E-Lab Natives.h
+
+El log además confirma que cada Actor recién creado pasa:
+
+IS_ACTOR_VALID ... result=1
+GET_ACTOR_ENUM ... enum=837
+
+Así que spawn inicial + handle + enum están funcionando.
+
+Lo que todavía no está demostrado es que TASK_GO_TO_COORD esté produciendo desplazamiento físico. Nuestro log solamente registra que la llamada fue ejecutada. No estamos leyendo la posición real del Actor después.
+
+Y hay una incógnita más: seguimos usando:
+
+taskArgs[2] = 0u;
+
+El tipo MoveType está identificado en la fuente de RE, pero no encontré en ese material un valor numérico documentado que demuestre que 0 sea el modo correcto. Por tanto, no voy a afirmar que 0 sea walk/run sin comprobarlo.
+
+Diagnóstico actual
+
+La lectura más consistente de este test es:
+
+el cambio 0,80 m / 500 ms funcionó como reducción de retargeting, pero no solucionó la locomoción.
+
+Tenemos ahora dos problemas separados:
+
+A. Locomoción:
+TASK_GO_TO_COORD se invoca correctamente, pero no sabemos si el Actor realmente cambia de posición.
+
+B. Lifecycle:
+Los Actors son recreados repetidamente durante las transiciones del mundo, y nuestro manager no tiene una observación fiable de la vida real del Actor.
+
+El siguiente cambio que tiene sentido no es tocar otra vez 0.80 / 500. Hay que instrumentar el Actor con GET_POSITION (0x99BD9D6F) y validar IS_ACTOR_VALID durante update(). Con eso podemos distinguir inmediatamente entre:
+
+TASK_GO_TO_COORD -> Actor camina
+
+y
+
+TASK_GO_TO_COORD -> Actor no se mueve / task no tiene efecto
+
+y, al mismo tiempo, saber exactamente en qué tick muere el Actor que luego reaparece.
 
 
 Powered by ChatGPT Exporter (https://www.chatgptexporter.com)
