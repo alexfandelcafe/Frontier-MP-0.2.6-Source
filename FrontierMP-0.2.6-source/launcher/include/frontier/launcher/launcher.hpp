@@ -18,11 +18,17 @@ class Launcher final {
 public:
     int run(const LaunchOptions& options) const;
     static std::wstring quote(const std::wstring& value);
-    static std::vector<wchar_t> build_environment(const LaunchOptions& options);
+    static std::vector<wchar_t> build_environment(
+        const LaunchOptions& options,
+        const std::wstring& bootstrapEventName);
 
 private:
     bool verify_game(const std::wstring& gameExe) const;
-    bool inject_client(void* processHandle, const std::wstring& clientDll, unsigned long& loadResult) const;
+    bool inject_client(void* processHandle,
+                       const std::wstring& clientDll,
+                       unsigned long& loadResult) const;
+    bool wait_for_bootstrap_ready(const std::wstring& bootstrapEventName,
+                                  unsigned long timeoutMs) const;
 };
 
 } // namespace frontier::launcher
