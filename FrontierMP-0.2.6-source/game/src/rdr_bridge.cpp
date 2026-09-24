@@ -49,6 +49,10 @@ constexpr std::uint32_t kNativeGetSlotActor = 0xDB9B49D8;
 constexpr std::uint32_t kNativeEnableMover = 0xE29F0A39;
 constexpr std::uint32_t kNativeSetMoverFrozen = 0x13E6B5EE;
 constexpr std::uint32_t kNativeTaskFollowActor = 0x12F0911A;
+constexpr std::uint32_t kNativeMakeActorReadyForAction = 0xF04335A6;
+constexpr std::uint32_t kNativeSetActorStreamingHighPriority = 0x0911BA31;
+constexpr std::uint32_t kNativeActorForceNextUpdate = 0x5C7F63E3;
+constexpr std::uint32_t kNativeIsMoverFrozen = 0x9C12BD5A;
 constexpr std::uintptr_t kTaggedLayoutRef = 0x100000000ull;
 constexpr std::int32_t kRemoteTestActorEnum = 837; // ACTOR_MPPLAYER01
 
@@ -1004,6 +1008,36 @@ bool RdrBridge::task_follow_remote_actor(
                 return;
             }
 
+            std::uintptr_t actorReadyArgs[2]{};
+            actorReadyArgs[0] = static_cast<std::uintptr_t>(actorHandle);
+            actorReadyArgs[1] = 1u; // true
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeMakeActorReadyForAction, actorReadyArgs, 2u, result)) {
+                error = "MAKE_ACTOR_READY_FOR_ACTION(true) invoke failed";
+                return;
+            }
+
+            std::uintptr_t streamingArgs[2]{};
+            streamingArgs[0] = static_cast<std::uintptr_t>(actorHandle);
+            streamingArgs[1] = 1u; // true
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeSetActorStreamingHighPriority, streamingArgs, 2u, result)) {
+                error = "SET_ACTOR_STREAMING_HIGH_PRIORITY(true) invoke failed";
+                return;
+            }
+
+            std::uintptr_t forceUpdateArgs[1]{static_cast<std::uintptr_t>(actorHandle)};
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeActorForceNextUpdate, forceUpdateArgs, 1u, result)) {
+                error = "ACTOR_FORCE_NEXT_UPDATE invoke failed";
+                return;
+            }
+
+            std::uintptr_t frozenCheckArgs[1]{static_cast<std::uintptr_t>(actorHandle)};
+            std::uintptr_t frozenResult = 0u;
+            const bool frozenReadOk = nativeInvoker_.invoke_raw(
+                kNativeIsMoverFrozen, frozenCheckArgs, 1u, frozenResult);
+
             std::uintptr_t taskArgs[2]{};
             taskArgs[0] = static_cast<std::uintptr_t>(actorHandle);
             taskArgs[1] = static_cast<std::uintptr_t>(localActor);
@@ -1017,10 +1051,12 @@ bool RdrBridge::task_follow_remote_actor(
             char message[240]{};
             std::snprintf(
                 message, sizeof(message),
-                "[FrontierRemoteTask] follow actor=0x%08X target=0x%08X localSlot=%u",
+                "[FrontierRemoteTask] follow actor=0x%08X target=0x%08X localSlot=%u moverFrozen=%s%u",
                 actorHandle,
                 localActor,
-                localSlot);
+                localSlot,
+                frozenReadOk ? "" : "<unreadable>",
+                frozenReadOk ? static_cast<unsigned>(frozenResult != 0u) : 0u);
             write_bridge_log_line(message);
         },
         500u,
