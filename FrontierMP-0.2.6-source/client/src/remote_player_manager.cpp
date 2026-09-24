@@ -153,7 +153,13 @@ void RemotePlayerManager::update(std::uint64_t nowMs, frontier::game::RdrBridge&
     for (auto it = players_.begin(); it != players_.end();) {
         auto& player = it->second;
 
-        if (effectiveNow - player.lastSeenMs > kRemotePlayerGraceMs) {
+        // Player 65000 is reserved for the local synthetic locomotion probe.
+        // Its target is generated from the local snapshot and may temporarily be
+        // absent while local-player state is settling; never destroy its Actor
+        // because of the normal remote-player freshness grace period.
+        const bool syntheticLocomotionProbe = player.playerId == 65000u;
+        if (!syntheticLocomotionProbe &&
+            effectiveNow - player.lastSeenMs > kRemotePlayerGraceMs) {
             remove_player(it++, bridge);
             continue;
         }
