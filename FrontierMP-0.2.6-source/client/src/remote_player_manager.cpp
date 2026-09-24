@@ -9,8 +9,11 @@ namespace frontier::client {
 namespace {
 constexpr std::uint64_t kRemotePlayerGraceMs = 750;
 constexpr float kPositionUpdateThreshold = 0.02f;
-constexpr float kLocomotionTargetUpdateThreshold = 0.30f;
-constexpr std::uint64_t kLocomotionTaskRetryMs = 150;
+// Let the engine keep a locomotion task alive for several gait frames before
+// retargeting. The network target moves continuously, but restarting TASK_GO_TO_COORD
+// every ~200 ms visibly chops the walk animation into half-steps.
+constexpr float kLocomotionTargetUpdateThreshold = 0.80f;
+constexpr std::uint64_t kLocomotionTaskRetryMs = 500;
 
 float distance_squared(const Vec3& a, const Vec3& b) {
     const float dx = a.x - b.x;
