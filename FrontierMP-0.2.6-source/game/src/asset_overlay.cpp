@@ -8,6 +8,7 @@
 #endif
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <initializer_list>
 #include <cctype>
@@ -57,20 +58,27 @@ bool guarded_ascii(std::uintptr_t address, std::string& out) {
     if (address < 0x10000u) return false;
 
 #ifdef _WIN32
-    __try {
-        const auto* chars = reinterpret_cast<const unsigned char*>(address);
-        for (std::size_t i = 0; i < 260; ++i) {
-            const unsigned char c = chars[i];
-            if (c == 0) {
-                if (out.empty()) return false;
-                return true;
-            }
-            if (c < 32 || c > 126) return false;
-            out.push_back(static_cast<char>(c));
-        }
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        out.clear();
+    std::array<unsigned char, 260> chars{};
+    SIZE_T bytesRead = 0;
+    if (!ReadProcessMemory(GetCurrentProcess(),
+                           reinterpret_cast<const void*>(address),
+                           chars.data(),
+                           chars.size(),
+                           &bytesRead) ||
+        bytesRead == 0) {
         return false;
+    }
+
+    for (std::size_t i = 0; i < bytesRead; ++i) {
+        const unsigned char c = chars[i];
+        if (c == 0) {
+            return !out.empty();
+        }
+        if (c < 32 || c > 126) {
+            out.clear();
+            return false;
+        }
+        out.push_back(static_cast<char>(c));
     }
 #else
     (void)address;
@@ -84,20 +92,28 @@ bool guarded_utf16(std::uintptr_t address, std::string& out) {
     if (address < 0x10000u) return false;
 
 #ifdef _WIN32
-    __try {
-        const auto* chars = reinterpret_cast<const wchar_t*>(address);
-        for (std::size_t i = 0; i < 260; ++i) {
-            const wchar_t c = chars[i];
-            if (c == L'\0') {
-                if (out.empty()) return false;
-                return true;
-            }
-            if (c < 32 || c > 126) return false;
-            out.push_back(static_cast<char>(c));
-        }
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        out.clear();
+    std::array<wchar_t, 260> chars{};
+    SIZE_T bytesRead = 0;
+    if (!ReadProcessMemory(GetCurrentProcess(),
+                           reinterpret_cast<const void*>(address),
+                           chars.data(),
+                           sizeof(chars),
+                           &bytesRead) ||
+        bytesRead < sizeof(wchar_t)) {
         return false;
+    }
+
+    const std::size_t charCount = bytesRead / sizeof(wchar_t);
+    for (std::size_t i = 0; i < charCount; ++i) {
+        const wchar_t c = chars[i];
+        if (c == L'\0') {
+            return !out.empty();
+        }
+        if (c < 32 || c > 126) {
+            out.clear();
+            return false;
+        }
+        out.push_back(static_cast<char>(c));
     }
 #else
     (void)address;
@@ -143,22 +159,28 @@ std::string memory_qword_probe(std::uintptr_t address) {
     if (address < 0x10000u) return out.str();
 
 #ifdef _WIN32
-    __try {
-        const auto* words = reinterpret_cast<const std::uintptr_t*>(address);
-        for (std::size_t i = 0; i < 4; ++i) {
-            const auto value = words[i];
-            out << " q" << i << "=0x" << std::hex << value << std::dec;
+    std::array<std::uintptr_t, 4> words{};
+    SIZE_T bytesRead = 0;
+    if (!ReadProcessMemory(GetCurrentProcess(),
+                           reinterpret_cast<const void*>(address),
+                           words.data(),
+                           sizeof(words),
+                           &bytesRead) ||
+        bytesRead != sizeof(words)) {
+        return out.str();
+    }
 
-            std::string ascii;
-            std::string utf16;
-            if (guarded_ascii(value, ascii) && !ascii.empty()) {
-                out << ":ascii=" << ascii;
-            } else if (guarded_utf16(value, utf16) && !utf16.empty()) {
-                out << ":utf16=" << utf16;
-            }
+    for (std::size_t i = 0; i < words.size(); ++i) {
+        const auto value = words[i];
+        out << " q" << i << "=0x" << std::hex << value << std::dec;
+
+        std::string ascii;
+        std::string utf16;
+        if (guarded_ascii(value, ascii) && !ascii.empty()) {
+            out << ":ascii=" << ascii;
+        } else if (guarded_utf16(value, utf16) && !utf16.empty()) {
+            out << ":utf16=" << utf16;
         }
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        out << " <unreadable>";
     }
 #else
     (void)address;
