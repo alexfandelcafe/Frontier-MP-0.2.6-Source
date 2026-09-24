@@ -120,7 +120,7 @@ bool InlineHook::install(std::uintptr_t target,
     std::size_t trampolineOffset = 0;
     while (sourceOffset < patchSize) {
         const auto opcode = originalBytes_[sourceOffset];
-        if ((opcode == 0xE8 || opcode == 0xE9) && sourceOffset + 5 <= patchSize) {
+        if (opcode == 0xE8 && sourceOffset == 4 && sourceOffset + 5 <= patchSize) {
             std::int32_t displacement = 0;
             std::memcpy(&displacement, originalBytes_.data() + sourceOffset + 1, sizeof(displacement));
             const auto sourceInstruction =
@@ -136,15 +136,6 @@ bool InlineHook::install(std::uintptr_t target,
                 trampolineOffset += sizeof(branchTarget);
                 trampoline[trampolineOffset++] = 0xFF;
                 trampoline[trampolineOffset++] = 0xD0;
-            } else {
-                // A relative JMP is not used by the known fullReadPath prologue.
-                // Refuse rather than silently emit an incorrect trampoline.
-                VirtualFree(trampoline, 0, MEM_RELEASE);
-                originalBytes_.clear();
-                error = name + ": relative JMP inside patch window is unsupported";
-                return false;
-            }
-
             sourceOffset += 5;
             continue;
         }
