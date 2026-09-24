@@ -1022,12 +1022,18 @@ bool RdrBridge::task_go_to_remote_coord(
             const bool frozenReadOk = nativeInvoker_.invoke_raw(
                 kNativeIsMoverFrozen, frozenCheckArgs, 1u, frozenResult);
 
-            // TASK_GO_TO_COORD is the conservative coordinate-task probe:
-            // Actor + Vector3, where Vector3 occupies XY + Z native slots.
+            // G.R.E-Lab's RDR1 native declaration identifies the ABI as:
+            // TASK_GO_TO_COORD(Actor, const Vector3*, MoveType).
+            // The Vector3 is therefore passed by pointer, not packed into native
+            // argument slots as XY/Z scalar values.
+            const Vec3 taskPosition = destination;
             std::uintptr_t taskArgs[3]{};
             taskArgs[0] = static_cast<std::uintptr_t>(actorHandle);
-            taskArgs[1] = pack_vec2(destination.x, destination.y);
-            taskArgs[2] = float_bits(destination.z);
+            taskArgs[1] = reinterpret_cast<std::uintptr_t>(&taskPosition);
+
+            // MoveType is not yet resolved to a named enum in this build.
+            // Keep the conservative zero value for the first runtime probe.
+            taskArgs[2] = 0u;
 
             if (!nativeInvoker_.invoke_raw(
                     kNativeTaskGoToCoord, taskArgs, 3u, result)) {
