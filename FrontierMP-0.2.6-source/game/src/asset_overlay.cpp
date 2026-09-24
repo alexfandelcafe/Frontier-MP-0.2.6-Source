@@ -167,24 +167,6 @@ std::string memory_qword_probe(std::uintptr_t address) {
     return out.str();
 }
 
-std::string compact_path_candidate(std::initializer_list<std::uintptr_t> values) {
-    std::ostringstream out;
-    for (const auto value : values) {
-        std::string ascii;
-        std::string utf16;
-
-        if (guarded_ascii(value, ascii) && !ascii.empty()) {
-            out << " ascii=" << ascii;
-        }
-        if (guarded_utf16(value, utf16) && !utf16.empty()) {
-            out << " utf16=" << utf16;
-        }
-
-        if (!out.str().empty()) break;
-    }
-    return out.str();
-}
-
 std::uintptr_t hooked_full_read_path(std::uintptr_t a,
                                      std::uintptr_t b,
                                      std::uintptr_t c,
