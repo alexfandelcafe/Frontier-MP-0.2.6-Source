@@ -3307,8 +3307,158 @@ dio error de acces violation (crash que no cierra el juego) https://github.com/a
 ## Response:
 24/9/2026, 19:03:47
 
-Voy a separar dos problemas: el ACCESS_VIOLATION del hook y la falsa señal de “mundo cargado”. No voy a hacer ningún commit; primero voy a contrastar log, código y comportamiento conocido de RDRMP.
+Sí, el dato del mapa del menú sirve. Después de revisar el client.log, el código actual y el flujo de arranque del cliente histórico, hay dos problemas distintos y uno de ellos está bastante bien localizado.
 
+1. El ACCESS_VIOLATION apunta al trampoline
 
+En el log tenemos:
+
+[FrontierAsset] fullReadPath target=0x140eb8ea0
+[FrontierAsset] fullReadPath call=0 a=0x14e720 b=0x14ff60620 c=0x9d7bcfa1 d=0x4
+[FrontierAsset] fullReadPath return=140eb8eb0
+
+Y 0x140eb8eb0 es exactamente:
+
+0x140eb8ea0 + 0x10
+
+Ese +0x10 coincide con el patchSize = 16 que usamos.
+
+Eso es una señal muy fuerte de un fallo en nuestro trampoline: el salto absoluto de retorno está implementado como:
+
+mov rax, target+16
+jmp rax
+
+Por tanto, destruye RAX antes de volver al código original.
+
+En este caso es especialmente sospechoso porque el prólogo que estamos interceptando contiene:
+
+sub rsp, 28h
+call ...
+mov byte ptr [rax+...], ...
+
+Es decir, el resultado del call queda en RAX y se utiliza inmediatamente. Si después del bloque parcheado el código original conserva ese resultado como valor de retorno, nuestro:
+
+mov rax, target+16
+
+lo convierte en 0x140EB8EB0.
+
+Eso explica perfectamente que aparezca ese valor concreto en el log.
+
+Además, el stack de errores de FiveM/RAGE contiene precisamente FullReadPath@fiAssetManager@rage..., así que esta familia de funciones existe realmente en RAGE, aunque eso no demuestra todavía que nuestro patrón corresponda exactamente a FullReadPath en este build de RDR1. Microsoft también documenta que los nombres decorados codifican tipos y parámetros, por lo que usar una firma genérica sin verificarla sigue siendo una suposición.
+
+Conclusión: no conviene seguir probando el overlay con este trampoline tal como está.
+
+La corrección conceptual es que el salto de retorno del trampoline no puede tocar registros. Por ejemplo, un salto absoluto indirecto RIP-relative:
+
+FF 25 00 00 00 00
+<8 bytes: dirección>
+
+no necesita modificar RAX.
+
+También hay otro detalle que corregiremos cuando toquemos código: AssetOverlay tiene un InlineHook hook_ miembro, pero actualmente la implementación instala g_fullReadPathHook global. Por eso attached() del objeto no refleja realmente el hook instalado.
+
+2. Tu observación sobre worldLoaded es correcta
+
+Nuestro estado actual está haciendo esto:
+
+STREAMING_IS_WORLD_LOADED() -> true
+        ↓
+worldLoadedStable = true
+        ↓
+WaitingForLocalPlayer
+
+Pero 0x87B74064 está documentado en los headers públicos de RDR1 como:
+
+STREAMING_IS_WORLD_LOADED()
+
+y existe incluso otro:
+
+_STREAMING_IS_WORLD_LOADED_2()
+
+Eso es una condición del sistema de streaming, no una garantía de que el jugador de gameplay exista.
+
+Y el log lo demuestra directamente:
+
+worldLoaded=1
+stableWorldLoaded=1
+localPlayer=0
+
+mientras seguís viendo el menú.
+
+Así que el mapa que aparece como fondo del menú puede perfectamente coexistir con STREAMING_IS_WORLD_LOADED() == true. No debemos interpretar eso como “el mundo jugable está listo”.
+
+De hecho, nuestra propia comprobación de jugador es mucho más interesante:
+
+local player pointer unavailable
+
+y luego:
+
+guid=0x00000000
+
+Eso significa que todavía no existe una identidad de jugador utilizable. El código después continúa comprobando actor → component → transform → position. Esa cadena representa mucho mejor la condición que vos estás describiendo: “el gameplay realmente existe y tengo un jugador con una posición válida”.
+
+3. El problema de arranque también quedó mucho más claro
+
+Revisando el boot.sc.xml del cliente histórico RDRMP, el evento:
+
+net.EnterOnlineForInvite
+
+no era por sí solo lo que iniciaba el multiplayer.
+
+El flujo modificado hace:
+
+net.EnterOnlineForInvite
+    ↓
+fileSetForMPLoad
+    ↓
+NetMachine.SetMultiplayerModeToLaunch('JoinWish')
+    ↓
+UIGame.ValidateNormalMode()
+    ↓
+mainMenuExit
+    ↓
+LoadingScreen
+    ↓
+Startup_Checks
+
+Ese flujo está presente en el boot.sc.xml histórico que estamos usando como referencia.
+
+En cambio, nosotros estamos enviando:
+
+UI_SEND_EVENT("net.EnterOnlineForInvite")
+
+al frontend original de RDR1.
+
+Y actualmente boot.sc.xml de Frontier no está siendo interceptado; nuestro hook solo estaba en modo diagnóstico.
+
+Por eso el comportamiento que viste encaja perfectamente:
+
+evento enviado
+      ↓
+menu sigue existiendo
+      ↓
+streaming del frontend puede dar worldLoaded=1
+      ↓
+no se crea localPlayer
+      ↓
+no hay gameplay
+Lo que considero probado ahora
+
+Tenemos tres hechos bastante sólidos:
+
+Componente	Estado
+Red / snapshots	Funciona
+Actor remoto / locomoción	Funciona
+UI_SEND_EVENT	Se ejecuta
+STREAMING_IS_WORLD_LOADED	No sirve como “gameplay ready”
+localPlayer en menú	Sigue siendo 0
+boot.sc.xml estilo RDRMP	Todavía no se está aplicando
+Trampoline actual	Tiene un bug serio con RAX
+
+Y hay una pista particularmente buena: el return=target+16 es demasiado específico para ignorarlo.
+
+No hice ningún commit en esta investigación.
+
+El siguiente cambio técnico que tiene sentido es corregir primero el trampoline para que sea transparente a los registros y, una vez que ese hook sea seguro, usarlo para hacer la redirección real de content/ui/boot.sc.xml. Después debemos cambiar la lógica de FrontierSession para que “mundo jugable” se determine por la creación válida del jugador/actor/transform, no por el fondo cargado del menú.
 
 Powered by ChatGPT Exporter (https://www.chatgptexporter.com)
