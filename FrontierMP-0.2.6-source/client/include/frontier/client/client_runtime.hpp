@@ -29,6 +29,8 @@ private:
     bool bridgeStateReady_{};
     frontier::game::FrontierSession session_{};
     std::uint64_t lastSessionUpdateMs_{};
+    std::uint64_t lastFrontendBootstrapAttemptMs_{};
+    bool frontendBootstrapTriggered_{};
     std::string sessionMode_{"freeroam"};
     RemotePlayerManager remotePlayers_{};
     std::uint16_t localPlayerId_{};
