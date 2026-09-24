@@ -973,12 +973,14 @@ bool RdrBridge::is_remote_actor_valid(
     std::string dispatchError;
     const bool completed = gameThreadDispatcher_.submit_and_wait(
         [this, actorHandle, &outValid, &error]() {
-            bool valid = false;
-            if (!nativeInvoker_.invoke_bool(kNativeIsActorValid, valid)) {
+            std::uintptr_t args[1]{};
+            args[0] = static_cast<std::uintptr_t>(actorHandle);
+            std::uintptr_t result = 0u;
+            if (!nativeInvoker_.invoke_raw(kNativeIsActorValid, args, 1u, result)) {
                 error = "IS_ACTOR_VALID invoke failed";
                 return;
             }
-            outValid = valid;
+            outValid = result != 0u;
         },
         250u,
         dispatchError);
