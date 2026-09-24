@@ -97,6 +97,18 @@ if(WIN32 AND FRONTIER_BUILD_CLIENT)
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}"
         ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}"
     )
+
+    # The launcher is kept separate from the game installation. The historical
+    # multiplayer boot XML is copied next to FrontierClient.dll so the runtime
+    # can redirect only content/ui/boot.sc.xml without modifying RDR1.
+    add_custom_command(TARGET frontier_client POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:frontier_client>/data/game/content/ui"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/resources/game/content/ui/boot.sc.xml"
+                "$<TARGET_FILE_DIR:frontier_client>/data/game/content/ui/boot.sc.xml"
+        VERBATIM
+    )
 endif()
 
 # The launcher and client are separate targets, but the launcher must never
@@ -134,6 +146,7 @@ if(FRONTIER_BUILD_TESTS)
         client/src/interpolation.cpp
     )
     target_include_directories(frontier_interpolation_tests PRIVATE shared/include client/include)
+    target_link_libraries(frontier_interpolation_tests PRIVATE frontier_shared)
     frontier_enable_warnings(frontier_interpolation_tests)
     add_test(NAME frontier_interpolation_tests COMMAND frontier_interpolation_tests)
 endif()
