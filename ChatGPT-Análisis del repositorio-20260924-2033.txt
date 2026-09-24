@@ -1,0 +1,1820 @@
+Análisis del repositorio
+
+User: Anonymous
+Created: 9/24/2026 19:15:33
+Updated: 9/24/2026 20:25:37
+Exported: 9/24/2026 20:33:00
+Link: https://chatgpt.com/c/6ab5a104-f2a8-83e9-af0d-149fa75ddcdd
+
+## Prompt:
+24/9/2026, 19:15:33
+
+analiza el chat https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/ChatGPT-Analizar%20repositorio%20remoto-20260924-1909.txt para saber lo que estoy haciendo en el repo https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/tree/game-thread/remote-actor-spawn-test-0.2.41no hagas ningun commit todavia, haz un analisis
+
+## Response:
+24/9/2026, 19:15:35
+
+Voy a reconstruir el contexto desde el chat guardado y contrastarlo con el estado real de la rama remote-actor-spawn-test-0.2.41, sin modificar el repositorio ni crear commits.
+
+Ya veo una cuestión estructural que merece más peso que el diagnóstico anterior: la rama tiene un GameThreadDispatcher, así que hay que comprobar si las llamadas a RAGE realmente se ejecutan allí o siguen saliendo del worker de ClientRuntime.
+
+Inspeccioné ramas, commits y código del runtime Frontier
+
+Analizando el repositorio
+
+Estoy reconstruyendo el objetivo a partir del chat y contrastándolo con la rama indicada, sin modificar archivos ni crear commits. Ya identifico una arquitectura de snapshots remotos, actores sintéticos y diferencias entre teletransporte y movimiento mediante tareas.
+
+Evaluando el estado actual
+
+Estoy contrastando la rama con los cambios recientes y los registros. La lógica de actores remotos parece preparada, pero el cliente sigue en frontend: el mundo carga de forma intermitente y la identidad del jugador local permanece pendiente.
+
+Revisando el enganche
+
+Estoy detectando dos riesgos principales: el salto de retorno sobrescribe RAX, y la reubicación solo contempla un caso concreto de call. Además, el estado usa un enganche global distinto del miembro declarado, algo que conviene corregir.
+
+Analizado el repositorio, evaluado su estado y revisado el enganche
+
+Inspeccioné e implementé RdrBridge, arranque y actores remotos
+
+Ha pensado durante 1m 44s
+
+He analizado el chat indicado y lo he contrastado con el estado actual de la rama game-thread/remote-actor-spawn-test-0.2.41. No hice ningún commit ni modificación.
+
+Qué estás haciendo realmente en el repositorio
+
+El proyecto ya dejó de ser solamente un experimento de red. El objetivo actual es conseguir un cliente multijugador de RDR1 que introduzca el estado de Frontier dentro del runtime real del juego, y para eso estás resolviendo tres capas en paralelo:
+
+Frontier network
+    ↓
+Snapshot / PlayerState
+    ↓
+RemotePlayerManager
+    ↓
+RdrBridge
+    ↓
+RDR1 real
+
+y, paralelamente:
+
+RDR1 frontend / boot
+    ↓
+asset lookup
+    ↓
+content/ui/boot.sc.xml
+    ↓
+flujo real de entrada a multiplayer
+    ↓
+gameplay
+    ↓
+local player válido
+
+La segunda parte es ahora el bloqueo principal.
+
+1. La parte de red ya está bastante estructurada
+
+En client/src/network_client.cpp la recepción es síncrona dentro de NetworkClient::update(): no hay un hilo de recepción separado. El snapshot llega y onSnapshot_ se ejecuta durante el mismo ciclo de actualización.
+
+Eso es importante porque una de las hipótesis anteriores era una carrera entre el hilo de red y el hilo de juego. Con el código actual, esa hipótesis pierde bastante fuerza.
+
+ClientRuntime::update() además tiene ahora:
+
+updateInProgress_
+
+como protección frente a llamadas concurrentes a FrontierClient_Update() y al worker interno.
+
+Por tanto, actualmente la arquitectura de actualización está razonablemente controlada.
+
+2. El experimento del actor remoto 65000 es una herramienta de diagnóstico, no todavía la funcionalidad definitiva
+
+En client_runtime.cpp estás fabricando deliberadamente un jugador:
+
+playerId = 65000
+
+y le generás una trayectoria artificial:
+
++X
+stop
+-X
+stop
++Z
+stop
+-Z
+stop
+repeat
+
+a 2.4 m/s.
+
+Eso sirve para probar la cadena:
+
+snapshot
+ → interpolación
+ → RemotePlayerManager
+ → creación Actor
+ → preparación mover
+ → TASK_GO_TO_COORD
+ → GET_POSITION
+
+El código de RemotePlayerManager confirma que 65000 tiene tratamiento especial.
+
+Hay una distinción importante respecto de lo que aparecía en el chat anterior:
+
+los logs actuales de walk+X, walk-X, etc. no demuestran por sí solos que el Actor de RDR1 esté caminando.
+
+La razón es que estás generando esa trayectoria en el snapshot artificial, pero:
+
+remotePlayers_.update(..., sessionActive);
+
+solo permite actuar sobre el Actor cuando:
+
+sessionActive == true
+
+y actualmente la sesión no llega a Active.
+
+Por eso, el log:
+
+[FrontierClient] locomotion test phase=walk+X
+
+demuestra que el generador de prueba funciona, no necesariamente que el Actor físico esté realizando esa locomoción durante esta ejecución.
+
+Ese matiz es importante.
+
+3. El verdadero problema actual está en el arranque del juego
+
+El client.log actual muestra repetidamente:
+
+worldLoaded=1
+stableWorldLoaded=1
+localPlayer=0
+
+y además:
+
+local player identity pending ...
+guid=0x00000000
+
+Eso es muy significativo.
+
+Tu observación sobre el mapa del menú era correcta como pista: el hecho de que se vea el mapa no demuestra que el jugador de gameplay exista.
+
+Tu propio bridge hace una cadena mucho más fuerte:
+
+localPlayer
+    ↓
+GUID
+    ↓
+actor manager slot
+    ↓
+actor
+    ↓
+actorComponent
+    ↓
+transform
+    ↓
+position
+
+En el estado actual esa cadena todavía se rompe en:
+
+GUID = 0
+
+Por eso FrontierSession nunca pasa de:
+
+WaitingForLocalPlayer
+
+a:
+
+Active
+
+Esto está correctamente reflejado en frontier_session.cpp.
+
+En otras palabras
+
+Ahora mismo estás usando:
+
+STREAMING_IS_WORLD_LOADED()
+
+como una señal de que el juego ya está listo para iniciar el gameplay.
+
+Pero tu propio código demuestra que no es suficiente:
+
+streaming world = loaded
+gameplay player = no existe
+
+Así que el concepto que estás buscando no es realmente:
+
+"world loaded"
+
+sino:
+
+"gameplay player instantiated and usable"
+
+Eso debería convertirse en la condición real de activación.
+
+4. El GameThreadDispatcher sí está funcionando
+
+Esto corrige una parte importante del diagnóstico anterior.
+
+La arquitectura actual hace:
+
+ClientRuntime worker
+       ↓
+RdrBridge
+       ↓
+GameThreadDispatcher::submit_and_wait()
+       ↓
+queue
+       ↓
+scrThread::Wait hook
+       ↓
+game thread real
+       ↓
+NativeInvoker
+       ↓
+RDR1
+
+Y el client.log contiene muchísimos:
+
+[FrontierNative] scrThread::Wait trace=...
+
+por lo que tenemos evidencia de que el hook de scrThread::Wait está siendo ejecutado y que el dispatcher está viendo el hilo del juego.
+
+Así que el problema inmediato ya no parece ser "estamos ejecutando las natives desde el hilo incorrecto".
+
+De hecho, RdrBridge ya enruta correctamente por dispatcher prácticamente todas las operaciones importantes:
+
+UI_SEND_EVENT
+
+TASK_GO_TO_COORD
+
+GET_POSITION
+
+IS_ACTOR_VALID
+
+creación/destrucción de Actors
+
+mover
+
+streaming
+
+etc.
+
+Eso es una pieza importante de arquitectura que ya resolviste.
+
+5. El problema grave actual es el inline hook de fullReadPath
+
+Aquí sí hay un fallo muy concreto.
+
+En:
+
+game/src/inline_hook.cpp
+
+el trampoline de retorno se construye con:
+
+mov rax, target+patchSize
+jmp rax
+
+Es decir:
+
+48 B8 <target+16>
+FF E0
+
+Eso destruye RAX.
+
+Y el log actual da:
+
+fullReadPath target=0x140eb8ea0
+
+fullReadPath return=140eb8eb0
+
+La relación es:
+
+0x140EB8EA0 + 0x10
+= 0x140EB8EB0
+
+Exactamente el comienzo posterior al bloque robado.
+
+Esto hace que la observación del chat anterior sea muy fuerte: el valor que debería haber quedado como retorno puede estar siendo sustituido por la dirección de continuación del trampoline.
+
+Y el prólogo que estás interceptando contiene:
+
+sub rsp, 28h
+call ...
+mov byte ptr [rax+...], ...
+
+Es decir, RAX tiene importancia inmediata después del call.
+
+Por lo tanto, el trampoline no es transparente respecto al estado observable de la función.
+
+Pero hay un segundo problema
+
+El sistema de hook tampoco es un relocator x64 general.
+
+Actualmente solo reconoce un E8 bajo una condición específica:
+
+opcode == 0xE8 && sourceOffset == 4
+
+Todo lo demás se copia byte por byte.
+
+Eso significa que el hook funciona solamente bajo la hipótesis de que los 16 bytes robados contienen exactamente las instrucciones previstas y ninguna otra instrucción con operandos relativos que necesite relocación.
+
+Para un experimento concreto puede ser suficiente, pero para un hook sobre una función interna de RAGE es frágil.
+
+6. Además hay una inconsistencia real en AssetOverlay
+
+asset_overlay.hpp tiene:
+
+InlineHook hook_{};
+
+y:
+
+bool attached() const { return hook_.attached(); }
+
+pero asset_overlay.cpp instala:
+
+InlineHook g_fullReadPathHook{};
+
+global.
+
+Por lo tanto:
+
+AssetOverlay::hook_
+
+no es el hook que realmente se instala.
+
+Consecuencia:
+
+assetOverlay_.attached()
+
+puede decir "no adjunto" aunque el hook global esté funcionando.
+
+No es necesariamente la causa del crash, pero sí es una inconsistencia de estado que hay que eliminar antes de considerar terminado el subsistema.
+
+7. Y todavía no estás haciendo el redirect de boot.sc.xml
+
+Este punto es fundamental.
+
+Actualmente AssetOverlay:
+
+localiza el posible fullReadPath
+
+instala el hook
+
+registra argumentos
+
+registra retorno
+
+detecta si existe el archivo boot.sc.xml
+
+pero no sustituye todavía la ruta.
+
+El código incluso lo dice explícitamente:
+
+hook is diagnostic-only
+
+Así que actualmente tienes:
+
+RDR1
+ ↓
+fullReadPath
+ ↓
+Frontier hook
+ ↓
+log
+ ↓
+RDR1 original
+
+Todavía no:
+
+RDR1
+ ↓
+fullReadPath
+ ↓
+si path == content/ui/boot.sc.xml
+ ↓
+Frontier/data/game/content/ui/boot.sc.xml
+
+Eso explica por qué el flujo histórico de RDRMP todavía no está entrando realmente en el juego.
+
+8. El descubrimiento más importante del chat histórico
+
+El chat documenta que estás intentando reproducir el flujo que utilizaba RDRMP, no simplemente "mandar una native de UI".
+
+La cadena que encontraste es:
+
+net.EnterOnlineForInvite
+        ↓
+fileSetForMPLoad
+        ↓
+NetMachine.SetMultiplayerModeToLaunch("JoinWish")
+        ↓
+UIGame.ValidateNormalMode()
+        ↓
+mainMenuExit
+        ↓
+LoadingScreen
+        ↓
+Startup_Checks
+
+Mientras que Frontier actualmente hace esencialmente:
+
+UI_SEND_EVENT("net.EnterOnlineForInvite")
+
+y espera que el frontend original produzca por sí mismo el resto.
+
+Eso parece ser la diferencia conceptual central.
+
+No estás intentando simplemente "hacer spawn de un actor".
+
+Estás intentando hacer que el runtime de RDR1 siga el camino de inicialización de multiplayer que normalmente no ejecuta en este contexto, y después insertar el estado de Frontier en ese runtime.
+
+9. El estado actual se puede resumir así
+
+Subsistema
+Estado actual
+UDP / conexión
+funcional
+snapshots
+funcional
+interpolación
+implementada
+synthetic player 65000
+implementado
+RemotePlayerManager
+implementado
+actor lifecycle
+implementado
+IS_ACTOR_VALID
+implementado
+GET_POSITION
+implementado
+game-thread dispatcher
+funcionando
+NativeInvoker
+funcionando
+detección de local player
+todavía no obtiene GUID en menú
+STREAMING_IS_WORLD_LOADED
+confirmado como señal insuficiente
+UI_SEND_EVENT
+confirmado que se ejecuta
+redirect de boot.sc.xml
+todavía no implementado
+fullReadPath hook
+ejecutándose
+trampoline
+actualmente inseguro
+asset overlay
+diagnóstico solamente
+
+10. Hay también una cuestión sobre TASK_GO_TO_COORD que todavía no daría por cerrada
+
+En rdr_bridge.cpp asumís:
+
+TASK_GO_TO_COORD(Actor, const Vector3*, MoveType)
+
+y actualmente mandás:
+
+taskArgs[2] = 0;
+
+El comentario dice explícitamente que MoveType todavía no está resuelto para este build.
+
+Por tanto, incluso después de solucionar el arranque, esta parte debe considerarse todavía un runtime probe, no una ABI definitivamente validada.
+
+Es correcto para la fase experimental actual, pero no conviene convertir esa firma en arquitectura estable sin verificarla.
+
+11. Qué estás intentando conseguir, visto como proyecto
+
+La dirección del repositorio actualmente es esta:
+
+FrontierMP
+                       │
+              ┌────────┴────────┐
+              │                 │
+           Network           Game bootstrap
+              │                 │
+       PlayerState         Asset overlay
+              │                 │
+      RemotePlayerManager   boot.sc.xml
+              │                 │
+           RdrBridge ──────────┘
+              │
+      GameThreadDispatcher
+              │
+         NativeInvoker
+              │
+             RDR1
+              │
+       ┌──────┴──────┐
+       │             │
+  local player   remote actors
+
+Y el bloqueo actual está en la unión:
+
+frontend/menu
+      ↓
+real multiplayer/gameplay startup
+      ↓
+local player creation
+
+No en la red.
+
+No principalmente en el dispatcher.
+
+No principalmente en la interpolación.
+
+Y todavía no en el locomotion system.
+
+12. Secuencia técnica que considero coherente a partir de ahora
+
+Yo no tocaría todavía el Actor locomotion.
+
+El orden que se desprende del estado actual es:
+
+1. Hacer transparente y seguro el trampoline.
+        ↓
+2. Confirmar que el target realmente es la función esperada
+   y determinar exactamente qué argumento contiene la ruta.
+        ↓
+3. Confirmar que fullReadPath puede sobrevivir muchas llamadas
+   sin crash.
+        ↓
+4. Interceptar exclusivamente:
+       content/ui/boot.sc.xml
+        ↓
+5. Servir el boot.sc.xml de Frontier.
+        ↓
+6. Observar si el frontend abandona el menú.
+        ↓
+7. Redefinir "gameplay ready" usando:
+       localPlayer → GUID → actor → component → transform
+        ↓
+8. Confirmar localPlayer real y posición válida.
+        ↓
+9. Recién entonces activar RemotePlayerManager.
+        ↓
+10. Revalidar 65000 → TASK_GO_TO_COORD → GET_POSITION.
+        ↓
+11. Después probar un segundo cliente real.
+
+Ese orden reduce mucho la cantidad de variables que estás probando simultáneamente.
+
+Sobre la rama actual
+
+El HEAD actual es:
+
+c4a4f4713687fab814ec1eebb8b0759228f9574c
+
+pero ese commit solamente actualiza el archivo de chat.
+
+Los últimos cambios de código relevantes son, entre otros:
+
+3c77d51178421952449746d620ddececd3c66ef8
+Fix client linkage for asset overlay sources
+
+3f157a1081a2a3a85c929e64f054bf898834d975
+Fix inline hook trampoline block braces
+
+Eso encaja con el historial que analizaste: primero se arregló el enlace de InlineHook/AssetOverlay, después una llave rota en el C++, y la siguiente ejecución ya llegó al hook real y produjo el ACCESS_VIOLATION.
+
+Conclusión: el repositorio está actualmente en una transición entre "probar actores remotos" y "hacer funcionar el bootstrap real de multiplayer". El siguiente cuello de botella lógico es el asset/bootstrap path, concretamente conseguir un fullReadPath hook seguro y transparente antes de intentar redirigir boot.sc.xml. La detección de worldLoaded también debe dejar de ser la condición que define que existe gameplay.
+
+No hice ningún commit ni modifiqué la rama durante este análisis.
+
+## Prompt:
+24/9/2026, 19:25:28
+
+avanza entonces y ahora si podes hacer commits
+
+## Response:
+24/9/2026, 19:25:31
+
+Voy a aplicar primero las correcciones de bajo riesgo que ya quedaron justificadas: trampoline sin destruir RAX, estado coherente del AssetOverlay y, después, el redirect selectivo de boot.sc.xml. Luego compilaría lógicamente por inspección y dejaría los cambios en commits separados para poder aislar regresiones.
+
+El primer arreglo ya está separado en un commit y elimina la corrupción de RAX; el segundo hace que AssetOverlay::attached() refleje el hook real y añade sondas sobre la estructura apuntada por los argumentos. Estoy cerrando ahora la parte de compilación estática antes de tocar la redirección real.
+
+Revisando el parcheo
+
+Estoy comprobando que el salto absoluto use espacio suficiente y que la llamada relativa reubicada conserve el comportamiento esperado. También estoy valorando cómo aplicar los cambios mediante commits separados sin alterar la lógica existente.
+
+Revisó el parcheo
+
+Avanzando con cautela
+
+Estoy buscando referencias públicas para confirmar las firmas y el flujo de carga antes de modificar más archivos. Mientras tanto, priorizo hacer seguro el salto inline y mejorar los diagnósticos, evitando inventar contenido de arranque.
+
+Avancé con cautela
+
+Se ha buscado en 2 sitios web
+
+Exploré el repositorio e inspeccioné el historial de boot.sc.xml
+
+Se ha buscado en 2 sitios web
+
+Comprobando decodificadores de firmas MSVC
+
+Comprobados decodificadores de firmas MSVC
+
+Asegurando la instrumentación
+
+Estoy priorizando cambios reversibles: primero estabilizo el salto inline y después añado diagnósticos para identificar con precisión los argumentos y rutas. Así evito activar una redirección basada en una firma aún incierta.
+
+Asegurada la instrumentación
+
+Delimitando el siguiente paso
+
+Estoy evitando cambios especulativos porque faltan datos sobre la firma real y el contenido de arranque. Primero corregiré el salto inline y añadiré diagnósticos reversibles; después validaré las rutas antes de redirigirlas.
+
+Delimitó el siguiente paso
+
+Se ha buscado en 6 sitios web
+
+Modificó hooks inline y superposiciones de activos
+
+Corrigiendo destructor y limpiando overlay de assets
+
+Corregido el destructor y limpiado el overlay de assets
+
+Corregí cabecera y destructor de AssetOverlay
+
+Contrastando alternativas
+
+Estoy comprobando referencias externas sobre la firma de carga y revisando el código existente para detectar advertencias o errores sencillos. Si no encuentro confirmación suficiente, mantendré el cambio en diagnóstico seguro, sin activar redirecciones dudosas.
+
+Contrasté las alternativas
+
+Comprobando referencias
+
+Estoy buscando la firma exacta y el flujo de carga para evitar suposiciones. Si no aparece una referencia fiable, mantendré los cambios limitados a instrumentación reversible y correcciones de bajo riesgo antes de activar cualquier redirección.
+
+Comprobé las referencias
+
+Se ha buscado en 2 sitios web
+
+Revisado el código de ganchos y cambios de aparición remota
+
+Comprobando herramientas de demangling MSVC disponibles
+
+Comprobadas herramientas de demangling MSVC con llvm-nm
+
+Comparaste cambios de implementación y pruebas
+
+Calculando hashes de rutas para identificar el archivo
+
+Calculaste hashes de rutas para identificar el archivo
+
+Buscados hashes RDR, eliminada función sin uso y revisado CI
+
+Cerrando el avance
+
+Estoy dejando los cambios preparados y documentando el siguiente ensayo en ejecución: comprobaré que el salto ya no provoque el bloqueo y usaré los nuevos registros para confirmar la firma antes de redirigir rutas.
+
+Buscando en la web
+
+Ha pensado durante 2m 8s
+
+He avanzado y ya hay cambios en la rama game-thread/remote-actor-spawn-test-0.2.41.
+
+Cambios realizados
+
+1. Corregí el trampoline x64
+
+El salto de retorno ya no usa:
+
+mov rax, target
+jmp rax
+
+Ahora usa el salto indirecto RIP-relative:
+
+ff 25 00 00 00 00
+<8 bytes de dirección>
+
+Así el retorno no destruye RAX. Además, la reubicación del E8 del prólogo usa R11 como registro volátil en lugar de RAX. Esto ataca directamente la anomalía que habíamos encontrado en el log, donde fullReadPath devolvía exactamente target + 0x10.
+
+Commit: efc2ff2d8ed4bc81a98f894d8cfdff4f165c3eb5
+Ver commit del trampoline
+
+2. Hice coherente AssetOverlay
+
+Antes AssetOverlay tenía hook_, pero el código realmente instalaba otro InlineHook global. Ahora el hook pertenece al objeto que expone attached().
+
+También añadí desmontaje explícito y sondas de memoria sobre los argumentos de fullReadPath, especialmente b y c, para descubrir dónde está realmente la ruta que queremos redirigir.
+
+Commit: 704b890ca3101a1c8311277b96866322251a9e98
+Ver commit de AssetOverlay
+
+3. Añadí correctamente el destructor al header
+
+Esto evita que la definición del destructor quede inconsistente con la clase.
+
+Commit: 1accf89022ddb2090716a8af1338443599a7597a
+Ver commit del destructor
+
+4. Limpié una sonda auxiliar no utilizada
+
+Commit: 94f45710809bfce0df83d1c6899d8d5220e17f7e
+Ver commit de limpieza
+
+El HEAD de la rama quedó en 94f45710809bfce0df83d1c6899d8d5220e17f7e.
+
+Lo que deliberadamente no hice todavía
+
+No activé aún la sustitución de content/ui/boot.sc.xml.
+
+La razón técnica es importante: ya sabemos que el hook llega a la función, pero todavía no tenemos demostrado cuál de los argumentos, o qué estructura referenciada por ellos, contiene la ruta real. Redirigir suponiendo que b sea directamente un char*, por ejemplo, volvería a introducir exactamente el tipo de crash que acabamos de eliminar.
+
+Ahora el siguiente arranque de prueba tiene un objetivo mucho más concreto: comprobar que el fullReadPath hook deja de corromper el retorno y, simultáneamente, sacar de bProbe/cProbe la estructura que contiene la ruta.
+
+Además, confirmé que actualmente el repositorio no tiene checks CI reportados para este commit; por tanto no voy a afirmar que el DLL compile o que el crash esté resuelto sin una ejecución real en el RDR1 del build objetivo.
+
+El paso siguiente queda reducido a:
+
+fullReadPath
+    ↓
+trampoline transparente
+    ↓
+identificar path real
+    ↓
+redirect SOLO boot.sc.xml
+    ↓
+ejecutar boot Frontier
+    ↓
+salir del frontend
+    ↓
+localPlayer válido
+    ↓
+FrontierSession = Active
+
+No hice ningún cambio en FrontierSession ni en la locomoción remota todavía; mantener esas capas quietas ahora evita mezclar el diagnóstico del bootstrap con el del Actor.
+
+## Prompt:
+24/9/2026, 19:30:20
+
+error al buildear C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\game
+src\asset_overlay.cpp(141,13): error C2712: No se puede utilizar __try en las funciones que requieren desenredo de obje
+tos [C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source
+build\vs2026-x64\frontier_client.vcxproj]
+
+## Response:
+24/9/2026, 19:30:22
+
+Sí. El error viene de los helpers de diagnóstico: MSVC no permite __try/__except dentro de funciones que contienen objetos C++ que requieren destrucción. Voy a aislar esos probes SEH fuera de esas funciones y dejar el diagnóstico equivalente.
+
+La corrección más limpia es eliminar SEH de esas funciones y usar ReadProcessMemory sobre el proceso actual, que devuelve fallo al acceder a memoria no legible sin activar C2712. Mantengo los mismos logs y límites de diagnóstico.
+
+Corrigiendo el error
+
+Estoy sustituyendo los bloques SEH por lecturas seguras mediante la API de Windows, evitando objetos locales incompatibles con __try. Aplicaré el cambio a ASCII, UTF‑16 y memoria de 64 bits, y después revisaré la compilación.
+
+Corrigió el error
+
+Interacted with GitHub
+
+Reemplazado SEH y modificado el diagnóstico seguro de memoria
+
+Ha pensado durante 24s
+
+Corregido y commiteado.
+
+El problema era efectivamente el uso de __try/__except dentro de funciones con objetos C++ (std::string, std::ostringstream, etc.), que MSVC rechaza con C2712.
+
+Cambio aplicado en asset_overlay.cpp:
+
+Eliminé todos los __try/__except.
+
+Los probes de memoria ahora usan ReadProcessMemory(GetCurrentProcess(), ...).
+
+Se conservan los diagnósticos ascii, utf16, bProbe, cProbe y resultProbe.
+
+Ya no hay SEH anidado dentro de funciones que requieren unwinding C++.
+
+Commit:
+
+1c4624f4b37f296ae1b2171e5b1f55036447574a — Fix MSVC SEH diagnostic build error
+
+No puedo afirmar que haya pasado el build de Visual Studio porque no tengo ese entorno MSVC ejecutándose aquí. El cambio elimina específicamente la causa del C2712.
+
+Ahora el siguiente paso es volver a ejecutar el build.
+
+## Prompt:
+24/9/2026, 19:46:56
+
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.logsigue apareciendo el menu
+
+## Response:
+24/9/2026, 19:46:59
+
+Los logs cambian el diagnóstico: el hook ya está ejecutándose y no parece ser el bloqueo principal. El juego llega a gameState=3, luego worldLoaded=1, pero nunca crea la identidad local (guid=0).
+
+Hay otra pista importante: fullReadPath solo aparece en el log en el tick 11256, cuando el mundo ya estaba cargado. Eso sugiere que llegamos tarde para interceptar boot.sc.xml. Estoy verificando el punto exacto de inyección del cliente.
+
+Investigado el arranque del frontend y la inicialización de eventos del cliente
+
+Buscando "Startup_Checks" "RDR1" multiplayer
+
+Inspeccionado el arranque del cliente, runtime nativo y archivos XML históricos
+
+Calculando hashes Jenkins de rutas de archivo
+
+Analizando una declaración nativa
+
+Estoy intentando identificar la función a partir de sus argumentos y del patrón de llamada. El tercer valor parece un hash de recurso, aunque todavía no puedo confirmar qué algoritmo ni qué archivo representa.
+
+Analizada una declaración nativa
+
+Analizando la declaración nativa y el hash de rutas
+
+Calculados hashes Jenkins de rutas de archivo y analizada declaración nativa
+
+Investigadas trazas de UI_SEND_EVENT y nativos multijugador
+
+Solicitando el archivo esencial
+
+Estoy concluyendo que falta el contenido real de boot.sc.xml, así que no puedo reconstruirlo con fiabilidad. Necesito que el usuario proporcione ese archivo para continuar sin inventar datos críticos.
+
+Replanteando el arranque
+
+Estoy comprobando si el menú persiste porque el script de arranque no existe o porque faltan eventos posteriores. La evidencia actual apunta a que el desvío solo registra diagnósticos, sin disponer todavía del recurso necesario para activar el flujo completo.
+
+Solicitado el archivo esencial y replanteado el arranque
+
+Se ha buscado en 15 sitios web
+
+Inspeccionado el lanzador, la inyección temprana y la configuración del cliente Frontier
+
+Ha pensado durante 1m 34s
+
+Sí. Revisé el client.log nuevo y ahora la causa está bastante clara.
+
+El problema no es ya el C2712, ni el trampoline, ni la detección de worldLoaded.
+
+La secuencia actual es:
+
+FrontierAsset hook attached
+↓
+boot override file missing; hook is diagnostic-only
+↓
+net.EnterOnlineForInvite
+↓
+RDR llega a worldLoaded=1
+↓
+localPlayer sigue en 0
+↓
+menú permanece visible
+
+Y hay un detalle especialmente importante: el único fullReadPath que vemos en el log ocurre en el tick 11256, cuando el juego ya estaba funcionando. No tenemos evidencia de que nuestro hook haya interceptado la carga del boot.sc.xml.
+
+Además, el propio log dice explícitamente:
+
+boot override file missing; hook is diagnostic-only
+
+Por tanto, Frontier actualmente no está reemplazando el boot.sc.xml del juego. Seguimos ejecutando el frontend stock. Mandar net.EnterOnlineForInvite desde C++ no reproduce por sí solo la lógica adicional que vimos en el cliente histórico.
+
+La cadena histórica que recuperamos era:
+
+net.EnterOnlineForInvite
+    ↓
+startScreenExit
+    ↓
+fileSetForMPLoad
+    ↓
+NetMachine.SetMultiplayerModeToLaunch('JoinWish')
+    ↓
+UIGame.ValidateNormalMode()
+    ↓
+mainMenuExit
+    ↓
+LoadingScreen
+    ↓
+Startup_Checks
+
+La pieza crítica que nos falta ahora es el boot.sc.xml real del cliente RDRMP histórico, porque no está en nuestro repositorio y no sería correcto inventar su estructura XML.
+
+Necesito que me pases este archivo de tu instalación histórica de RDRMP:
+
+game\content\ui\boot.sc.xml
+
+Podés subir solamente ese archivo acá. No necesito RDR.exe, ni la instalación completa, ni archivos de Rockstar.
+
+Con ese XML puedo reproducir exactamente la lógica de bootstrap que nos falta y adaptar AssetOverlay para que Frontier cargue su propia copia sin modificar la instalación original de RDR1.
+
+## Prompt:
+24/9/2026, 19:57:58
+
+<uiobject id="Setup">
+
+	<onfocused expr="StreamMovie('startscreen')"></onfocused>
+	<onfocused expr="StreamMovie('loading')"></onfocused>
+	<transition event="setupComplete" target="BenchmarkScreen"></transition>
+	<transition event="net.JoinWish_XPad"></transition>
+	<transition event="net.JoinWishPosted"></transition>
+
+    <ifdef expr="ULTIMATE_1">
+
+		<onfocused expr="Exclude(StartScreen_Zombie)"></onfocused>
+		<onfocused expr="Exclude(SS_SP_BackPrompt)"></onfocused>
+	</ifdef>
+
+	<!--delay networking events-->
+	<transition event="net.StartOnline"     target="AddDelayedEvent('net.StartOnline',2.0)"   ></transition>
+	<transition event="net.signedOffline"   target="AddDelayedEvent('net.signedOffline',2.0)" ></transition>
+	<transition event="net.lostConnection"  target="AddDelayedEvent('net.lostConnection',2.0)"></transition>
+	<transition event="auth.success_NoComm" target="AddDelayedEvent('auth.success_NoComm',2.0)" ></transition>
+
+	<!-- put things here that you want done after the uiobject machine and component heiarchy loads-->
+	<transition event="postLoad">
+
+		<action expr="Enter(SaveGameScene)"></action>
+		<action expr="Enter(Startup)"></action>
+	</transition>
+</uiobject>
+
+<uiobject id="Startup">
+
+	<!--delay networking events-->
+	<transition event="net.StartOnline"     target="AddDelayedEvent('net.StartOnline',2.0)"   ></transition>
+	<transition event="net.signedOffline"   target="AddDelayedEvent('net.signedOffline',2.0)" ></transition>
+	<transition event="net.lostConnection"  target="AddDelayedEvent('net.lostConnection',2.0)"></transition>
+	<transition event="auth.success_NoComm" target="AddDelayedEvent('auth.success_NoComm',2.0)" ></transition>
+	<transition event="net.JoinWish_XPad"   target="SendEvent('net.JoinWishPosted')"></transition>
+	<transition event="net.JoinWishPosted"  target="AddDelayedEvent('net.JoinWishPosted',0.1)"></transition>
+	<transition event="dlc.reboot_content_removed" target="DLCAlert_PostRebootContentRemoved"></transition>
+	<transition event="dlc.corrupt" target="DLCAlert_Corrupt"></transition>
+	<transition event="extras.checking" target="DLCAlert_Scanning"></transition>
+	<transition event="promo.validating" target="PromoAlert_ValidatingCode"></transition>
+	
+    <transition event="promo.item_unlocked">
+
+		<action expr="Exit(PromoAlert_ValidatingCode)"></action>
+		<action expr="Enter(PromoAlert_ItemUnlocked)"></action>
+	</transition>
+	
+    <transition event="promo.code_in_use">
+
+		<action expr="Exit(PromoAlert_ValidatingCode)"></action>
+		<action expr="Enter(PromoAlert_CodeInUse)"></action>
+	</transition>
+	
+    <transition event="promo.invalid_code">
+
+		<action expr="Exit(PromoAlert_ValidatingCode)"></action>
+		<action expr="Enter(PromoAlert_InvalidCode)"></action>
+	</transition>
+
+	<transition event="promo.server_timeout">
+
+		<action expr="Exit(PromoAlert_ValidatingCode)"></action>
+		<action expr="Enter(PromoAlert_ServerTimeout)"></action>
+	</transition>
+
+	<RDRUIBenchmarkScreen id="BenchmarkScreen">
+
+		<transition event="benchmarkComplete" target="StartScreen1"></transition>
+	</RDRUIBenchmarkScreen>
+    
+	<UIPanel id="StartScreen1" movie="startscreen">
+		<!-- <onpaint expr="SetFlashBool('startscreen','aStartScreen',true)"></onpaint> -->
+		<onactivate expr="Enter(UITransitions)"></onactivate>
+		<onactivate expr="Enter(StartScreenPromptStrip)"></onactivate>
+		<ondeactivate expr="Exit(StartScreenPromptStrip)"></ondeactivate>
+		<onshow expr="UIGame.BootFlow()"></onshow>
+		
+		<!--EnterOnlineForInvite takes us directly online so no need for confirmations -->
+		<transition event="net.JoinWish_XPad"></transition>
+		<transition event="net.JoinWishPosted"></transition>
+		
+		<transition event="net.EnterOnlineForInvite">
+			<action expr="SendEvent('startScreenExit')"></action>
+			<action expr="SendEvent('net.EnterOnlineForInvite')"></action>
+		</transition>
+
+		<transition event="auth.fail_NotSignedIn" target="SSAlert_NotSignedIn"></transition>
+		<transition event="auth.fail_NoCable"     target="SSAlert_NoCable"    ></transition>
+		<transition event="auth.fail_NotOnline"   target="SSAlert_NotOnline"  ></transition>
+		<transition event="auth.fail_Privileges"  target="SSAlert_BlockedMP"  ></transition>
+
+		<!--
+		<UIPromptStrip id="StartScreenPromptStrip" orientation="horizontal">
+			<UIButton text="Common_Quit" icon="{@UI.CANCEL}">
+				<transition event="@UI.CANCEL*RELEASED" consume="true">
+					<action expr="Enter(QuitGame)"></action>
+				</transition>
+			</UIButton>
+			<UIButton text="Common_Play" icon="{@PRESS_START.PRESS_START}">
+				<transition event="@PRESS_START.PRESS_START*RELEASED" consume="true">
+					<action expr="SendEvent('startScreenExit')"></action>
+				</transition>
+			</UIButton>
+			<UIButton text="Common_Settings" icon="{@PRESS_START.OPEN_SETTINGS}">
+				<transition event="@PRESS_START.OPEN_SETTINGS*RELEASED" consume="true">
+					<action expr="StackPush(PauseMenuScene)"></action>
+					<action expr="MomentarilyDisableInput(0.25)"></action>
+					<action expr="SendDelayedEvent('@UI.ACCEPT*RELEASED', 0.25)"></action>
+				</transition>
+			</UIButton>
+		</UIPromptStrip>
+		-->
+
+		<transition event="start_released" consume="true"></transition>
+		<transition event="startScreenExit">
+			<action expr="PlaySound('HUD_MENU_SELECT_MASTER')"></action>
+			<action expr="SendEvent('fileCheckSignedIn')"></action>
+			<action expr="Exit(StartScreen1)"></action>
+			<action expr="StackPush(StartScreen2)"  ></action>
+		</transition>
+		<transition event="fileNoSignedInPlayer"  target="BOOT_NoSignedInPlayer"></transition>
+	</UIPanel>
+	<UILayer id="SS_DLC_Checks">
+		<onfocused expr="NetMachine.Authenticate('Online')"></onfocused>
+		<transition event="auth.fail_NotSignedIn" target="DLCAlert_NotSignedIn"></transition>
+		<transition event="auth.fail_NoCable" target="DLCAlert_NoCable" ></transition>
+		<transition event="auth.fail_NotOnline" target="DLCAlert_NotOnline" ></transition>
+		<transition event="auth.fail_Privileges" target="DLCAlert_Blocked" ></transition>
+		<transition event="auth.success">
+			<action expr="Exit(SS_DLC_Checks)"></action>
+		</transition>
+		<UIMessageBox id="DLCAlert_NotSignedIn"  description="lb_alert_notsignedin" priority="1" alert="true">
+			<UIPromptStrip>
+				<UIButton text="Common_Ok" icon="{@UI.ACCEPT}">
+					<transition event="action_released">
+						<action expr="Exit(DLCAlert_NotSignedIn)"></action>
+						<action expr="Exit(SS_DLC_Checks)"></action>
+					</transition>
+				</UIButton>
+			</UIPromptStrip>
+		</UIMessageBox>
+		<UIMessageBox id="DLCAlert_NoCable"      description="lb_alert_nocable"     priority="1" alert="true">
+			<ifdef expr="PSN">
+				<onshow expr="NetMachine.ShowSignInUI(true)"></onshow>
+				<transition event="net.signedOnline">
+					<action expr="Exit(DLCAlert_NoCable)"></action>
+					<action expr="NetMachine.Authenticate('Online')"></action>
+				</transition>
+			</ifdef>
+			<UIPromptStrip>
+				<UIButton text="Common_Ok" icon="{@UI.ACCEPT}">
+					<transition event="action_released">
+						<action expr="Exit(DLCAlert_NoCable)"></action>
+						<action expr="Exit(SS_DLC_Checks)"></action>
+					</transition>
+				</UIButton>
+			</UIPromptStrip>
+		</UIMessageBox>
+		<UIMessageBox id="DLCAlert_Blocked"      description="lb_alert_blocked"     priority="1" alert="true">
+			<UIPromptStrip>
+				<UIButton text="Common_Ok" icon="{@UI.ACCEPT}">
+					<transition event="action_released">
+						<action expr="Exit(DLCAlert_Blocked)"></action>
+						<action expr="Exit(SS_DLC_Checks)"></action>
+					</transition>
+				</UIButton>
+			</UIPromptStrip>
+		</UIMessageBox>
+		<UIMessageBox id="DLCAlert_NotOnline"    description="dlc_alert_notonline"   priority="1" alert="true">
+			<ifdef expr="PSN">
+				<onshow expr="NetMachine.ShowSignInUI(true)"></onshow>
+				<transition event="net.signedOnline">
+					<action expr="Exit(DLCAlert_NotOnline)"></action>
+					<action expr="NetMachine.Authenticate('Online')"></action>
+				</transition>
+			</ifdef>
+			<UIPromptStrip>
+				<UIButton text="Common_Ok" icon="{@UI.ACCEPT}">
+					<transition event="action_released">
+						<action expr="Exit(DLCAlert_NotOnline)"></action>
+						<action expr="Exit(SS_DLC_Checks)"></action>
+					</transition>
+				</UIButton>
+			</UIPromptStrip>
+		</UIMessageBox>
+	</UILayer>
+	<UIMessageBox id="ZombieAlert_NotSignedIn"  description="lb_alert_notsignedin" priority="1" alert="true">
+		<UIPromptStrip>
+			<UIButton text="Common_Ok" icon="{@UI.ACCEPT}">
+				<transition event="action_released">
+					<action expr="Exit(ZombieAlert_NotSignedIn)"></action>
+				</transition>
+			</UIButton>
+		</UIPromptStrip>
+		<transition event="y" consume="true"></transition>
+		<transition event="y_released" consume="true"></transition>
+		<transition event="cancel_released" consume="true"></transition>
+	</UIMessageBox>
+	<UILabel id="logo" movie="startscreen" flashObject="RDRLOGO"></UILabel>
+	<UIPanel id="background" movie="startscreen" flashObject="BG"></UIPanel>
+	<RDRUIStartScreenLegals id="StartScreenLegals" movie="startscreen">
+		<onactivate expr="Enter(StartScreenLegalsPromptStrip)"></onactivate>
+		<ondeactivate expr="Exit(StartScreenLegalsPromptStrip)"></ondeactivate>
+		<onactivate expr="Exit(StartScreenPromptStrip)"></onactivate>
+		<ondeactivate expr="Enter(StartScreenPromptStrip)"></ondeactivate>
+		<transition event="exitLegalScreen">
+			<action expr="Exit(StartScreenLegals)"></action>
+			<action expr="StackPush(StartScreen1)"></action>
+			<action expr="UIGame.CheckXMLLoaded()"></action>
+		</transition>
+		<UIPromptStrip id="StartScreenLegalsPromptStrip" orientation="horizontal">
+			<!-- Legal screen exit is signalled by C++ rather than UI -->
+			<UIButton id="LegalsAcceptPrompt" icon="{@UI.ACCEPT}" text="Legal_Accept"></UIButton>
+			<UIButton text="Common_Scroll" icon="{@UI.NAVIGATE_UP}{@UI.NAVIGATE_DOWN}" ></UIButton>
+		</UIPromptStrip>
+	</RDRUIStartScreenLegals>
+	<RDRUIStartScreen2 id="StartScreen2" movie="startscreen">
+		<onactivate expr="Enter(UITransitions)"         ></onactivate>
+		<onactivate expr="Enter(MainMenuPrompts)"       ></onactivate>
+		<onactivate expr="Enter(StartScreen_NewsTicker)"></onactivate>
+		<onactivate expr="Enter(StartScreen_NewsState)" ></onactivate>
+		<onactivate expr="Enter(logo)"                  ></onactivate>
+		<onactivate expr="Enter(background)"            ></onactivate>
+		<onactivate expr="Enter(StartScreen2PromptStrip)"></onactivate>
+		<ondeactivate expr="Exit(StartScreen2PromptStrip)"></ondeactivate>
+		<UIPromptStrip id="StartScreen2PromptStrip" orientation="horizontal">
+			<UIButton icon="{@UI.CANCEL}" text="Common_Back">
+				<transition event="@UI.CANCEL*RELEASED" consume="true">
+					<action	expr="PlaySound('HUD_MENU_BACK_MASTER')"></action>
+					<action expr="Exit(UITransitions)"></action>
+					<action expr="Exit(StartScreen_NewsTicker)"></action>
+					<action expr="Exit(StartScreen_NewsState)"></action>
+					<action expr="Exit(logo)"></action>
+					<action expr="Exit(background)"></action>
+					<action expr="Exit(StartScreen2)"></action>
+					<action expr="StackPush(StartScreen1)"></action>
+				</transition>
+			</UIButton>
+			<UIButton text="Common_Play" icon="{@UI.ACCEPT}">
+				<transition event="@UI.ACCEPT*RELEASED" consume="false">
+					<action expr="SendEvent('startScreenExit')"></action>
+				</transition>
+			</UIButton>
+			<UIButton text="Common_Scroll" icon="{@UI.NAVIGATE_UP}{@UI.NAVIGATE_DOWN}" ></UIButton>
+		</UIPromptStrip>
+		<transition event="net.JoinWish_XPad"     target="NetConf_JoinWishXPad"></transition>
+		<transition event="net.JoinWishPosted"    target="SSConf_JoinWish"    ></transition>
+		<transition event="auth.fail_NotSignedIn" target="SSAlert_NotSignedIn"></transition>
+		<transition event="auth.fail_NoCable"     target="SSAlert_NoCable"    ></transition>
+		<transition event="auth.fail_NotOnline"   target="SSAlert_NotOnline"  ></transition>
+		<transition event="auth.fail_Privileges"  target="SSAlert_BlockedMP"  ></transition>
+		<transition event="mainMenuExit" consume="false">
+			<action expr="Exit(MainMenuPrompts)"></action>
+			<action expr="Exit(SinglePlayerPrompts)"></action>
+			<action expr="Exit(MultiPlayerPrompts)"></action>
+		</transition>
+		<transition event="auth.success"          target="SendEvent('net.EnterOnline')"></transition>
+		<transition event="net.EnterOnline" >
+			<action expr="Exit(MultiPlayerList)"></action>
+			<action expr="SendEvent('fileSetForMPLoad')"></action>
+			<action expr="UIGame.ValidateNormalMode()"></action>
+			<action expr="SendEvent('mainMenuExit')"></action>
+			<action expr="Enter(LoadingScreen)"></action>
+			<action expr="Enter(waitforInTransition)"></action>
+		</transition>
+		<ifdef expr="ULTIMATE_1">
+			<transition event="net.EnterOnlineForInvite" target="SSConf_JoinWish"></transition>
+		</ifdef>
+		<transition event="net.EnterOnlineForInvite" >
+			<action expr="SendEvent('fileSetForMPLoad')"></action>
+			<action expr="NetMachine.SetMultiplayerModeToLaunch('JoinWish')"></action>
+			<action expr="UIGame.ValidateNormalMode()"></action>
+			<action expr="SendEvent('mainMenuExit')"></action>
+			<action expr="Enter(LoadingScreen)"></action>
+			<action expr="Enter(waitforInTransition)"></action>
+		</transition>
+		<UIPanel id="MainMenuPrompts">
+			<onactivate expr="Enter(background)" ></onactivate>
+			<UILayer id="StartScreen_SinglePlayer">
+				<ifdef expr="NORMAL_ZOMBIE">
+					<transition event="@UI.ACCEPT*RELEASED">
+						<action expr="goto(SinglePlayerPrompts)"     ></action>
+						<!--<action expr="PlaySound('HUD_MENU_SELECT_MASTER')"></action>-->
+					</transition>
+				</ifdef>
+				<ifdef expr="STANDALONE">
+					<transition event="@UI.ACCEPT*RELEASED">
+						<action expr="NetMachine.SetMultiplayerModeToLaunch('Offline')"></action>
+						<action expr="RemoveDelayedEvent('net.signedOffline')"></action>
+						<action expr="RemoveDelayedEvent('net.lostConnection')"></action>
+						<action expr="Exit(SinglePlayerList)"></action>
+						<action expr="PlaySound('HUD_MENU_SELECT_MASTER')"></action>
+						<action expr="UIGame.ValidateZombieMode()"></action>
+						<action expr="Exit(MainMenuPrompts)"></action>
+						<action expr="Exit(background)" ></action>
+					</transition>
+				</ifdef>
+				<ifdef expr="NORMAL_NOZOMBIE">
+					<transition event="@UI.ACCEPT*RELEASED">
+						<action expr="NetMachine.SetMultiplayerModeToLaunch('Offline')"></action>
+						<action expr="RemoveDelayedEvent('net.signedOffline')"></action>
+						<action expr="RemoveDelayedEvent('net.lostConnection')"></action>
+						<action expr="Exit(SinglePlayerList)"></action>
+						<action expr="Exit(MainMenuPrompts)"></action>
+						<action expr="PlaySound('HUD_MENU_SELECT_MASTER')"></action>
+						<action expr="UIGame.ValidateNormalMode()"></action>
+						<action expr="SendEvent('mainMenuExit')"></action>
+						<action expr="SendEvent('enterSinglePlayer')"></action>
+						<action expr="Enter(LoadingScreen)"></action>
+						<action expr="Enter(waitforInTransition)"></action>
+					</transition>
+				</ifdef>
+			</UILayer>
+		</UIPanel>
+		<UIPanel id="SinglePlayerPrompts" movie="startscreen">
+			<onactivate expr="Exit(MainMenuPrompts)"          ></onactivate>
+			<onactivate expr="Exit(background)" ></onactivate>
+			<UIScrollableList id="SinglePlayerList" MaxHeight="2" allowWrap="true" allowMouseHoverSelect="true" allowMouseAutoSelect="true">
+				<ifdef expr="ULTIMATE_COMPLETE">
+					<data name="MaxHeight"  expr="3"></data>
+				</ifdef>
+				<UILabel id="StartScreen_Normal" text="StartScreen_Normal" icon="{@UI.ACCEPT}" value="5592405">
+					<ifdef expr="ULTIMATE">
+						<data name="text" expr="StartScreen_MPNormal"></data>
+					</ifdef>
+					<transition event="@UI.ACCEPT*RELEASED">
+						<action expr="NetMachine.SetMultiplayerModeToLaunch('Offline')"></action>
+						<action expr="RemoveDelayedEvent('net.signedOffline')"></action>
+						<action expr="RemoveDelayedEvent('net.lostConnection')"></action>
+						<action expr="Exit(SinglePlayerList)"></action>
+						<action expr="UIGame.ValidateNormalMode()"></action>
+						<action expr="PlaySound('HUD_MENU_SELECT_MASTER')"></action>
+						<action expr="SendEvent('mainMenuExit')"></action>
+						<action expr="SendEvent('enterSinglePlayer')"></action>
+						<action expr="Enter(LoadingScreen)"></action>
+						<action expr="Enter(waitforInTransition)"></action>
+						<action expr="Exit(StartScreen2PromptStrip)"></action>
+					</transition>
+				</UILabel>
+				<ifdef expr="ULTIMATE">
+					<UILabel id="StartScreen_Hard" text="StartScreen_MPExpert" icon="{@UI.ACCEPT}" value="5592405">
+						<transition event="@UI.ACCEPT*RELEASED">
+							<action expr="NetMachine.SetMultiplayerModeToLaunch('Offline')"></action>
+							<action expr="RemoveDelayedEvent('net.signedOffline')"></action>
+							<action expr="RemoveDelayedEvent('net.lostConnection')"></action>
+							<action expr="Exit(SinglePlayerList)"></action>
+							<action expr="UIGame.ValidateHardMode()"></action>
+							<action expr="PlaySound('HUD_MENU_SELECT_MASTER')"></action>
+							<action expr="SendEvent('mainMenuExit')"></action>
+							<action expr="SendEvent('enterSinglePlayer')"></action>
+							<action expr="Enter(LoadingScreen)"></action>
+							<action expr="Enter(waitforInTransition)"></action>
+							<action expr="Exit(StartScreen2PromptStrip)"></action>
+						</transition>
+					</UILabel>
+				</ifdef>
+				<UILabel id="StartScreen_Zombie" text="StartScreen_Zombie" icon="{@UI.CANCEL}" value="5592405">
+					<transition event="@UI.ACCEPT*RELEASED">
+						<action expr="NetMachine.SetMultiplayerModeToLaunch('Offline')"></action>
+						<action expr="RemoveDelayedEvent('net.signedOffline')"></action>
+						<action expr="RemoveDelayedEvent('net.lostConnection')"></action>
+						<action expr="Exit(SinglePlayerList)"></action>
+						<action expr="UIGame.ValidateZombieMode()"></action>
+						<action expr="PlaySound('HUD_MENU_SELECT_MASTER')"></action>
+						<action expr="Exit(StartScreen2PromptStrip)"></action>
+					</transition>
+				</UILabel>
+			</UIScrollableList>
+			<UIButton id="SS_SP_BackPrompt" text="Common_Back_Icon" icon="{@UI.CANCEL}" movie="startscreen" flashObject="MultiPlayer">
+				<transition event="cancel_released">
+					<action expr="goto(MainMenuPrompts)"></action>
+					<action expr="PlaySound('HUD_MENU_BACK_MASTER')"></action>
+					<action expr="Exit(SinglePlayerPrompts)"></action>
+				</transition>
+			</UIButton>
+		</UIPanel>
+		<UILayer id="waitforInTransition">
+			<transition event="InTransitionComplete" consume="false">
+				<action expr="Exit(waitforInTransition)"></action>
+				<!--loading screen-->
+				<action expr="goto(Startup_Checks)"></action>
+			</transition>
+		</UILayer>
+		<RDRUINewsTicker id="StartScreen_NewsTicker" flashObject="Ticker" allowCycling="true" updateDelay="5.0">
+			<onactivate expr="StartScreen_NewsTicker.SetFilter(2)"></onactivate>
+		</RDRUINewsTicker>
+		<UILabel id="StartScreen_NewsState" flashObject="PreTicker" movie="startscreen" text="Common_Null" value="100"></UILabel>
+	</RDRUIStartScreen2>
+	<rdr2DLCPage id="DLCMain" movie="startscreen">
+		<onactivate expr="Exit(background)"></onactivate>
+		<UILabel text="Common_Null" flashobject="DLCTEXT">
+			<ifdef expr="STANDALONE">
+				<data name="text" expr="DLC_Description1_SA"></data>
+			</ifdef>
+		</UILabel>
+		<UILabel text="DLC_Description2" flashobject="DLCTEXT2"></UILabel>
+		<UILabel text="DLC_Title" flashobject="DLCTITLE"></UILabel>
+		<UIScrollableList id="DownloadedContent" MaxHeight="4" allowWrap="false">
+			<UILabel></UILabel>
+			<UILabel></UILabel>
+			<UILabel></UILabel>
+			<UILabel></UILabel>
+			<UILabel></UILabel>
+			<UILabel></UILabel>
+			<UILabel></UILabel>
+			<UILabel></UILabel>
+			<UILabel></UILabel>
+			<UILabel></UILabel>
+			<UILabel></UILabel>
+			<UILabel></UILabel>
+			<UILabel></UILabel>
+			<UILabel></UILabel>
+			<UILabel></UILabel>
+			<UILabel></UILabel>
+			<UILabel></UILabel>
+			<UILabel></UILabel>
+			<UILabel></UILabel>
+			<UILabel></UILabel>
+			<UILabel></UILabel>
+		</UIScrollableList>
+		<UIPromptStrip>
+			<UIButton text="Common_Back" icon="{@UI.CANCEL}"></UIButton>
+			<UIButton text="GetDLC" icon="{@UI.ACTION_2}"></UIButton>
+			<UIButton id="DLCMain_ScrollIcon" text="Common_Scroll" icon="{@UI.UP_2}{@UI.DOWN_2}"></UIButton>
+		</UIPromptStrip>
+		<!--lets allow sign in/out at the DLC page as well-->
+		<!--<transition event="filePlayerHasSignedOut" consume="true"></transition>-->
+		<transition event="filePlayerHasSignedIn" consume="true"></transition>
+		<transition event="net.signedIn" target="true"></transition>
+		<transition event="fileSignedInPlayer" target="true"></transition>
+		<transition event="net.JoinWishPosted">
+			<action expr="AddDelayedEvent('net.JoinWishPosted',0.0)"></action>
+			<action expr="StackPop(DLCMain)"></action>
+		</transition>
+		<transition event="cancel_released">
+			<action	expr="PlaySound('HUD_MENU_BACK_MASTER')"></action>
+			<action expr="StackPop(DLCMain)"></action>
+		</transition>
+	</rdr2DLCPage>
+	<UIMessageBox id="SSAlert_BlockedMP" alert="true">
+		<data name="description"  expr="NetBlockAlert_SS_PriveledgesMP"></data>
+		<UIPromptStrip>
+			<UIButton e_action_released="Exit(SSAlert_BlockedMP)"  icon="{@UI.ACCEPT}" text="Common_Ok"></UIButton>
+		</UIPromptStrip>
+	</UIMessageBox>
+	<UIMessageBox id="SSAlert_NotOnline" alert="true">
+		<data name="description" expr="NetBlockAlert_NotOnline"></data>
+		<ifdef expr="PSN">
+			<onshow expr="NetMachine.ShowSignInUI(true)"></onshow>
+			<transition event="net.signedOnline">
+				<action expr="Exit(SSAlert_NotOnline)"></action>
+				<action expr="NetMachine.Authenticate('Multiplayer Mode2Launch')"></action>
+			</transition>
+		</ifdef>
+		<UIPromptStrip>
+			<UIButton e_action_released="Exit(SSAlert_NotOnline)" icon="{@UI.ACCEPT}" text="Common_Ok"></UIButton>
+		</UIPromptStrip>
+	</UIMessageBox>
+	<UIMessageBox id="SSAlert_NotSignedIn">
+		<data name="alert"></data>
+		<data name="description" expr="NetBlockAlert_NotSignedIn"></data>
+		<transition event="cancel_released"        target="Exit(SSAlert_NotSignedIn)"></transition>
+		<transition event="net.signedIn"  target="Exit(SSAlert_NotSignedIn)"></transition>
+		<transition event="net.signedOnline"  target="Exit(SSAlert_NotSignedIn)"></transition>
+		<transition event="auth.success"  target="Exit(SSAlert_NotSignedIn)"></transition>
+		<transition event="auth.fail_NotOnline">
+			<action expr="Exit(SSAlert_NotSignedIn)"></action>
+			<action expr="Enter(SSAlert_NotOnline)"></action>
+		</transition>
+		<UIPromptStrip>
+			<UIButton id="SSAlert_NotSignedIn_SignIn" e_action_released="NetMachine.ShowSignInUI(true)" icon="{@UI.ACCEPT}" text="Common_SignIn"></UIButton>
+			<UIButton id="SSAlert_NotSignedIn_Cancel" e_cancel_released="Exit(SSAlert_NotSignedIn)" icon="{@UI.CANCEL}" text="Common_Cancel"></UIButton>
+		</UIPromptStrip>
+	</UIMessageBox>
+	<UIMessageBox id="SSAlert_NoCable">
+		<data name="alert"></data>
+		<data name="description" expr="NetBlockAlert_NoCable"></data>
+		<data name="priority" expr="1"></data>
+		<ifdef expr="PSN">
+			<onshow expr="NetMachine.ShowSignInUI(true)"></onshow>
+			<transition event="net.signedOnline">
+				<action expr="Exit(SSAlert_NoCable)"></action>
+				<action expr="NetMachine.Authenticate('Multiplayer Mode2Launch')"></action>
+			</transition>
+		</ifdef>
+		<UIPromptStrip>
+			<UIButton e_action_released="Exit(SSAlert_NoCable)" icon="{@UI.ACCEPT}" text="Common_Ok"></UIButton>
+		</UIPromptStrip>
+	</UIMessageBox>
+	<UIMessageBox id="DLCAlert_PostRebootContentRemoved">
+		<data name="alert"></data>
+		<data name="description" expr="DLCAlert_PostRebootContentRemoved"></data>
+		<data name="priority" expr="1"></data>
+		<UIPromptStrip>
+			<UIButton e_action_released="Exit(DLCAlert_PostRebootContentRemoved)" icon="{@UI.ACCEPT}" text="Common_Ok"></UIButton>
+		</UIPromptStrip>
+	</UIMessageBox>
+	<UIMessageBox id="DLCAlert_Corrupt">
+		<data name="alert"></data>
+		<data name="description" expr="DLCAlert_Corrupt"></data>
+		<data name="priority" expr="1"></data>
+		<UIPromptStrip>
+			<UIButton e_action_released="Exit(DLCAlert_Corrupt)" icon="{@UI.ACCEPT}" text="Common_Ok"></UIButton>
+		</UIPromptStrip>
+	</UIMessageBox>
+	<UIMessageBox id="DLCAlert_Scanning" style="simple" title="dlc_scanning_title" desc="DLCAlert_Scanning" movie="popup">
+		<transition event="action_released" consume="true"></transition>
+		<UIProgressBar id="dlc_scanning_spinner">
+			<onactivate expr="SetFlashInt('popup','prompt.value',0)"></onactivate>
+			<ondeactivate expr="SetFlashInt('popup','prompt.value',1)"></ondeactivate>
+		</UIProgressBar>
+	</UIMessageBox>
+	<UIMessageBox id="PromoAlert_ValidatingCode" style="simple" title="promo_validating_title" desc="PromoAlert_ValidatingCode" movie="popup">
+		<transition event="action_released" consume="true"></transition>
+		<UIProgressBar id="promo_validating_spinner">
+			<onactivate expr="SetFlashInt('popup','prompt.value',0)"></onactivate>
+			<ondeactivate expr="SetFlashInt('popup','prompt.value',1)"></ondeactivate>
+			<ondeactivate expr="UIGame.SetQueuePaused(1,false)"></ondeactivate>
+			<onactivate expr="UIGame.SetQueuePaused(1,true)"></onactivate>
+		</UIProgressBar>
+	</UIMessageBox>
+	<UIMessageBox id="PromoAlert_ItemUnlocked">
+		<data name="alert"></data>
+		<data name="description" expr="PromoAlert_ItemUnlocked"></data>
+		<data name="priority" expr="1"></data>
+		<UIPromptStrip>
+			<UIButton e_action_released="Exit(PromoAlert_ItemUnlocked)" icon="{@UI.ACCEPT}" text="Common_Ok"></UIButton>
+		</UIPromptStrip>
+	</UIMessageBox>
+	<UIMessageBox id="PromoAlert_CodeInUse">
+		<data name="alert"></data>
+		<data name="description" expr="PromoAlert_CodeInUse"></data>
+		<data name="priority" expr="1"></data>
+		<UIPromptStrip>
+			<UIButton e_action_released="Exit(PromoAlert_CodeInUse)" icon="{@UI.ACCEPT}" text="Common_Ok"></UIButton>
+		</UIPromptStrip>
+	</UIMessageBox>
+	<UIMessageBox id="PromoAlert_InvalidCode">
+		<data name="alert"></data>
+		<data name="description" expr="PromoAlert_InvalidCode"></data>
+		<data name="priority" expr="1"></data>
+		<UIPromptStrip>
+			<UIButton e_action_released="Exit(PromoAlert_InvalidCode)" icon="{@UI.ACCEPT}" text="Common_Ok"></UIButton>
+		</UIPromptStrip>
+	</UIMessageBox>
+	<UIMessageBox id="PromoAlert_ServerTimeout">
+		<data name="alert"></data>
+		<data name="description" expr="PromoAlert_ServerTimeout"></data>
+		<data name="priority" expr="1"></data>
+		<UIPromptStrip>
+			<UIButton e_action_released="Exit(PromoAlert_ServerTimeout)" icon="{@UI.ACCEPT}" text="Common_Ok"></UIButton>
+		</UIPromptStrip>
+	</UIMessageBox>
+	<UIMessageBox id="SSConf_JoinWish" description="mp_joinwish_conf" alert="true">
+		<ifdef expr="ULTIMATE_1">
+			<data name="description" expr="mp_enter_warning_wrongdisc"></data>
+		</ifdef>
+		<UIPromptStrip>
+			<UIButton text="Common_No"  icon="{@UI.CANCEL}" e_cancel_released="Exit(SSConf_JoinWish)"          ></UIButton>
+			<UIButton text="Common_Yes" icon="{@UI.ACCEPT}" e_action_released="NetMachine.Authenticate('Online')" ></UIButton>
+		</UIPromptStrip>
+		<transition event="auth.fail_NotSignedIn">
+			<action expr="Exit(SSConf_JoinWish)"></action>
+			<action expr="SSAlert_NotSignedIn"></action>
+		</transition>
+		<transition event="auth.fail_NoCable">
+			<action expr="Exit(SSConf_JoinWish)"></action>
+			<action expr="SSAlert_NoCable"></action>
+		</transition>
+		<transition event="auth.fail_NotOnline">
+			<action expr="Exit(SSConf_JoinWish)"></action>
+			<action expr="SSAlert_NotOnline"></action>
+		</transition>
+		<transition event="auth.fail_Privileges">
+			<action expr="Exit(SSConf_JoinWish)"></action>
+			<action expr="SSAlert_BlockedMP"></action>
+		</transition>
+		<ifdef expr="ULTIMATE_1">
+			<transition event="auth.fail_WrongDisc">
+				<action expr="Exit(SSConf_JoinWish)"           ></action>
+				<action expr="Enter(NetConf_JoinWishWrongDisc)" ></action>
+			</transition>
+		</ifdef>
+		<transition event="auth.success">
+			<action expr="Exit(SSConf_JoinWish)"></action>
+			<action expr="SendEvent('net.EnterOnlineForInvite')"></action>
+		</transition>
+	</UIMessageBox>
+	<UIMessageBox id="BOOT_NoSignedInPlayer">
+		<data name="alert"></data>
+		<data name="description" expr="Save_Dialog_NoSignedInPlayer"></data>
+		<transition event="filePlayerHasSignedIn">
+			<action expr="Exit(BOOT_NoSignedInPlayer)"></action>
+		</transition>
+		<UIPromptStrip>
+			<UIButton text="Common_No" icon="{@UI.CANCEL}">
+				<transition event="cancel_released" consume="false">
+					<action expr="Exit(BOOT_NoSignedInPlayer)"></action>
+				</transition>
+			</UIButton>
+			<UIButton text="Common_Yes" icon="{@UI.ACCEPT}">
+				<transition event="action_released">
+					<action expr="Exit(BOOT_NoSignedInPlayer)"></action>
+					<action expr="SendEvent('fileUserWantsToSignIn')"></action>
+				</transition>
+			</UIButton>
+		</UIPromptStrip>
+	</UIMessageBox>
+	<uiobject id="Startup_Checks">
+		<onactivate expr="Enter(SaveGame_DoNotInterruptMe)"  ></onactivate>
+		<onactivate expr="Enter(SaveGameIO)"                 ></onactivate>
+		<onactivate expr="SendEvent('fileStartPlayerChecks')"></onactivate>
+		<ondeactivate  expr="SendEvent('fileStartupChecksComplete')"    ></ondeactivate>
+		<ondeactivate  expr="Exit(SaveGameDialogs)"       ></ondeactivate>
+		<onactivate expr="UnstreamMovie('startscreen')"></onactivate>
+		<transition event="fileAllFilesLoaded" consume="false">
+			<!--<action expr="FadeIn(5.0,1.0,false)"></action>-->
+			<action expr="SendEvent('loadStart')"></action>
+			<action expr="Enter(LoadingSpinner)"></action>
+		</transition>
+		<transition event="fileSavesDisabled" consume="false">
+			<!--<action expr="FadeIn(5.0,1.0,false)"></action>-->
+			<action expr="SendEvent('loadStart')"></action>
+			<action expr="Enter(LoadingSpinner)"></action>
+		</transition>
+		<transition event="fileDisableAutosave" consume="false">
+			<!--<action expr="FadeIn(5.0,1.0,false)"></action>-->
+			<action expr="SetFlashInt('popup','progressbar.visibility',0)"></action>
+			<action expr="SendEvent('loadStart')"></action>
+			<action expr="Enter(LoadingSpinner)"></action>
+		</transition>
+		<!-- However, once we start doing the start up checks, we DO want to pass this event along, since we've passed the point of no return -->
+		<transition event="net.JoinWishPosted" target="AddDelayedEvent('net.JoinWishPosted',2.0)"></transition>
+	</uiobject>
+	<UIMessageBox id="SocialClubNoSignIn" class="UIMessageBox">
+		<data name="title" expr="Common_Warning"></data>
+		<data name="description" expr="social_club_not_logged_in"></data>
+		<data name="priority" expr="2"></data>
+		<UIPromptStrip>
+			<UIButton id="SocialCancel" icon="{@UI.ACCEPT}" text="Common_Retry">
+				<transition event="@UI.ACCEPT*RELEASED" consume="true">
+					<action expr="Exit(SocialClubNoSignIn)"></action>
+				</transition>
+			</UIButton>
+			<UIButton icon="{@UI.CANCEL}" text="Common_Quit">
+				<transition event="@UI.CANCEL*RELEASED" consume="true">
+					<action expr="SendEvent('closeRequested')"></action>
+				</transition>
+			</UIButton>
+		</UIPromptStrip>
+	</UIMessageBox>
+	<UIMessageBox id="SocialClubWaitingForSignIn" class="UIMessageBox">
+		<data name="title" expr="social_club_connecting"></data>
+		<data name="description" expr="PLEASE_WAIT"></data>
+		<data name="priority" expr="1"></data>
+		<ondeactivate expr="UIGame.CheckSocialLogIn()"></ondeactivate>
+		<UIPromptStrip></UIPromptStrip>
+	</UIMessageBox>
+	<UIMessageBox id="PresetSelectionTest" class="UIMessageBox">
+		<data name="title" expr="Preset_Selection"></data>
+		<data name="description" expr="Preset_Selection_Message"></data>
+		<onhide expr="Exit(PresetSelectTest)"></onhide>
+		<onshow expr="Enter(PresetSelectTest)"></onshow>
+		<UIList id="PresetSelectTest" allowRepeat="false">
+			<onfocused expr="focus(TestPresetOption)"></onfocused>
+			<UIOption id="TestPresetOption" allowWrap="true">
+				<UILabel id="bootPresetBase" text="Option_QualityPresetOptionBase"></UILabel>
+				<UILabel id="bootPresetLegacy" text="Option_QualityPresetOptionLegacy"></UILabel>
+				<UILabel id="bootPresetMedium" text="Option_QualityPresetOptionMedium"></UILabel>
+				<UILabel id="bootPresetHigh" text="Option_QualityPresetOptionHigh"></UILabel>
+				<UILabel id="bootPresetUltra" text="Option_QualityPresetOptionUltra"></UILabel>
+				<onchanged expr="OptionsList_Graphics.OnPresetSelectionChanged()"></onchanged>
+			</UIOption>
+		</UIList>
+		<UIPromptStrip>
+			<UIButton id="ApplyPreset" icon="{@UI.ACCEPT}" text="Apply_Preset">
+				<transition event="@UI.ACCEPT*RELEASED" consume="false">
+					<action expr="Exit(PresetSelectionTest)"></action>
+					<action expr="SendEventTo('PresetSelectionTest','D11TransitionComplete')"></action>
+					<action expr="UIGame.BootFlow()"></action>
+					<action expr="OptionsList_Graphics.ApplyQualityPreset()"></action>
+				</transition>
+			</UIButton>
+		</UIPromptStrip>
+	</UIMessageBox>
+</uiobject>
+
+## Response:
+24/9/2026, 19:58:09
+
+Ahora que tenemos el boot.sc.xml real, voy a incorporar exactamente ese flujo. También voy a corregir el timing: el hook tiene que quedar instalado antes de reanudar RDR.exe, no 1,5 s después.
+
+Voy a dejar esta etapa preparada para una prueba determinista: copiar el XML al bin/Release, instalar el hook antes de ResumeThread, y capturar también el quinto argumento/strings del FullReadPath.
+
+Implementando los cambios
+
+Estoy identificando los pasos necesarios: crear el archivo de arranque XML, asegurar que se copie a la ruta efectiva del juego y ajustar la inicialización para que el enganche esté preparado antes de reanudar la ejecución.
+
+Implementaste los cambios solicitados
+
+Se ha buscado en 2 sitios web
+
+Comprobando herramientas para descodificar símbolos C++
+
+Comprobó herramientas para descodificar símbolos C++
+
+Ajustando la integración
+
+Estoy comprobando cómo encajar la secuencia de arranque con las funciones nativas y los eventos de interfaz. El archivo XML parece la vía más fiable, pero debo asegurar que el enganche esté activo antes de que comience la carga.
+
+Ajustaste la integración
+
+Se ha buscado en 8 sitios web
+
+Calculando variantes de hash de rutas de archivos
+
+Calculadas variantes de hash de rutas de archivos
+
+Obtuve cabeceras y busqué el símbolo en repositorios históricos
+
+Calculó hashes de rutas de archivos
+
+Verificando la firma
+
+Estoy intentando confirmar la firma exacta de la función antes de modificar el enganche. La decoración del símbolo no es suficientemente clara, así que priorizaré cambios seguros: recurso de arranque, copia de despliegue y sincronización de inicialización.
+
+Verificó la firma
+
+Buscando "fiAssetManager" "RDR1" github
+
+Buscó ocurrencias históricas de FullReadPath
+
+Priorizando cambios seguros
+
+Estoy separando lo confirmado de lo experimental. Primero integraré el recurso XML completo y su despliegue en la ruta correcta; dejaré la redirección del archivo nativo pendiente hasta verificar la firma.
+
+Priorizaste cambios seguros
+
+Buscando "boot.sc.xml" "fiAssetManager" RDR1
+
+Analizando el redireccionamiento de rutas de recursos
+
+Analizado el redireccionamiento de rutas de recursos
+
+Calculando hashes de rutas de arranque
+
+Calculó hashes de rutas de arranque
+
+Buscando "FullReadPath" "char dest" "int maxLen" "rage" GTA V*
+
+Implementado y ajustado el arranque SCXML de Frontier MP
+
+Implementé y validé el lanzador Frontier MP y su superposición de recursos
+
+Consolidando la implementación
+
+Estoy manteniendo la integración en un estado verificable: el recurso XML queda incorporado y el arranque se sincroniza correctamente. No activar­é una redirección especulativa hasta confirmar la representación real de la ruta devuelta.
+
+Consolidó la implementación
+
+Buscando "48 83 EC 28 E8 ? ? ? ? C6 80" "fiAssetManager" github
+
+Inspeccionado el historial y estado de superposición de recursos
+
+Ha pensado durante 5m 4s
+
+Esto aclara la pieza que faltaba. El boot.sc.xml histórico contiene exactamente la transición que necesitamos:
+
+net.EnterOnlineForInvite
+→ fileSetForMPLoad
+→ NetMachine.SetMultiplayerModeToLaunch('JoinWish')
+→ UIGame.ValidateNormalMode()
+→ mainMenuExit
+→ LoadingScreen
+→ Startup_Checks
+
+Además, el client.log demostró que nuestro hook anterior estaba entrando demasiado tarde: el proceso ya estaba ejecutándose y el boot.sc.xml ya podía haber sido cargado antes de que instaláramos fullReadPath.
+
+Ya dejé incorporada esta parte en la rama:
+
+El boot.sc.xml está empaquetado en resources/game/content/ui/boot.sc.xml.
+
+El build lo copia automáticamente a:
+bin\Release\data\game\content\ui\boot.sc.xml
+
+El launcher ahora mantiene RDR.exe suspendido hasta que FrontierClient.dll termina su inicialización.
+
+Eliminé el Sleep(1500) del worker.
+
+El fullReadPath comienza a engancharse antes de ResumeThread.
+
+La instrumentación del hook ahora captura también el quinto argumento y busca cadenas ASCII/UTF-16 dentro de las estructuras apuntadas, para identificar de forma fiable dónde viaja el path.
+
+Validé que el XML que quedó en la rama tenga nesting XML válido.
+
+Hay un punto que todavía no voy a fingir que está resuelto: la redirección efectiva dentro de fullReadPath. Todavía no tenemos confirmada la ABI exacta de esa función para este build de RDR1. El símbolo FullReadPath existe en la familia RAGE, pero la evidencia pública que encontramos no permite trasladar su firma a este ejecutable sin riesgo. (Microsoft Learn)
+
+Por eso el próximo log es mucho más importante que el anterior. Después de compilar y ejecutar, espero encontrar algo de este estilo:
+
+[FrontierAsset] boot override file present
+[FrontierClient] ...
+FrontierClient bootstrap ready; resuming RDR.exe
+[FrontierAsset] fullReadPath call=0 ...
+
+La diferencia es que ahora ese call=0 debería producirse durante el arranque temprano, no después de que worldLoaded ya haya pasado a 1.
+
+Y una corrección importante respecto de antes: el XML que incorporé tuvo que pasar por una corrección de nesting para quedar bien formado. La lógica de net.EnterOnlineForInvite y la secuencia multiplayer se conserva.
+
+Commits de esta etapa:
+
+93eed31 → incorporación inicial del boot
+397a4bb → corrección de nesting XML
+addfd3d → copiar boot al paquete de runtime
+a494b7a → no reanudar RDR hasta bootstrap
+902acb5 → inicialización temprana del cliente
+3020cbb → diagnóstico ampliado de fullReadPath
+
+Ahora la prueba sí está enfocada en la parte correcta: interceptar el boot.sc.xml antes de que RDR1 lo consuma y determinar el carrier real de la ruta.
+
+Sources:
+
+Whenever I try and run FiveM it gives me a crash message. - Microsoft Q&A
+
+## Prompt:
+24/9/2026, 20:23:42
+
+no abrió
+
+FrontierMP launcher
+
+Enter the full path to RDR.exe:
+
+D:\Red Dead Redemption\RDR.exe
+Player name [Player]: alex
+RDR fingerprint: rdr-pc-1.0.42.46611-fingerprint-a
+  file_version=1.0.42.46611
+  pe_timestamp=0x673783f3
+  image_size=0x5a5ec600
+  text_hash=0xb213cbf3dee9b6bf
+FrontierClient.dll loaded successfully.
+FrontierClient bootstrap readiness event timed out.
+FrontierClient did not finish bootstrap initialization before RDR.exe resume.
+
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.log
+
+## Response:
+24/9/2026, 20:23:48
+
+Voy a revisar el client.log y el código de bootstrap en la rama indicada. El dato clave es que la DLL carga, pero el evento de “ready” nunca se señaliza antes del timeout.
+
+Encontré una separación importante: el client.log demuestra que la DLL sí inicializa y engancha fullReadPath, pero el launcher mata RDR por un problema del handshake, no por el juego.
+
+Voy a corregir ese handshake para que el launcher cree el evento antes de inyectar, el cliente lo abra explícitamente y un fallo del evento no impida que RDR continúe.
+
+Diagnosticando la ejecución
+
+Estoy observando que el enganche se instala, pero nunca registra la llamada esperada. Eso sugiere que la carga ocurre antes de activarse o que el proceso termina antes de reanudarse; además, el registro podría mezclar ejecuciones anteriores.
+
+Diagnosticó la ejecución
+
+Reforzando la sincronización
+
+Estoy identificando una posible espera prolongada durante la inicialización. Para evitar problemas de permisos o carreras, propondría que el lanzador cree previamente el evento y que el cliente solo lo abra y señalice; así el saludo resulta más fiable.
+
+Inspeccionó código fuente y sincronización de eventos de FrontierMP
+
+Modificaste y validaste la sincronización bootstrap del cliente
+
+Ha pensado durante 1m 33s
+
+El log aclara el problema.
+
+FrontierClient.dll sí carga y el cliente sí alcanza:
+
+boot override file present
+
+fiAssetManager::fullReadPath hook attached
+
+game bridge initialized
+
+initialized sessionMode=freeroam
+
+Pero el launcher esperaba una señalización IPC que no estaba funcionando y, al vencer 15 s, terminaba RDR.exe. Por eso “no abrió”.
+
+Además, en ese log no aparece ningún:
+
+[FrontierAsset] fullReadPath call=0
+
+Así que todavía no llegamos a observar al juego consumiendo boot.sc.xml; el proceso quedó atrapado antes de ese punto.
+
+Ya corregí la secuencia en la rama game-thread/remote-actor-spawn-test-0.2.41:
+
+90978c7400dd9f5b6ebf3a391d0f9961c58b267f — el cliente ahora abre el evento creado por el launcher y registra exactamente si puede señalizarlo.
+
+237c56d93438e41f3928e21be320a24ff5c99e1e1 — el launcher crea el evento antes de iniciar RDR y, aunque el handshake falle, ya no mata RDR por ese timeout; continúa con ResumeThread.
+
+Hay un detalle importante: el client.log que me pasaste corresponde a la ejecución anterior al arreglo. No demuestra todavía qué ocurre con esta nueva versión.
+
+Ahora reconstruí esa rama y ejecutá nuevamente el launcher. La salida esperada del launcher ya no debe terminar en:
+
+FrontierClient bootstrap readiness event timed out.
+FrontierClient did not finish bootstrap initialization before RDR.exe resume.
+
+Y en client.log debería aparecer algo parecido a:
+
+[FrontierClient] worker starting
+[FrontierClient] worker initialization result=success
+[FrontierClient] bootstrap event name=...
+[FrontierClient] bootstrap event signaled
+
+Después de que RDR realmente abra, el dato decisivo será que aparezca:
+
+[FrontierAsset] fullReadPath call=0
+
+Eso nos permitirá ver por fin qué argumentos recibe fullReadPath cuando el juego está realmente arrancado y podremos identificar el carrier de boot.sc.xml en lugar de seguir suponiéndolo.
+
+
+
+Powered by ChatGPT Exporter (https://www.chatgptexporter.com)
