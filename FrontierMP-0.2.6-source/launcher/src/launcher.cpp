@@ -194,30 +194,39 @@ bool Launcher::inject_client(
 bool Launcher::wait_for_bootstrap_ready(
     const std::wstring& bootstrapEventName,
     unsigned long timeoutMs) const {
-    const ULONGLONG deadline =
-        GetTickCount64() + timeoutMs;
-
-    for (;;) {
-        HANDLE event = OpenEventW(
+    HANDLE event =
+        OpenEventW(
             SYNCHRONIZE,
             FALSE,
             bootstrapEventName.c_str());
 
-        if (event) {
-            const DWORD waitResult =
-                WaitForSingleObject(event, 0);
-            CloseHandle(event);
-            return waitResult == WAIT_OBJECT_0;
-        }
-
-        if (GetTickCount64() >= deadline) {
-            std::wcerr
-                << L"FrontierClient bootstrap readiness event timed out.\n";
-            return false;
-        }
-
-        Sleep(10);
+    if (!event) {
+        std::wcerr
+            << L"OpenEventW failed for bootstrap readiness event: "
+            << GetLastError()
+            << L"\n";
+        return false;
     }
+
+    const DWORD result =
+        WaitForSingleObject(event, timeoutMs);
+    CloseHandle(event);
+
+    if (result == WAIT_OBJECT_0) {
+        return true;
+    }
+
+    if (result == WAIT_TIMEOUT) {
+        std::wcerr
+            << L"FrontierClient bootstrap readiness event timed out.\n";
+    } else {
+        std::wcerr
+            << L"FrontierClient bootstrap readiness wait failed: "
+            << GetLastError()
+            << L"\n";
+    }
+
+    return false;
 }
 
 std::vector<wchar_t> Launcher::build_environment(
@@ -335,6 +344,21 @@ int Launcher::run(const LaunchOptions& options) const {
             static_cast<unsigned long long>(
                 GetTickCount64()));
 
+    HANDLE bootstrapEvent =
+        CreateEventW(
+            nullptr,
+            TRUE,
+            FALSE,
+            bootstrapEventName.c_str());
+
+    if (!bootstrapEvent) {
+        std::wcerr
+            << L"CreateEventW failed for bootstrap readiness event: "
+            << GetLastError()
+            << L"\n";
+        return 4;
+    }
+
     auto environment =
         build_environment(options, bootstrapEventName);
 
@@ -353,6 +377,7 @@ int Launcher::run(const LaunchOptions& options) const {
             << L"CreateProcessW failed: "
             << GetLastError()
             << L"\n";
+        CloseHandle(bootstrapEvent);
         return 4;
     }
 
@@ -365,6 +390,7 @@ int Launcher::run(const LaunchOptions& options) const {
         TerminateProcess(processInfo.hProcess, 5);
         CloseHandle(processInfo.hThread);
         CloseHandle(processInfo.hProcess);
+        CloseHandle(bootstrapEvent);
         return 5;
     }
 
@@ -375,17 +401,14 @@ int Launcher::run(const LaunchOptions& options) const {
             bootstrapEventName,
             15000)) {
         std::wcerr
-            << L"FrontierClient did not finish bootstrap "
-               L"initialization before RDR.exe resume.\n";
-
-        TerminateProcess(processInfo.hProcess, 7);
-        CloseHandle(processInfo.hThread);
-        CloseHandle(processInfo.hProcess);
-        return 7;
+            << L"FrontierClient bootstrap readiness was not "
+               L"confirmed; continuing with RDR.exe resume.\n";
+    } else {
+        std::cout
+            << "FrontierClient bootstrap ready; resuming RDR.exe.\n";
     }
 
-    std::cout
-        << "FrontierClient bootstrap ready; resuming RDR.exe.\n";
+    CloseHandle(bootstrapEvent);
 
     if (ResumeThread(processInfo.hThread) ==
         static_cast<DWORD>(-1)) {
