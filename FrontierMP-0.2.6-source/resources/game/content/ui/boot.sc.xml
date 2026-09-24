@@ -32,9 +32,9 @@
 
 		<!--delay networking events-->
 		<transition event="net.StartOnline"     target="AddDelayedEvent('net.StartOnline',2.0)"   ></transition>
-		<transition event="net.signedOffline"   target="AddDelayedEvent('net.signedOffline',2.0)" ></transition>
+		<transition event="net.signedOffline"   target="AddDelayedEvent('net.signedOffline',2.0)"></transition>
 		<transition event="net.lostConnection"  target="AddDelayedEvent('net.lostConnection',2.0)"></transition>
-		<transition event="auth.success_NoComm" target="AddDelayedEvent('auth.success_NoComm',2.0)" ></transition>
+		<transition event="auth.success_NoComm" target="AddDelayedEvent('auth.success_NoComm',2.0)"></transition>
 		<transition event="net.JoinWish_XPad"   target="SendEvent('net.JoinWishPosted')"></transition>
 		<transition event="net.JoinWishPosted"  target="AddDelayedEvent('net.JoinWishPosted',0.1)"></transition>
 		<transition event="dlc.reboot_content_removed" target="DLCAlert_PostRebootContentRemoved"></transition>
@@ -70,18 +70,18 @@
 
 			<transition event="benchmarkComplete" target="StartScreen1"></transition>
 		</RDRUIBenchmarkScreen>
-
+        
 		<UIPanel id="StartScreen1" movie="startscreen">
 			<!-- <onpaint expr="SetFlashBool('startscreen','aStartScreen',true)"></onpaint> -->
 			<onactivate expr="Enter(UITransitions)"></onactivate>
 			<onactivate expr="Enter(StartScreenPromptStrip)"></onactivate>
 			<ondeactivate expr="Exit(StartScreenPromptStrip)"></ondeactivate>
 			<onshow expr="UIGame.BootFlow()"></onshow>
-
+			
 			<!--EnterOnlineForInvite takes us directly online so no need for confirmations -->
 			<transition event="net.JoinWish_XPad"></transition>
 			<transition event="net.JoinWishPosted"></transition>
-
+			
 			<transition event="net.EnterOnlineForInvite">
 				<action expr="SendEvent('startScreenExit')"></action>
 				<action expr="SendEvent('net.EnterOnlineForInvite')"></action>
@@ -92,6 +92,28 @@
 			<transition event="auth.fail_NotOnline"   target="SSAlert_NotOnline"  ></transition>
 			<transition event="auth.fail_Privileges"  target="SSAlert_BlockedMP"  ></transition>
 
+			<!--
+			<UIPromptStrip id="StartScreenPromptStrip" orientation="horizontal">
+				<UIButton text="Common_Quit" icon="{@UI.CANCEL}">
+					<transition event="@UI.CANCEL*RELEASED" consume="true">
+						<action expr="Enter(QuitGame)"></action>
+					</transition>
+				</UIButton>
+				<UIButton text="Common_Play" icon="{@PRESS_START.PRESS_START}">
+					<transition event="@PRESS_START.PRESS_START*RELEASED" consume="true">
+						<action expr="SendEvent('startScreenExit')"></action>
+					</transition>
+				</UIButton>
+				<UIButton text="Common_Settings" icon="{@PRESS_START.OPEN_SETTINGS}">
+					<transition event="@PRESS_START.OPEN_SETTINGS*RELEASED" consume="true">
+						<action expr="StackPush(PauseMenuScene)"></action>
+						<action expr="MomentarilyDisableInput(0.25)"></action>
+						<action expr="SendDelayedEvent('@UI.ACCEPT*RELEASED', 0.25)"></action>
+					</transition>
+				</UIButton>
+			</UIPromptStrip>
+			-->
+
 			<transition event="start_released" consume="true"></transition>
 			<transition event="startScreenExit">
 				<action expr="PlaySound('HUD_MENU_SELECT_MASTER')"></action>
@@ -101,7 +123,6 @@
 			</transition>
 			<transition event="fileNoSignedInPlayer"  target="BOOT_NoSignedInPlayer"></transition>
 		</UIPanel>
-
 		<UILayer id="SS_DLC_Checks">
 			<onfocused expr="NetMachine.Authenticate('Online')"></onfocused>
 			<transition event="auth.fail_NotSignedIn" target="DLCAlert_NotSignedIn"></transition>
@@ -138,7 +159,7 @@
 					</UIButton>
 				</UIPromptStrip>
 			</UIMessageBox>
-			<UIMessageBox id="DLCAlert_Blocked"      description="lb_alert_blocked"     priority="1" alert="true">
+			<UIMessageBox id="DLCAlert_Blocked"      description="lb_alert_blocked" priority="1" alert="true">
 				<UIPromptStrip>
 					<UIButton text="Common_Ok" icon="{@UI.ACCEPT}">
 						<transition event="action_released">
@@ -148,7 +169,7 @@
 					</UIButton>
 				</UIPromptStrip>
 			</UIMessageBox>
-			<UIMessageBox id="DLCAlert_NotOnline"    description="dlc_alert_notonline"   priority="1" alert="true">
+			<UIMessageBox id="DLCAlert_NotOnline"    description="dlc_alert_notonline" priority="1" alert="true">
 				<ifdef expr="PSN">
 					<onshow expr="NetMachine.ShowSignInUI(true)"></onshow>
 					<transition event="net.signedOnline">
@@ -166,8 +187,7 @@
 				</UIPromptStrip>
 			</UIMessageBox>
 		</UILayer>
-
-		<UIMessageBox id="ZombieAlert_NotSignedIn"  description="lb_alert_notsignedin" priority="1" alert="true">
+		<UIMessageBox id="ZombieAlert_NotSignedIn" description="lb_alert_notsignedin" priority="1" alert="true">
 			<UIPromptStrip>
 				<UIButton text="Common_Ok" icon="{@UI.ACCEPT}">
 					<transition event="action_released">
@@ -179,7 +199,6 @@
 			<transition event="y_released" consume="true"></transition>
 			<transition event="cancel_released" consume="true"></transition>
 		</UIMessageBox>
-
 		<UILabel id="logo" movie="startscreen" flashObject="RDRLOGO"></UILabel>
 		<UIPanel id="background" movie="startscreen" flashObject="BG"></UIPanel>
 		<RDRUIStartScreenLegals id="StartScreenLegals" movie="startscreen" >
@@ -198,7 +217,6 @@
 				<UIButton text="Common_Scroll" icon="{@UI.NAVIGATE_UP}{@UI.NAVIGATE_DOWN}" ></UIButton>
 			</UIPromptStrip>
 		</RDRUIStartScreenLegals>
-
 		<RDRUIStartScreen2 id="StartScreen2" movie="startscreen">
 			<onactivate expr="Enter(UITransitions)"         ></onactivate>
 			<onactivate expr="Enter(MainMenuPrompts)"       ></onactivate>
@@ -228,7 +246,6 @@
 				</UIButton>
 				<UIButton text="Common_Scroll" icon="{@UI.NAVIGATE_UP}{@UI.NAVIGATE_DOWN}" ></UIButton>
 			</UIPromptStrip>
-
 			<transition event="net.JoinWish_XPad"     target="NetConf_JoinWishXPad"></transition>
 			<transition event="net.JoinWishPosted"    target="SSConf_JoinWish"    ></transition>
 			<transition event="auth.fail_NotSignedIn" target="SSAlert_NotSignedIn"></transition>
@@ -240,9 +257,7 @@
 				<action expr="Exit(SinglePlayerPrompts)"></action>
 				<action expr="Exit(MultiPlayerPrompts)"></action>
 			</transition>
-
 			<transition event="auth.success" target="SendEvent('net.EnterOnline')"></transition>
-
 			<transition event="net.EnterOnline">
 				<action expr="Exit(MultiPlayerList)"></action>
 				<action expr="SendEvent('fileSetForMPLoad')"></action>
@@ -251,11 +266,9 @@
 				<action expr="Enter(LoadingScreen)"></action>
 				<action expr="Enter(waitforInTransition)"></action>
 			</transition>
-
 			<ifdef expr="ULTIMATE_1">
 				<transition event="net.EnterOnlineForInvite" target="SSConf_JoinWish"></transition>
 			</ifdef>
-
 			<transition event="net.EnterOnlineForInvite">
 				<action expr="SendEvent('fileSetForMPLoad')"></action>
 				<action expr="NetMachine.SetMultiplayerModeToLaunch('JoinWish')"></action>
@@ -264,13 +277,12 @@
 				<action expr="Enter(LoadingScreen)"></action>
 				<action expr="Enter(waitforInTransition)"></action>
 			</transition>
-
 			<UIPanel id="MainMenuPrompts">
 				<onactivate expr="Enter(background)" ></onactivate>
 				<UILayer id="StartScreen_SinglePlayer">
 					<ifdef expr="NORMAL_ZOMBIE">
 						<transition event="@UI.ACCEPT*RELEASED">
-							<action expr="goto(SinglePlayerPrompts)"     ></action>
+							<action expr="goto(SinglePlayerPrompts)"></action>
 						</transition>
 					</ifdef>
 					<ifdef expr="STANDALONE">
@@ -302,10 +314,9 @@
 					</ifdef>
 				</UILayer>
 			</UIPanel>
-
 			<P UIPanel id="SinglePlayerPrompts" movie="startscreen">
-				<onactivate expr="Exit(MainMenuPrompts)"></onactivate>
-				<onactivate expr="Exit(background)"></onactivate>
+				<onactivate expr="Exit(MainMenuPrompts)"          ></onactivate>
+				<onactivate expr="Exit(background)" ></onactivate>
 				<UIScrollableList id="SinglePlayerList" MaxHeight="2" allowWrap="true" allowMouseHoverSelect="true" allowMouseAutoSelect="true">
 					<ifdef expr="ULTIMATE_COMPLETE">
 						<data name="MaxHeight"  expr="3"></data>
@@ -349,7 +360,7 @@
 						<transition event="@UI.ACCEPT*RELEASED">
 							<action expr="NetMachine.SetMultiplayerModeToLaunch('Offline')"></action>
 							<action expr="RemoveDelayedEvent('net.signedOffline')"></action>
-							<action expr="RemoveDelayedEvent('net.lostConnection')"></transition>
+							<action expr="RemoveDelayedEvent('net.lostConnection')"></action>
 							<action expr="Exit(SinglePlayerList)"></action>
 							<action expr="UIGame.ValidateZombieMode()"></action>
 							<action expr="PlaySound('HUD_MENU_SELECT_MASTER')"></action>
@@ -365,20 +376,17 @@
 					</transition>
 				</UIButton>
 			</UIPanel>
-
 			<UILayer id="waitforInTransition">
 				<transition event="InTransitionComplete" consume="false">
 					<action expr="Exit(waitforInTransition)"></action>
 					<action expr="goto(Startup_Checks)"></action>
 				</transition>
 			</UILayer>
-
 			<RDRUINewsTicker id="StartScreen_NewsTicker" flashObject="Ticker" allowCycling="true" updateDelay="5.0">
 				<onactivate expr="StartScreen_NewsTicker.SetFilter(2)"></onactivate>
 			</RDRUINewsTicker>
 			<UILabel id="StartScreen_NewsState" flashObject="PreTicker" movie="startscreen" text="Common_Null" value="100"></UILabel>
 		</RDRUIStartScreen2>
-
 		<rdr2DLCPage id="DLCMain" movie="startscreen">
 			<onactivate expr="Exit(background)"></onactivate>
 			<UILabel text="Common_Null" flashobject="DLCTEXT">
@@ -399,7 +407,9 @@
 				<UIButton text="GetDLC" icon="{@UI.ACTION_2}"></UIButton>
 				<UIButton id="DLCMain_ScrollIcon" text="Common_Scroll" icon="{@UI.UP_2}{@UI.DOWN_2}"></UIButton>
 			</UIPromptStrip>
-			<transition event="filePlayerHasSignedOut" consume="true"></transition>
+			<!--lets allow sign in/out at the DLC page as well-->
+			<!--<transition event="filePlayerHasSignedOut" consume="true"></transition>-->
+			<transition event="filePlayerHasSignedIn" consume="true"></transition>
 			<transition event="net.signedIn" target="true"></transition>
 			<transition event="fileSignedInPlayer" target="true"></transition>
 			<transition event="net.JoinWishPosted">
@@ -411,15 +421,13 @@
 				<action expr="StackPop(DLCMain)"></action>
 			</transition>
 		</rdr2DLCPage>
-
-		<UIMessageBox id="SSAlert_BlockedMP">
-			<data name="description" expr="NetBlockAlert_SS_PriveledgesMP"></data>
+		<UIMessageBox id="SSAlert_BlockedMP" alert="true">
+			<data name="description"  expr="NetBlockAlert_SS_PriveledgesMP"></data>
 			<UIPromptStrip>
 				<UIButton e_action_released="Exit(SSAlert_BlockedMP)" icon="{@UI.ACCEPT}" text="Common_Ok"></UIButton>
 			</UIPromptStrip>
 		</UIMessageBox>
-
-		<UIMessageBox id="SSAlert_NotOnline">
+		<UIMessageBox id="SSAlert_NotOnline" alert="true">
 			<data name="description" expr="NetBlockAlert_NotOnline"></data>
 			<ifdef expr="PSN">
 				<onshow expr="NetMachine.ShowSignInUI(true)"></onshow>
@@ -432,11 +440,10 @@
 				<UIButton e_action_released="Exit(SSAlert_NotOnline)" icon="{@UI.ACCEPT}" text="Common_Ok"></UIButton>
 			</UIPromptStrip>
 		</UIMessageBox>
-
 		<UIMessageBox id="SSAlert_NotSignedIn">
 			<data name="alert"></data>
 			<data name="description" expr="NetBlockAlert_NotSignedIn"></data>
-			<transition event="cancel_released" target="Exit(SSAlert_NotSignedIn)"></transition>
+			<transition event="cancel_released"        target="Exit(SSAlert_NotSignedIn)"></transition>
 			<transition event="net.signedIn"  target="Exit(SSAlert_NotSignedIn)"></transition>
 			<transition event="net.signedOnline"  target="Exit(SSAlert_NotSignedIn)"></transition>
 			<transition event="auth.success"  target="Exit(SSAlert_NotSignedIn)"></transition>
@@ -449,7 +456,70 @@
 				<UIButton id="SSAlert_NotSignedIn_Cancel" e_cancel_released="Exit(SSAlert_NotSignedIn)" icon="{@UI.CANCEL}" text="Common_Cancel"></UIButton>
 			</UIPromptStrip>
 		</UIMessageBox>
-
+		<UIMessageBox id="DLCAlert_PostRebootContentRemoved">
+			<data name="alert"></data>
+			<data name="description" expr="DLCAlert_PostRebootContentRemoved"></data>
+			<data name="priority" expr="1"></data>
+			<UIPromptStrip>
+				<UIButton e_action_released="Exit(DLCAlert_PostRebootContentRemoved)" icon="{@UI.ACCEPT}" text="Common_Ok"></UIButton>
+			</UIPromptStrip>
+		</UIMessageBox>
+		<UIMessageBox id="DLCAlert_Corrupt">
+			<data name="alert"></data>
+			<data name="description" expr="DLCAlert_Corrupt"></data>
+			<data name="priority" expr="1"></data>
+			<UIPromptStrip>
+				<UIButton e_action_released="Exit(DLCAlert_Corrupt)" icon="{@UI.ACCEPT}" text="Common_Ok"></UIButton>
+			</UIPromptStrip>
+		</UIMessageBox>
+		<UIMessageBox id="DLCAlert_Scanning" style="simple" title="dlc_scanning_title" desc="DLCAlert_Scanning" movie="popup">
+			<transition event="action_released" consume="true"></transition>
+			<UIProgressBar id="dlc_scanning_spinner">
+				<onactivate expr="SetFlashInt('popup','prompt.value',0)"></onactivate>
+				<ondeactivate expr="SetFlashInt('popup','prompt.value',1)"></ondeactivate>
+			</UIProgressBar>
+		</UIMessageBox>
+		<UIMessageBox id="PromoAlert_ValidatingCode" style="simple" title="promo_validating_title" desc="PromoAlert_ValidatingCode" movie="popup">
+			<transition event="action_released" consume="true"></transition>
+			<UIProgressBar id="promo_validating_spinner">
+				<onactivate expr="SetFlashInt('popup','prompt.value',0)"></onactivate>
+				<ondeactivate expr="SetFlashInt('popup','prompt.value',1)"></ondeactivate>
+				<ondeactivate expr="UIGame.SetQueuePaused(1,false)"></ondeactivate>
+				<onactivate expr="UIGame.SetQueuePaused(1,true)"></onactivate>
+			</UIProgressBar>
+		</UIMessageBox>
+		<UIMessageBox id="PromoAlert_ItemUnlocked">
+			<data name="alert"></data>
+			<data name="description" expr="PromoAlert_ItemUnlocked"></data>
+			<data name="priority" expr="1"></data>
+			<UIPromptStrip>
+				<UIButton e_action_released="Exit(PromoAlert_ItemUnlocked)" icon="{@UI.ACCEPT}" text="Common_Ok"></UIButton>
+			</UIPromptStrip>
+		</UIMessageBox>
+		<UIMessageBox id="PromoAlert_CodeInUse">
+			<data name="alert"></data>
+			<data name="description" expr="PromoAlert_CodeInUse"></data>
+			<data name="priority" expr="1"></data>
+			<UIPromptStrip>
+				<UIButton e_action_released="Exit(PromoAlert_CodeInUse)" icon="{@UI.ACCEPT}" text="Common_Ok"></UIButton>
+			</UIPromptStrip>
+		</UIMessageBox>
+		<UIMessageBox id="PromoAlert_InvalidCode">
+			<data name="alert"></data>
+			<data name="description" expr="PromoAlert_InvalidCode"></data>
+			<data name="priority" expr="1"></data>
+			<UIPromptStrip>
+				<UIButton e_action_released="Exit(PromoAlert_InvalidCode)" icon="{@UI.ACCEPT}" text="Common_Ok"></UIButton>
+			</UIPromptStrip>
+		</UIMessageBox>
+		<UIMessageBox id="PromoAlert_ServerTimeout">
+			<data name="alert"></data>
+			<data name="description" expr="PromoAlert_ServerTimeout"></data>
+			<data name="priority" expr="1"></data>
+			<UIPromptStrip>
+				<UIButton e_action_released="Exit(PromoAlert_ServerTimeout)" icon="{@UI.ACCEPT}" text="Common_Ok"></UIButton>
+			</UIPromptStrip>
+		</UIMessageBox>
 		<UIMessageBox id="SSConf_JoinWish" description="mp_joinwish_conf" alert="true">
 			<ifdef expr="ULTIMATE_1">
 				<data name="description" expr="mp_enter_warning_wrongdisc"></data>
@@ -460,32 +530,31 @@
 			</UIPromptStrip>
 			<transition event="auth.fail_NotSignedIn">
 				<action expr="Exit(SSConf_JoinWish)"></action>
-				<action expr="Enter(SSAlert_NotSignedIn)"></action>
+				<action expr="SSAlert_NotSignedIn"></action>
 			</transition>
 			<transition event="auth.fail_NoCable">
 				<action expr="Exit(SSConf_JoinWish)"></action>
-				<action expr="Enter(SSAlert_NoCable)"></action>
+				<action expr="SSAlert_NoCable"></action>
 			</transition>
 			<transition event="auth.fail_NotOnline">
 				<action expr="Exit(SSConf_JoinWish)"></action>
-				<action expr="Enter(SSAlert_NotOnline)"></action>
+				<action expr="SSAlert_NotOnline"></action>
 			</transition>
 			<transition event="auth.fail_Privileges">
 				<action expr="Exit(SSConf_JoinWish)"></action>
-				<action expr="Enter(SSAlert_BlockedMP)"></action>
+				<action expr="SSAlert_BlockedMP"></action>
 			</transition>
 			<ifdef expr="ULTIMATE_1">
 				<transition event="auth.fail_WrongDisc">
 					<action expr="Exit(SSConf_JoinWish)"></action>
 					<action expr="Enter(NetConf_JoinWishWrongDisc)"></action>
-				</transition>
+				</action>
 			</ifdef>
 			<transition event="auth.success">
 				<action expr="Exit(SSConf_JoinWish)"></action>
 				<action expr="SendEvent('net.EnterOnlineForInvite')"></action>
 			</transition>
 		</UIMessageBox>
-
 		<UIMessageBox id="BOOT_NoSignedInPlayer">
 			<data name="alert"></data>
 			<data name="description" expr="Save_Dialog_NoSignedInPlayer"></data>
@@ -506,15 +575,13 @@
 				</UIButton>
 			</UIPromptStrip>
 		</UIMessageBox>
-
 		<uiobject id="Startup_Checks">
-			<onactivate expr="Enter(SaveGame_DoNotInterruptMe)"></onactivate>
-			<onactivate expr="Enter(SaveGameIO)"></onactivate>
+			<onactivate expr="Enter(SaveGame_DoNotInterruptMe)"  ></onactivate>
+			<onactivate expr="Enter(SaveGameIO)"                 ></onactivate>
 			<onactivate expr="SendEvent('fileStartPlayerChecks')"></onactivate>
-			<ondeactivate expr="SendEvent('fileStartupChecksComplete')"></ondeactivate>
-			<ondeactivate expr="Exit(SaveGameDialogs)"></ondeactivate>
+			<ondeactivate  expr="SendEvent('fileStartupChecksComplete')"    ></ondeactivate>
+			<ondeactivate  expr="Exit(SaveGameDialogs)"       ></ondeactivate>
 			<onactivate expr="UnstreamMovie('startscreen')"></onactivate>
-
 			<transition event="fileAllFilesLoaded" consume="false">
 				<action expr="SendEvent('loadStart')"></action>
 				<action expr="Enter(LoadingSpinner)"></action>
@@ -528,9 +595,9 @@
 				<action expr="SendEvent('loadStart')"></action>
 				<action expr="Enter(LoadingSpinner)"></action>
 			</transition>
+			<!-- However, once we start doing the start up checks, we DO want to pass this event along, since we've passed the point of no return -->
 			<transition event="net.JoinWishPosted" target="AddDelayedEvent('net.JoinWishPosted',2.0)"></transition>
 		</uiobject>
-
 		<UIMessageBox id="SocialClubNoSignIn" class="UIMessageBox">
 			<data name="title" expr="Common_Warning"></data>
 			<data name="description" expr="social_club_not_logged_in"></data>
@@ -548,15 +615,13 @@
 				</UIButton>
 			</UIPromptStrip>
 		</UIMessageBox>
-
 		<UIMessageBox id="SocialClubWaitingForSignIn" class="UIMessageBox">
-			<data name="title" expr="social_club_connecting"></data>
-			<data name="description" expr="PLEASE_WAIT"></data>
+			<data name="title" expr="Common_Warning"></data>
+			<data name="description" expr="social_club_connecting"></data>
 			<data name="priority" expr="1"></data>
 			<ondeactivate expr="UIGame.CheckSocialLogIn()"></ondeactivate>
 			<UIPromptStrip></UIPromptStrip>
 		</UIMessageBox>
-
 		<UIMessageBox id="PresetSelectionTest" class="UIMessageBox">
 			<data name="title" expr="Preset_Selection"></data>
 			<data name="description" expr="Preset_Selection_Message"></data>
