@@ -9,6 +9,8 @@ namespace frontier::client {
 namespace {
 constexpr std::uint64_t kRemotePlayerGraceMs = 750;
 constexpr float kPositionUpdateThreshold = 0.02f;
+constexpr float kLocomotionTargetUpdateThreshold = 0.30f;
+constexpr std::uint64_t kLocomotionTaskRetryMs = 150;
 
 float distance_squared(const Vec3& a, const Vec3& b) {
     const float dx = a.x - b.x;
@@ -82,23 +84,12 @@ bool RemotePlayerManager::ensure_spawned(RemotePlayer& player, std::uint64_t now
     player.actor = created;
     player.renderedState = player.targetState;
 
-    // The synthetic 65000 entity is a pure Actor locomotion probe.
-    // Keep the Actor alive when the local target is temporarily unavailable;
-    // the locomotion task will be retried from update() once the local Actor exists.
+    // The synthetic 65000 entity is the controlled Actor-locomotion probe.
+    // Its target is supplied by the network snapshot path; it must not follow
+    // the local player or be overwritten by a network teleport.
     if (player.playerId == 65000u) {
         player.locomotionTaskActive = false;
         player.lastLocomotionTaskAttemptMs = 0;
-
-        std::string taskError;
-        if (bridge.task_follow_remote_actor(player.actor.actorHandle, taskError)) {
-            player.locomotionTaskActive = true;
-        } else {
-            std::fprintf(stderr,
-                         "[FrontierRemotePlayer] task follow deferred playerId=%u actor=0x%08X error=%s\n",
-                         static_cast<unsigned>(player.playerId),
-                         player.actor.actorHandle,
-                         taskError.c_str());
-        }
     }
 
     std::fprintf(stderr,
@@ -131,39 +122,48 @@ void RemotePlayerManager::update(std::uint64_t nowMs, frontier::game::RdrBridge&
         const auto sampled = interpolator_.sample(player.playerId, latestServerTick_);
         const PlayerState desired = sampled.has_value() ? sampled->state : player.targetState;
 
-        // Retry the synthetic locomotion task after the local game Actor becomes available.
-        if (player.playerId == 65000u && !player.locomotionTaskActive) {
-            constexpr std::uint64_t kLocomotionTaskRetryMs = 250;
-            if (player.lastLocomotionTaskAttemptMs == 0 ||
-                effectiveNow - player.lastLocomotionTaskAttemptMs >= kLocomotionTaskRetryMs) {
+        // The synthetic locomotion probe is driven by the sampled network target.
+        // Keep the native TASK_GO_TO_COORD task as the movement owner and only
+        // retarget it when the destination has moved far enough.
+        if (player.playerId == 65000u) {
+            const bool firstTask = !player.locomotionTaskActive;
+            const bool targetMoved =
+                distance_squared(player.renderedState.position, desired.position) >
+                kLocomotionTargetUpdateThreshold * kLocomotionTargetUpdateThreshold;
+            const bool retryAllowed =
+                player.lastLocomotionTaskAttemptMs == 0 ||
+                effectiveNow - player.lastLocomotionTaskAttemptMs >= kLocomotionTaskRetryMs;
+
+            if ((firstTask || targetMoved) && retryAllowed) {
                 player.lastLocomotionTaskAttemptMs = effectiveNow;
 
                 std::string taskError;
-                if (bridge.task_follow_remote_actor(player.actor.actorHandle, taskError)) {
+                if (bridge.task_go_to_remote_coord(
+                        player.actor.actorHandle, desired.position, taskError)) {
                     player.locomotionTaskActive = true;
+                    // renderedState is the last commanded network target for the
+                    // locomotion path; the Actor itself remains engine-controlled.
+                    player.renderedState = desired;
+
                     std::fprintf(stderr,
-                                 "[FrontierRemotePlayer] task follow activated playerId=%u actor=0x%08X\n",
+                                 "[FrontierRemotePlayer] locomotion target playerId=%u "
+                                 "actor=0x%08X target=(%.3f,%.3f,%.3f)\n",
                                  static_cast<unsigned>(player.playerId),
-                                 player.actor.actorHandle);
+                                 player.actor.actorHandle,
+                                 desired.position.x,
+                                 desired.position.y,
+                                 desired.position.z);
                 } else {
+                    player.locomotionTaskActive = false;
                     std::fprintf(stderr,
-                                 "[FrontierRemotePlayer] task follow retry deferred playerId=%u actor=0x%08X error=%s\n",
+                                 "[FrontierRemotePlayer] locomotion target deferred "
+                                 "playerId=%u actor=0x%08X error=%s\n",
                                  static_cast<unsigned>(player.playerId),
                                  player.actor.actorHandle,
                                  taskError.c_str());
                 }
             }
 
-            // The locomotion probe must never fall back to network teleporting.
-            if (!player.locomotionTaskActive) {
-                ++it;
-                continue;
-            }
-        }
-
-        // In the synthetic locomotion probe, TASK_FOLLOW_ACTOR owns the transform.
-        // Do not overwrite its movement with network teleports.
-        if (player.locomotionTaskActive) {
             ++it;
             continue;
         }
