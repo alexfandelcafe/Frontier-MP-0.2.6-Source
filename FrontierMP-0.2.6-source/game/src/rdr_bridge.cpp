@@ -1024,12 +1024,14 @@ bool RdrBridge::read_remote_actor_position(
     std::string dispatchError;
     const bool completed = gameThreadDispatcher_.submit_and_wait(
         [this, actorHandle, &position, &error]() {
-            // GET_POSITION(Actor, Vector3*) writes through its second argument.
-            std::uintptr_t args[2]{};
+            // GET_POSITION(Actor, float*, float*, float*).
+            std::uintptr_t args[4]{};
             args[0] = static_cast<std::uintptr_t>(actorHandle);
-            args[1] = reinterpret_cast<std::uintptr_t>(&position);
+            args[1] = reinterpret_cast<std::uintptr_t>(&position.x);
+            args[2] = reinterpret_cast<std::uintptr_t>(&position.y);
+            args[3] = reinterpret_cast<std::uintptr_t>(&position.z);
             std::uintptr_t result = 0u;
-            if (!nativeInvoker_.invoke_raw(kNativeGetPosition, args, 2u, result)) {
+            if (!nativeInvoker_.invoke_raw(kNativeGetPosition, args, 4u, result)) {
                 error = "GET_POSITION invoke failed";
             }
         },
