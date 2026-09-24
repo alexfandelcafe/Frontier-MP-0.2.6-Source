@@ -82,6 +82,21 @@ bool RemotePlayerManager::ensure_spawned(RemotePlayer& player, std::uint64_t now
     player.actor = created;
     player.renderedState = player.targetState;
 
+    // The synthetic 65000 entity is used as a pure Actor locomotion probe.
+    // It is intentionally excluded from transform replication while the Task runs.
+    if (player.playerId == 65000u) {
+        std::string taskError;
+        if (!bridge.task_follow_remote_actor(player.actor.actorHandle, taskError)) {
+            std::fprintf(stderr,
+                         "[FrontierRemotePlayer] task follow setup failed playerId=%u actor=0x%08X error=%s\n",
+                         static_cast<unsigned>(player.playerId),
+                         player.actor.actorHandle,
+                         taskError.c_str());
+            return false;
+        }
+        player.locomotionTaskActive = true;
+    }
+
     std::fprintf(stderr,
                  "[FrontierRemotePlayer] spawned playerId=%u actorRef=0x%llX actorHandle=0x%08X position=(%.3f,%.3f,%.3f)\n",
                  static_cast<unsigned>(player.playerId),
@@ -112,6 +127,12 @@ void RemotePlayerManager::update(std::uint64_t nowMs, frontier::game::RdrBridge&
         const auto sampled = interpolator_.sample(player.playerId, latestServerTick_);
         const PlayerState desired = sampled.has_value() ? sampled->state : player.targetState;
 
+        // In the synthetic locomotion probe, TASK_FOLLOW_ACTOR owns the transform.
+        // Do not overwrite its movement with network teleports.
+        if (player.locomotionTaskActive) {
+            ++it;
+            continue;
+        }
 
         const bool moved = distance_squared(player.renderedState.position, desired.position) >
                            kPositionUpdateThreshold * kPositionUpdateThreshold;
