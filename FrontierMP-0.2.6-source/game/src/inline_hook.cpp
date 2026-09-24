@@ -38,19 +38,6 @@ bool executable_region(std::uintptr_t address, std::size_t size) {
     return address >= begin && address <= end && size <= end - address;
 }
 
-bool writable_region(std::uintptr_t address, std::size_t size) {
-    if (!address || !size) return false;
-    MEMORY_BASIC_INFORMATION mbi{};
-    if (VirtualQuery(reinterpret_cast<const void*>(address), &mbi, sizeof(mbi)) != sizeof(mbi)) return false;
-    if (mbi.State != MEM_COMMIT) return false;
-    const DWORD writableFlags =
-        PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
-    if ((mbi.Protect & writableFlags) == 0) return false;
-    const auto begin = reinterpret_cast<std::uintptr_t>(mbi.BaseAddress);
-    const auto end = begin + mbi.RegionSize;
-    return address >= begin && address <= end && size <= end - address;
-}
-
 bool patch_function(std::uintptr_t target,
                     const std::uint8_t* patch,
                     std::size_t patchSize,
