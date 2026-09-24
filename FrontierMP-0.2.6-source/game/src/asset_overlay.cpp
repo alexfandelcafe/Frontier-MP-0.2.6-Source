@@ -8,6 +8,8 @@
 #endif
 
 #include <algorithm>
+#include <atomic>
+#include <initializer_list>
 #include <cctype>
 #include <cstdio>
 #include <filesystem>
@@ -32,7 +34,6 @@ using FullReadPathFn = std::uintptr_t (*)(
 
 InlineHook g_fullReadPathHook{};
 FullReadPathFn g_originalFullReadPath = nullptr;
-std::once_flag g_logHeaderOnce;
 std::atomic<std::uint32_t> g_observedCalls{0};
 
 void log_line(const std::string& line) {
