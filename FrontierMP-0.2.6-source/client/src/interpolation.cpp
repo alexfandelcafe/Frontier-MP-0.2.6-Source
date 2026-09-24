@@ -39,7 +39,8 @@ std::optional<InterpolatedState> RemoteEntityInterpolator::sample(std::uint16_t 
     if (it == buffers_.end() || it->second.empty()) return std::nullopt;
 
     const auto& buffer = it->second;
-    const std::uint32_t targetTick = renderTick > interpolationDelayTicks_ ? renderTick - interpolationDelayTicks_ : 0;
+    const std::uint32_t targetTick =
+        renderTick > interpolationDelayTicks_ ? renderTick - interpolationDelayTicks_ : 0;
 
     if (buffer.size() == 1) return InterpolatedState{buffer.front().state, false};
 
@@ -74,6 +75,7 @@ std::optional<InterpolatedState> RemoteEntityInterpolator::sample(std::uint16_t 
     }
 
     return InterpolatedState{latest.state, false};
+}
 
 void RemoteEntityInterpolator::remove_player(std::uint16_t playerId) { buffers_.erase(playerId); }
 
