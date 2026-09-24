@@ -120,6 +120,7 @@ bool RemotePlayerManager::ensure_spawned(RemotePlayer& player, std::uint64_t now
     // the local player or be overwritten by a network teleport.
     if (player.playerId == 65000u) {
         player.locomotionTaskActive = false;
+        player.locomotionMoverPrepared = false;
         player.lastLocomotionTaskAttemptMs = 0;
     }
 
@@ -186,6 +187,7 @@ void RemotePlayerManager::update(std::uint64_t nowMs, frontier::game::RdrBridge&
                 player.spawnPending = false;
                 player.lastSpawnAttemptMs = effectiveNow;
                 player.locomotionTaskActive = false;
+                player.locomotionMoverPrepared = false;
                 player.lastLocomotionTaskAttemptMs = 0;
                 player.lastPositionReadMs = 0;
                 ++it;
@@ -231,6 +233,24 @@ void RemotePlayerManager::update(std::uint64_t nowMs, frontier::game::RdrBridge&
             const bool retryAllowed =
                 player.lastLocomotionTaskAttemptMs == 0 ||
                 effectiveNow - player.lastLocomotionTaskAttemptMs >= kLocomotionTaskRetryMs;
+
+            // Prepare the Actor's mover only once per Actor lifecycle. Reissuing
+            // these setup natives together with every retarget can disturb the
+            // engine's locomotion state and visibly chop the walk.
+            if (!player.locomotionMoverPrepared) {
+                std::string prepareError;
+                if (!bridge.prepare_remote_actor_for_locomotion(
+                        player.actor.actorHandle, prepareError)) {
+                    player.locomotionTaskActive = false;
+                    log_remote("[FrontierRemotePlayer] locomotion prepare deferred playerId=%u actor=0x%08X error=%s",
+                               static_cast<unsigned>(player.playerId),
+                               player.actor.actorHandle,
+                               prepareError.c_str());
+                    ++it;
+                    continue;
+                }
+                player.locomotionMoverPrepared = true;
+            }
 
             if ((firstTask || targetMoved) && retryAllowed) {
                 player.lastLocomotionTaskAttemptMs = effectiveNow;
