@@ -1,5 +1,7 @@
 #pragma once
 
+#include "frontier/game/inline_hook.hpp"
+
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -14,13 +16,13 @@ public:
                     std::filesystem::path overlayRoot,
                     std::string& error);
 
-    bool attached() const { return attached_; }
+    bool attached() const { return hook_.attached(); }
     const std::filesystem::path& root() const { return overlayRoot_; }
     const std::filesystem::path& boot_override_path() const { return bootOverridePath_; }
     const std::string& last_error() const { return lastError_; }
 
 private:
-    bool attached_{};
+    InlineHook hook_{};
     std::filesystem::path overlayRoot_{};
     std::filesystem::path bootOverridePath_{};
     std::string lastError_{};
