@@ -81,6 +81,7 @@ if(WIN32 AND FRONTIER_BUILD_CLIENT)
         game/src/build_fingerprint.cpp
         game/src/pattern_scanner.cpp
         game/src/rdr_bridge.cpp
+        game/src/content_path_redirector.cpp
         game/src/native_invoker.cpp
         game/src/game_thread_dispatcher.cpp
         game/src/inline_hook.cpp
@@ -98,9 +99,10 @@ if(WIN32 AND FRONTIER_BUILD_CLIENT)
     )
 
     # Match the historical RDRMP distribution layout: the client package owns a
-    # sibling ./game/content tree next to its DLL. RDR is launched with that
-    # package root as its working directory so the normal asset resolver sees
-    # the RDRMP boot override without modifying the user's RDR installation.
+    # sibling ./game/content tree next to its DLL. FrontierClient's
+    # fiAssetManager::fullReadPath hook resolves the historical content routes
+    # into this external tree without modifying the user's RDR installation or
+    # changing RDR.exe's working directory.
     add_custom_command(TARGET frontier_client POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_FILE_DIR:frontier_client>/game/content/ui"
