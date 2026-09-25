@@ -310,6 +310,45 @@ void write_first_chance_exception_log(EXCEPTION_POINTERS* exceptionPointers) {
 
     const DWORD threadId = GetCurrentThreadId();
 
+    std::uintptr_t callTarget = 0;
+    if (rip == reinterpret_cast<std::uintptr_t>(module) + 0x1FDD85 &&
+        rip >= 5) {
+        const auto callInstruction =
+            reinterpret_cast<const unsigned char*>(rip - 9);
+        if (callInstruction[0] == 0xE8) {
+            std::int32_t relative = 0;
+            std::memcpy(&relative, callInstruction + 1, sizeof(relative));
+            callTarget = rip - 9 + 5 +
+                static_cast<std::int64_t>(relative);
+        }
+    }
+
+    std::uintptr_t stackArg5 = 0;
+    std::uintptr_t stackArg6 = 0;
+    SIZE_T stackArgBytesRead = 0;
+#if defined(_M_X64)
+    if (exceptionPointers->ContextRecord != nullptr &&
+        exceptionPointers->ContextRecord->Rsp != 0) {
+        const auto stackArguments =
+            reinterpret_cast<const std::uintptr_t*>(
+                exceptionPointers->ContextRecord->Rsp + 0x28);
+        ReadProcessMemory(
+            GetCurrentProcess(),
+            stackArguments,
+            &stackArg5,
+            sizeof(stackArg5),
+            &stackArgBytesRead);
+        if (stackArgBytesRead == sizeof(stackArg5)) {
+            ReadProcessMemory(
+                GetCurrentProcess(),
+                stackArguments + 1,
+                &stackArg6,
+                sizeof(stackArg6),
+                &stackArgBytesRead);
+        }
+    }
+#endif
+
     std::uintptr_t unwindIps[12]{};
     std::uintptr_t unwindRvas[12]{};
     HMODULE unwindModules[12]{};
@@ -463,7 +502,7 @@ void write_first_chance_exception_log(EXCEPTION_POINTERS* exceptionPointers) {
     const int length = std::snprintf(
         buffer,
         sizeof(buffer),
-        "[FrontierFirstChance] exception=0x%08lX accessOp=%lu fault=0x%llX rip=0x%llX ripRva=0x%llX thread=%lu module=%s before=%s bytes=%s regs=RAX:%llX RBX:%llX RCX:%llX RDX:%llX RSI:%llX RDI:%llX R8:%llX R9:%llX R10:%llX R11:%llX R12:%llX R13:%llX R14:%llX R15:%llX RSP:%llX RBP:%llX EFLAGS:%llX unwind=%s\\n",
+        "[FrontierFirstChance] exception=0x%08lX accessOp=%lu fault=0x%llX rip=0x%llX ripRva=0x%llX thread=%lu module=%s before=%s bytes=%s callTarget=0x%llX callTargetRva=0x%llX stackArg5=0x%llX stackArg6=0x%llX regs=RAX:%llX RBX:%llX RCX:%llX RDX:%llX RSI:%llX RDI:%llX R8:%llX R9:%llX R10:%llX R11:%llX R12:%llX R13:%llX R14:%llX R15:%llX RSP:%llX RBP:%llX EFLAGS:%llX unwind=%s\\n",
         static_cast<unsigned long>(code),
         static_cast<unsigned long>(accessOp),
         static_cast<unsigned long long>(faultAddress),
@@ -473,6 +512,15 @@ void write_first_chance_exception_log(EXCEPTION_POINTERS* exceptionPointers) {
         modulePathLength != 0 ? modulePath : "<unknown>",
         beforeRead != 0 ? instructionBeforeHex : "<unreadable>",
         instructionReadable ? instructionHex : "<unreadable>",
+        static_cast<unsigned long long>(callTarget),
+        static_cast<unsigned long long>(
+            callTarget != 0 &&
+            moduleBase != 0 &&
+            callTarget >= moduleBase
+                ? callTarget - moduleBase
+                : 0),
+        static_cast<unsigned long long>(stackArg5),
+        static_cast<unsigned long long>(stackArg6),
         static_cast<unsigned long long>(regRax),
         static_cast<unsigned long long>(regRbx),
         static_cast<unsigned long long>(regRcx),
