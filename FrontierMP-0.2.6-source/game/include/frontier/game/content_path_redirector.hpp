@@ -79,6 +79,7 @@ private:
     void* logFile_{};
 #endif
     std::atomic<std::uint32_t> redirectLogCount_{0};
+    std::atomic<std::uint32_t> callLogCount_{0};
 };
 
 } // namespace frontier::game
