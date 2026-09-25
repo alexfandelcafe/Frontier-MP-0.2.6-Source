@@ -28,7 +28,15 @@ public:
     bool attached() const { return hook_.attached(); }
 
 private:
-    using FullReadPathFn = char (*)(std::uintptr_t self, char* path);
+    // Preserve the historical first two parameters and forward two additional
+    // register/stack argument slots so the detour cannot discard ABI inputs.
+    using FullReadPathFn = char (*)(
+        std::uintptr_t self,
+        char* path,
+        std::uintptr_t arg3,
+        std::uintptr_t arg4,
+        std::uintptr_t arg5,
+        std::uintptr_t arg6);
 
     static constexpr std::size_t kHistoricalRouteCount = 4;
     static constexpr std::size_t kPathStorageSize = 1024;
@@ -42,9 +50,21 @@ private:
         bool enabled{};
     };
 
-    static char __fastcall full_read_path_hook(std::uintptr_t self, char* path);
+    static char __fastcall full_read_path_hook(
+        std::uintptr_t self,
+        char* path,
+        std::uintptr_t arg3,
+        std::uintptr_t arg4,
+        std::uintptr_t arg5,
+        std::uintptr_t arg6);
 
-    char invoke_and_redirect(std::uintptr_t self, char* path);
+    char invoke_and_redirect(
+        std::uintptr_t self,
+        char* path,
+        std::uintptr_t arg3,
+        std::uintptr_t arg4,
+        std::uintptr_t arg5,
+        std::uintptr_t arg6);
 
     bool prepare_routes(std::string& error);
     void log_message(const char* message) const;

@@ -426,20 +426,31 @@ bool ContentPathRedirector::install(
 
 char __fastcall ContentPathRedirector::full_read_path_hook(
     std::uintptr_t self,
-    char* path) {
+    char* path,
+    std::uintptr_t arg3,
+    std::uintptr_t arg4,
+    std::uintptr_t arg5,
+    std::uintptr_t arg6) {
     if (active_ == nullptr || active_->original_ == nullptr) {
         return 0;
     }
 
-    return active_->invoke_and_redirect(self, path);
+    return active_->invoke_and_redirect(
+        self, path, arg3, arg4, arg5, arg6);
 }
 
 char ContentPathRedirector::invoke_and_redirect(
     std::uintptr_t self,
-    char* path) {
+    char* path,
+    std::uintptr_t arg3,
+    std::uintptr_t arg4,
+    std::uintptr_t arg5,
+    std::uintptr_t arg6) {
     // The historical RDRMP hook passes through to the original first and
-    // redirects only after a successful resolution.
-    const char originalResult = original_(self, path);
+    // redirects only after a successful resolution. Forward every captured
+    // ABI argument slot so the detour does not discard volatile/stack inputs.
+    const char originalResult = original_(
+        self, path, arg3, arg4, arg5, arg6);
 
     if (originalResult == 0 || path == nullptr || *path == '\0') {
         return originalResult;
