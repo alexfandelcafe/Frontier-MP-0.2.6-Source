@@ -1,0 +1,290 @@
+<scxml
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="file://t:\mc4\assets\tune\ui\scxml_mc4.xsd">
+	<rdrSaveGameLayer id="SaveGameLayer">
+		<onfocused expr="StreamMovie('list')"></onfocused>
+		<onfocused expr="StreamMovie('quest_log')"></onfocused>
+		<onfocused expr="SetFlashInt('pause_main','pausetransition.visibility',1)"></onfocused>
+		<onfocused expr="SetFlashInt('pause_main','pausetransition.type',5)"></onfocused>
+		<onfocused expr="Exclude(GameTab_Load)"></onfocused>
+		<onfocused expr="Exclude(GameTab_New)"></onfocused>
+		<onfocused expr="Exclude(GameTab_Exit2Main)"></onfocused>
+		<onunfocused expr="UnstreamMovie('quest_log')"></onunfocused>
+		<onunfocused expr="UnstreamMovie('list')"></onunfocused>
+		<onunfocused expr="SetFlashInt('pause_main','pausetransition.visibility',0)"></onunfocused>
+		<transition event="@UI.CANCEL*RELEASED" consume="true">
+			<action	expr="PlaySound('HUD_MENU_BACK_MASTER')"></action>
+			<action expr="Exit(SaveGameLayer)"></action>
+			<action expr="SendEvent('HideVersionNumber')"></action>
+			<action expr="focus(PauseMenu)"></action>
+		</transition>
+		<transition event="fileNoSaveEvent" consume="false">
+			<action expr="Exit(SaveGameLayer)"></action>
+			<action expr="focus(PauseMenu)"></action>
+		</transition>
+		<transition event="fileUserCanceledDeviceSelection" consume="false">
+			<action expr="Enter(LM_UserCanceledChangeDevice)"></action>
+		</transition>
+		<transition event="fileLoadDeviceChangeStart" consume="true">
+			<action expr="Exit(SG_VerifyAndSaveGame)"></action>
+			<action expr="Exit(SG_LoadFile)"></action>
+			<action expr="Exit(SG_SaveFile)"></action>
+			<action expr="Exit(SaveGameIO)"></action>
+			<action expr="Enter(SaveGame_DoNotInterruptMe)"></action>
+			<action expr="Enter(LM_WaitingForChangeDevice)"></action>
+		</transition>
+		<transition event="fileMenuDeviceNotOk" consume="false">
+			<action expr="Enter(LM_StorageDeviceChanged)"></action>
+		</transition>
+		<onfocused expr="Enter(SaveGameTabs)"></onfocused>
+		<onunfocused expr="Exit(SaveGameTabs)"></onunfocused>
+		<UIList id="SaveGameTabs"  AllowWrap="true" movie="pause_main" flashObject="menu.elements[9]" allowMouseHoverSelect="true" allowMouseAutoSelect="true">
+			<onfocused expr="Activate(Game_ContentLayer)"></onfocused>
+			<onfocused expr="Show(Game_ContentLayer)"></onfocused>
+			<onfocused expr="Select(GamePrompts_MainMenu)"></onfocused>
+			<onshow expr="Exclude(SG_Main_Scroll)"></onshow>
+			<UILabel  id="GameTab_Load"   text="SG_LoadSave">
+				<onshow expr="Include(SG_Main_Scroll)"></onshow>
+				<onfocused expr="Select(LoadList)"></onfocused>
+				<onunfocused expr="SetRegistryValueInt('skipfade',1)"></onunfocused>
+				<transition event="@UI.ACCEPT*RELEASED">
+					<action expr="PlaySound('HUD_MENU_SELECT_MASTER')"></action>
+					<action expr="Unfocus(SaveGameTabs)"></action>
+					<action expr="Enter(Game_ContentLayer)"></action>
+				</transition>
+			</UILabel>
+			<UILabel id="GameTab_New" text="New_Game">
+				<onunfocused expr="SetRegistryValueInt('skipfade',1)"></onunfocused>
+				<transition event="@UI.ACCEPT*RELEASED">
+					<action	expr="PlaySound('HUD_MENU_SELECT_MASTER')"></action>
+					<action expr="Enter(SG_NewGameConf)"></action>
+				</transition>
+				<onfocused expr="Select(Game_NewGame)"></onfocused>
+			</UILabel>
+			<UILabel id="GameTab_Exit2Main" text="SG_Return2Main"  target="SG_Return2MainConf">
+				<onfocused expr="Select(Game_Exit2Main)"></onfocused>
+				<onunfocused expr="SetRegistryValueInt('skipfade',1)"></onunfocused>
+				<onfocused expr="Include(GameTab_ExitMp2Main)"></onfocused>
+				<transition event="UI_MessageBoxOnHide" consume="false" target="Include(GameTab_ExitMp2Main)"></transition>
+				<UIObject id="GameTab_ExitMp2Main">
+					<transition event="@UI.ACCEPT*RELEASED">
+						<action	expr="Exclude(GameTab_ExitMp2Main)"></action>
+						<action expr="goto(NetConf_ExitMP)"></action>
+					</transition>
+				</UIObject>
+			</UILabel>
+			<UILabel id="GameTab_QuitGame" text="SG_QuitGame">
+				<onunfocused expr="SetRegistryValueInt('skipfade',1)"></onunfocused>
+				<onfocused expr="Select(Game_QuitGame)"></onfocused>
+				<transition event="@UI.ACCEPT*RELEASED">
+					<action expr="Enter(QuitGame)"></action>
+				</transition>
+			</UILabel>
+		</UIList>
+		<onunfocused expr="Exit(Game_ContentLayer)"></onunfocused>
+		<UIPanel id="Game_ContentLayer" movie="list">
+			<onactivate	  expr="StreamMovie('list')"></onactivate>
+			<ondeactivate	expr="UnstreamMovie('list')"></ondeactivate>
+			<onunfocused expr="Exit(LoadList)"      ></onunfocused>
+			<onunfocused expr="Exit(Game_NewGame)"  ></onunfocused>
+			<onunfocused expr="Exit(Game_Exit2Main)"></onunfocused>
+			<UILayer>
+				<UIPanel id="GameTitle_Quit" movie="quest_log">
+					<UILabel id="GameTitle_QuitText" flashObject="menu.title" text="Common_Null"></UILabel>
+					<UILabel flashObject="menu"></UILabel>
+				</UIPanel>
+				<UILabel id="GameTitle_Load" flashObject="top_title" movie="list" text="Load_Slot_Selection"></UILabel>
+			</UILayer>
+			<UILayer movie="quest_log">
+				<UIList id="LoadList" MaxHeight="4" vertical="true" scrollable="true" movie="list" allowMouseAutoSelect="true">
+					<onshow expr="Select(GameTitle_Load)"></onshow>
+					<onfocused expr="Select(SavePromptStrip)"></onfocused>
+					<onactivate expr="SendEvent('fileMenuDeviceCheck')"></onactivate>
+					<UIList allowInput="false" MaxHeight="2" horizontal="true" scrollable="false">
+						<UILabel text="Slot0_Label"></UILabel>
+						<UILabel id="loadgame_slot0"></UILabel>
+					</UIList>
+					<UIList allowInput="false" MaxHeight="2" horizontal="true" scrollable="false">
+						<UILabel text="Slot1_Label"></UILabel>
+						<UILabel id="loadgame_slot1"></UILabel>
+					</UIList>
+					<UIList allowInput="false" MaxHeight="2" horizontal="true" scrollable="false">
+						<UILabel text="Slot2_Label"></UILabel>
+						<UILabel id="loadgame_slot2"></UILabel>
+					</UIList>
+					<UIList allowInput="false" MaxHeight="2" horizontal="true" scrollable="false">
+						<UILabel text="Slot3_Label"></UILabel>
+						<UILabel id="loadgame_slot3"></UILabel>
+					</UIList>
+				</UIList>
+				<UIScrollableList id="Game_NewGame"  flashObject="content">
+					<onpaint expr="SetFlashInt('quest_log','template',18)"></onpaint>
+					<onshow expr="Select(GameTitle_Quit)"></onshow>
+					<onshow expr="SetTextCB(GameTitle_QuitText,'New_Game')"></onshow>
+					<UILabel text="SG_NewGame_detail"  ></UILabel>
+				</UIScrollableList>
+				<UIScrollableList id="Game_Exit2Main"  flashObject="content">
+					<onpaint expr="SetFlashInt('quest_log','template',18)"></onpaint>
+					<onshow expr="Select(GameTitle_Quit)"></onshow>
+					<onshow expr="SetTextCB(GameTitle_QuitText,'SG_Return2Main')"></onshow>
+					<UILabel text="SG_Return2Main_detail"  ></UILabel>
+				</UIScrollableList>
+				<UIScrollableList id="Game_QuitGame"  flashObject="content">
+					<onpaint expr="SetFlashInt('quest_log','template',18)"></onpaint>
+					<onshow expr="Select(GameTitle_Quit)"></onshow>
+					<onshow expr="SetTextCB(GameTitle_QuitText,'SG_QuitGame')"></onshow>
+					<UILabel text="SG_QuitGame_detail"  ></UILabel>
+				</UIScrollableList>
+			</UILayer>
+		</UIPanel>
+		<onfocused expr="Enter(GameLayer_Prompts)"></onfocused>
+		<onunfocused expr="Exit(GameLayer_Prompts)"></onunfocused>
+		<onfocused expr="Select(GamePrompts_MainMenu)"></onfocused>
+		<UILayer id="GameLayer_Prompts">
+			<transition event="@UI.CANCEL*RELEASED">
+				<action	expr="PlaySound('HUD_MENU_BACK_MASTER')"></action>
+				<action expr="Exit(SaveGameLayer)"></action>
+				<action expr="SendEvent('HideVersionNumber')"></action>
+				<action expr="focus(PauseMenu)"></action>
+			</transition>
+			<UIPromptStrip id="GamePrompts_MainMenu">
+				<UIButton text="Common_Select" icon="{@UI.ACCEPT}"></UIButton>
+				<UIButton text="Common_Back" icon="{@UI.CANCEL}"></UIButton>
+				<UIButton icon="{@UI.NAVIGATE_UP}{@UI.NAVIGATE_DOWN}" text="Common_Scroll" id="SG_Main_Scroll"></UIButton>
+			</UIPromptStrip>
+			<UIPromptStrip id="SavePromptStrip" flashObject="_global.prompt">
+				<UIButton id="saveps_accept" icon="{@UI.ACCEPT}" text="Common_Accept"></UIButton>
+				<UIButton id="saveps_cancel" icon="{@UI.CANCEL}" text="Common_Back">
+					<transition event="@UI.CANCEL*RELEASED">
+						<action	expr="PlaySound('HUD_MENU_BACK_MASTER')"></action>
+						<action expr="Unfocus(Game_ContentLayer)"></action>
+						<action expr="Enter(SaveGameTabs)"></action>
+					</transition>
+				</UIButton>
+				<UIButton id="saveps_scroll" icon="{@UI.NAVIGATE_UP}{@UI.NAVIGATE_DOWN}" text="Common_Scroll"></UIButton>
+			</UIPromptStrip>
+		</UILayer>
+	</rdrSaveGameLayer>
+	<UIMessageBox id="LM_UserCanceledChangeDevice">
+		<data name="warning"></data>
+		<data name="description" expr="Save_Dialog_CanceledDeviceSelection"></data>
+		<data name="priority" expr="1"></data>
+		<onactivate expr="Exit(SG_VerifyAndSaveGame)"></onactivate>
+		<onactivate expr="Exit(SG_LoadFile)"></onactivate>
+		<onactivate expr="Exit(SG_SaveFile)"></onactivate>
+		<UIPromptStrip>
+			<UIButton text="Common_Yes" icon="{@UI.ACCEPT}">
+				<transition event="@UI.ACCEPT*RELEASED" consume="false">
+					<action expr="Exit(LM_UserCanceledChangeDevice)"></action>
+					<action expr="SendEvent('fileChangeLoadDevice')"></action>
+				</transition>
+			</UIButton>
+			<UIButton text="Common_No" icon="{@UI.CANCEL}">
+				<transition event="@UI.CANCEL*RELEASED" consume="false">
+					<action expr="Exit(LM_UserCanceledChangeDevice)"></action>
+					<action expr="Exit(SaveGame_DoNotInterruptMe)"></action>
+					<action expr="Exit(SaveGameDialogs)"></action>
+					<action expr="Exit(SaveGameIO)"></action>
+					<action expr="SendEvent('fileNoDeviceSelected')"></action>
+				</transition>
+			</UIButton>
+		</UIPromptStrip>
+	</UIMessageBox>
+	<UILayer id="LM_WaitingForChangeDevice">
+		<onactivate expr="Exit(SG_VerifyAndSaveGame)"></onactivate>
+		<onactivate expr="Exit(SG_LoadFile)"></onactivate>
+		<onactivate expr="Exit(SG_SaveFile)"></onactivate>
+		<transition event="fileDeviceSelectionSuccess" consume="true">
+			<action expr="Exit(SaveGame_DoNotInterruptMe)"></action>
+			<action expr="Exit(SaveGameDialogs)"></action>
+			<action expr="Exit(SaveGameIO)"></action>
+			<action expr="Exit(LM_WaitingForChangeDevice)"></action>
+		</transition>
+		<!--lets just do nothing if player cancels-->
+		<transition event="fileUserCanceledDeviceSelection" consume="false">
+			<action expr="Exit(LM_WaitingForChangeDevice)"></action>
+			<action expr="Enter(LM_UserCanceledChangeDevice)"></action>
+		</transition>
+		<transition event="fileStorageDeviceChanged">
+			<action expr="Exit(LM_WaitingForChangeDevice)"></action>
+			<action expr="Enter(LM_StorageDeviceChanged)"></action>
+		</transition>
+		<transition event="fileFullDeviceSelected" consume="false">
+			<action expr="Exit(LM_WaitingForChangeDevice)"></action>
+			<action expr="Enter(LM_FullDeviceSelected)"></action>
+		</transition>
+	</UILayer>
+	<UIMessageBox id="LM_FullDeviceSelected">
+		<data name="warning"></data>
+		<data name="description" expr="Save_NotEnoughFreeBlocks"></data>
+		<onactivate expr="Exit(LM_FullDeviceSelected)"></onactivate>
+		<onactivate expr="Exit(SG_VerifyAndSaveGame)"></onactivate>
+		<onactivate expr="Exit(SG_LoadFile)"></onactivate>
+		<onactivate expr="Exit(SG_SaveFile)"></onactivate>
+		<UIPromptStrip>
+			<UIButton text="Common_ChangeStorageDevice" icon="{@UI.ACCEPT}">
+				<transition event="@UI.ACCEPT*RELEASED" consume="false">
+					<action expr="Exit(LM_FullDeviceSelected)"></action>
+					<action expr="SendEvent('fileChangeLoadDevice')"></action>
+				</transition>
+			</UIButton>
+			<UIButton text="Common_Cancel" icon="{@UI.CANCEL}">
+				<transition event="@UI.CANCEL*RELEASED" consume="false">
+					<action expr="Exit(LM_FullDeviceSelected)"></action>
+					<action expr="Exit(SaveGame_DoNotInterruptMe)"></action>
+					<action expr="Exit(SaveGameDialogs)"></action>
+					<action expr="Exit(SaveGameIO)"></action>
+				</transition>
+			</UIButton>
+		</UIPromptStrip>
+	</UIMessageBox>
+	<UIMessageBox id="LM_StorageDeviceChanged">
+		<data name="warning"></data>
+		<data name="description" expr="Save_Dialog_StorageDeviceChanged"></data>
+		<data name="priority" expr="1"></data>
+		<onactivate expr="Exit(SG_VerifyAndSaveGame)"></onactivate>
+		<onactivate expr="Exit(SG_LoadFile)"></onactivate>
+		<onactivate expr="Exit(SG_SaveFile)"></onactivate>
+		<transition event="@UI.ACCEPT*RELEASED" consume="false">
+			<action expr="Exit(LM_StorageDeviceChanged)"></action>
+			<action expr="SendEvent('fileChangeLoadDevice')"></action>
+		</transition>
+		<UIPromptStrip>
+			<UIButton icon="{@UI.ACCEPT}" text="Common_Continue"></UIButton>
+		</UIPromptStrip>
+	</UIMessageBox>
+	<UIMessageBox id="SG_Return2MainConf">
+		<data name="warning"></data>
+		<data name="description" expr="SG_Return2MainConf"></data>
+		<UIPromptStrip>
+			<UIButton text="Common_Yes" icon="{@UI.ACCEPT}">
+				<transition event="@UI.ACCEPT*RELEASED">
+					<action expr="SendEvent('AwaitRebootTransition')"></action>
+					<action expr="FadeOut(0.5,1.0,false)"></action>
+					<action expr="Exit(SG_Return2MainConf)"></action>
+				</transition>
+			</UIButton>
+			<UIButton text="Common_No" icon="{@UI.CANCEL}">
+				<transition event="@UI.CANCEL*RELEASED">
+					<action expr="Exit(SG_Return2MainConf)"></action>
+				</transition>
+			</UIButton>
+		</UIPromptStrip>
+	</UIMessageBox>
+	<onunfocused expr="Exit(SG_NewGameConf)"></onunfocused>
+	<UIMessageBox id="SG_NewGameConf" movie="popup">
+		<data name="warning"></data>
+		<data name="description" expr="Save_Dialog_NewGameConfirmation"></data>
+		<UIPromptStrip>
+			<UIButton text="Common_Yes" icon="{@UI.ACCEPT}">
+				<transition event="@UI.ACCEPT*RELEASED">
+					<action expr="Exit(GameLayer_Prompts)"></action>
+					<action expr="Exit(SG_NewGameConf)"></action>
+					<action expr="SendEvent('fileStartNewGame')"></action>
+				</transition>
+			</UIButton>
+			<UIButton text="Common_No" icon="{@UI.CANCEL}">
+				<transition event="@UI.CANCEL*RELEASED" target="Exit(SG_NewGameConf)"></transition>
+			</UIButton>
+		</UIPromptStrip>
+	</UIMessageBox>
+</scxml>
