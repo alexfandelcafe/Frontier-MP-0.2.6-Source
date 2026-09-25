@@ -4,18 +4,20 @@
 [FrontierClient] game bridge initialized; local-player symbol and actor-manager paths resolved
 [FrontierClient] initialized sessionMode=freeroam
 [FrontierClient] worker initialization result=success
-[FrontierClient] bootstrap event name=Local\FrontierMP_Bootstrap_2496_10374265
+[FrontierClient] bootstrap event name=Local\FrontierMP_Bootstrap_9008_13608171
 [FrontierClient] bootstrap event signaled
 [FrontierLauncher] RDR.exe resumed; waiting for process exit
 [FrontierSession] waiting for native invoker registration table error=native registration table not ready: candidates=1 initialized=0
-[FrontierClient] connected as player 1 serverTick=388
+[FrontierClient] connected as player 1 serverTick=373
+[FrontierClient] locomotion test phase=walk+Z cycleTime=18.65 playerId=65000
+[FrontierClient] snapshot tick=373 players=2 remoteEntities=1
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] locomotion test phase=walk+Z cycleTime=19.45 playerId=65000
-[FrontierClient] snapshot tick=389 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=390 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=392 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=394 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=395 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=397 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=399 players=2 remoteEntities=1
-[FrontierFirstChance] exception=0x80000003 accessOp=4294967295 fault=0x1401FDD85 rip=0x1401FDD85 ripRva=0x1FDD85 thread=5568 module=D:\Red Dead Redemption\RDR.exe bytes=CC 48 8B 46 10 4C 8D 0D 9F 60 0A 02 49 8B 0C 07 48 C7 C0 FF FF FF FF 0F 1F 40 00 48 FF C0 41 80 stack=1,0,1,14FD10,1,584840,584988,584988\n[FrontierLauncher] RDR.exe exitCode=0x80000003
+[FrontierClient] snapshot tick=374 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=375 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=377 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=378 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=380 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=381 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=382 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=383 players=2 remoteEntities=1
+[FrontierFirstChance] exception=0x80000003 accessOp=4294967295 fault=0x1401FDD85 rip=0x1401FDD85 ripRva=0x1FDD85 thread=3828 module=D:\Red Dead Redemption\RDR.exe bytes=CC 48 8B 46 10 4C 8D 0D 9F 60 0A 02 49 8B 0C 07 48 C7 C0 FF FF FF FF 0F 1F 40 00 48 FF C0 41 80 unwind=0:rip=0x1401FDD85:rva=0x1FDD85:module=D:\Red Dead Redemption\RDR.exe | 1:rip=0x14007FCE2:rva=0x7FCE2:module=D:\Red Dead Redemption\RDR.exe | 2:rip=0x1400B7039:rva=0xB7039:module=D:\Red Dead Redemption\RDR.exe | 3:rip=0x1400B70C6:rva=0xB70C6:module=D:\Red Dead Redemption\RDR.exe | 4:rip=0x14007F7F0:rva=0x7F7F0:module=D:\Red Dead Redemption\RDR.exe | 5:rip=0x14007F850:rva=0x7F850:module=D:\Red Dead Redemption\RDR.exe | 6:rip=0x140F4A26A:rva=0xF4A26A:module=D:\Red Dead Redemption\RDR.exe | 7:rip=0x7FF966807374:rva=0x17374:module=C:\Windows\System32\KERNEL32.DLL | 8:rip=0x7FF9678FCC91:rva=0x4CC91:module=C:\Windows\SYSTEM32\ntdll.dll\n[FrontierLauncher] RDR.exe exitCode=0x80000003
