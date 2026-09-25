@@ -14,6 +14,33 @@ namespace frontier::launcher {
 
 namespace {
 
+void append_client_log(const std::string& line) {
+    char localAppData[MAX_PATH]{};
+    const DWORD n = GetEnvironmentVariableA("LOCALAPPDATA", localAppData, MAX_PATH);
+    if (n == 0 || n >= MAX_PATH) return;
+
+    const std::filesystem::path dir =
+        std::filesystem::path(localAppData) / "FrontierMP" / "logs";
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+
+    const auto path = dir / "client.log";
+    const HANDLE file = CreateFileA(
+        path.string().c_str(),
+        FILE_APPEND_DATA,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        nullptr,
+        OPEN_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        nullptr);
+    if (file == INVALID_HANDLE_VALUE) return;
+
+    const std::string payload = line + "\n";
+    DWORD written = 0;
+    WriteFile(file, payload.data(), static_cast<DWORD>(payload.size()), &written, nullptr);
+    CloseHandle(file);
+}
+
 std::wstring narrow_to_wide(const std::string& input) {
     if (input.empty()) return {};
 
@@ -425,6 +452,8 @@ int Launcher::run(const LaunchOptions& options) const {
 
     CloseHandle(processInfo.hThread);
 
+    append_client_log("[FrontierLauncher] RDR.exe resumed; waiting for process exit");
+
     WaitForSingleObject(
         processInfo.hProcess,
         INFINITE);
@@ -433,6 +462,11 @@ int Launcher::run(const LaunchOptions& options) const {
     GetExitCodeProcess(
         processInfo.hProcess,
         &exitCode);
+
+    std::ostringstream exitMessage;
+    exitMessage << "[FrontierLauncher] RDR.exe exitCode=0x"
+                << std::hex << std::uppercase << exitCode;
+    append_client_log(exitMessage.str());
 
     CloseHandle(processInfo.hProcess);
     return static_cast<int>(exitCode);
