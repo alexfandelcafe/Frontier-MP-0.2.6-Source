@@ -1,3 +1,7 @@
+## 0.2.69
+- Rework native registration discovery to match the documented RDRMP/Frontier 0.2.6 validation: scan all matching registration patterns, wait for an initialized table, require the historical `0xA0AE0C98` sentinel, and require at least one known RDR native before binding the storage.
+- Do not permanently select an early registration object whose table is still zeroed during RDR startup.
+
 ## 0.2.68
 - Reproduce the historical RDRMP `rage::fiAssetManager::fullReadPath` hook in FrontierClient.
 - Redirect the eight historical RDRMP UI content paths into the external `FrontierClient.dll/game/content` package.
