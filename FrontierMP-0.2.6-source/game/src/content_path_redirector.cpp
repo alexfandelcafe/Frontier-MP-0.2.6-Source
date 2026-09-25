@@ -550,6 +550,5 @@ char ContentPathRedirector::invoke_and_redirect(
 
     return originalResult;
 }
-}
 
 } // namespace frontier::game
