@@ -171,6 +171,46 @@ void write_first_chance_exception_log(EXCEPTION_POINTERS* exceptionPointers) {
             static_cast<std::uintptr_t>(record->ExceptionInformation[1]);
     }
 
+#if defined(_M_X64)
+    std::uintptr_t regRax = 0;
+    std::uintptr_t regRbx = 0;
+    std::uintptr_t regRcx = 0;
+    std::uintptr_t regRdx = 0;
+    std::uintptr_t regRsi = 0;
+    std::uintptr_t regRdi = 0;
+    std::uintptr_t regR8 = 0;
+    std::uintptr_t regR9 = 0;
+    std::uintptr_t regR10 = 0;
+    std::uintptr_t regR11 = 0;
+    std::uintptr_t regR12 = 0;
+    std::uintptr_t regR13 = 0;
+    std::uintptr_t regR14 = 0;
+    std::uintptr_t regR15 = 0;
+    std::uintptr_t regRsp = 0;
+    std::uintptr_t regRbp = 0;
+    std::uintptr_t regEFlags = 0;
+    if (exceptionPointers->ContextRecord != nullptr) {
+        const CONTEXT* context = exceptionPointers->ContextRecord;
+        regRax = static_cast<std::uintptr_t>(context->Rax);
+        regRbx = static_cast<std::uintptr_t>(context->Rbx);
+        regRcx = static_cast<std::uintptr_t>(context->Rcx);
+        regRdx = static_cast<std::uintptr_t>(context->Rdx);
+        regRsi = static_cast<std::uintptr_t>(context->Rsi);
+        regRdi = static_cast<std::uintptr_t>(context->Rdi);
+        regR8 = static_cast<std::uintptr_t>(context->R8);
+        regR9 = static_cast<std::uintptr_t>(context->R9);
+        regR10 = static_cast<std::uintptr_t>(context->R10);
+        regR11 = static_cast<std::uintptr_t>(context->R11);
+        regR12 = static_cast<std::uintptr_t>(context->R12);
+        regR13 = static_cast<std::uintptr_t>(context->R13);
+        regR14 = static_cast<std::uintptr_t>(context->R14);
+        regR15 = static_cast<std::uintptr_t>(context->R15);
+        regRsp = static_cast<std::uintptr_t>(context->Rsp);
+        regRbp = static_cast<std::uintptr_t>(context->Rbp);
+        regEFlags = static_cast<std::uintptr_t>(context->EFlags);
+    }
+#endif
+
     HMODULE module = nullptr;
     MEMORY_BASIC_INFORMATION mbi{};
     if (rip != 0 &&
@@ -203,9 +243,12 @@ void write_first_chance_exception_log(EXCEPTION_POINTERS* exceptionPointers) {
             ? static_cast<DWORD>(record->ExceptionInformation[0])
             : 0xFFFFFFFFu;
 
+    unsigned char instructionBefore[16]{};
     unsigned char instructionBytes[32]{};
+    SIZE_T beforeRead = 0;
     SIZE_T bytesRead = 0;
-    bool bytesReadable = false;
+    bool instructionReadable = false;
+
     if (rip != 0) {
         MEMORY_BASIC_INFORMATION instructionMbi{};
         if (VirtualQuery(
@@ -215,7 +258,16 @@ void write_first_chance_exception_log(EXCEPTION_POINTERS* exceptionPointers) {
             instructionMbi.State == MEM_COMMIT &&
             (instructionMbi.Protect & 0xFF) != PAGE_NOACCESS &&
             (instructionMbi.Protect & 0xFF) != PAGE_GUARD) {
-            bytesReadable =
+            if (rip >= reinterpret_cast<std::uintptr_t>(instructionMbi.BaseAddress) + 16) {
+                ReadProcessMemory(
+                    GetCurrentProcess(),
+                    reinterpret_cast<const void*>(rip - 16),
+                    instructionBefore,
+                    sizeof(instructionBefore),
+                    &beforeRead);
+            }
+
+            instructionReadable =
                 ReadProcessMemory(
                     GetCurrentProcess(),
                     reinterpret_cast<const void*>(rip),
@@ -226,21 +278,34 @@ void write_first_chance_exception_log(EXCEPTION_POINTERS* exceptionPointers) {
         }
     }
 
+    char instructionBeforeHex[16 * 3 + 1]{};
+    std::size_t instructionBeforeHexLength = 0;
+    for (SIZE_T i = 0;
+         i < beforeRead && instructionBeforeHexLength + 3 < sizeof(instructionBeforeHex);
+         ++i) {
+        const int n = std::snprintf(
+            instructionBeforeHex + instructionBeforeHexLength,
+            sizeof(instructionBeforeHex) - instructionBeforeHexLength,
+            "%02X%s",
+            static_cast<unsigned int>(instructionBefore[i]),
+            i + 1 < beforeRead ? " " : "");
+        if (n <= 0) break;
+        instructionBeforeHexLength += static_cast<std::size_t>(n);
+    }
+
     char instructionHex[32 * 3 + 1]{};
     std::size_t instructionHexLength = 0;
-    if (bytesReadable) {
-        for (SIZE_T i = 0;
-             i < bytesRead && instructionHexLength + 3 < sizeof(instructionHex);
-             ++i) {
-            const int n = std::snprintf(
-                instructionHex + instructionHexLength,
-                sizeof(instructionHex) - instructionHexLength,
-                "%02X%s",
-                static_cast<unsigned int>(instructionBytes[i]),
-                i + 1 < bytesRead ? " " : "");
-            if (n <= 0) break;
-            instructionHexLength += static_cast<std::size_t>(n);
-        }
+    for (SIZE_T i = 0;
+         i < bytesRead && instructionHexLength + 3 < sizeof(instructionHex);
+         ++i) {
+        const int n = std::snprintf(
+            instructionHex + instructionHexLength,
+            sizeof(instructionHex) - instructionHexLength,
+            "%02X%s",
+            static_cast<unsigned int>(instructionBytes[i]),
+            i + 1 < bytesRead ? " " : "");
+        if (n <= 0) break;
+        instructionHexLength += static_cast<std::size_t>(n);
     }
 
     const DWORD threadId = GetCurrentThreadId();
@@ -398,7 +463,7 @@ void write_first_chance_exception_log(EXCEPTION_POINTERS* exceptionPointers) {
     const int length = std::snprintf(
         buffer,
         sizeof(buffer),
-        "[FrontierFirstChance] exception=0x%08lX accessOp=%lu fault=0x%llX rip=0x%llX ripRva=0x%llX thread=%lu module=%s bytes=%s unwind=%s\\n",
+        "[FrontierFirstChance] exception=0x%08lX accessOp=%lu fault=0x%llX rip=0x%llX ripRva=0x%llX thread=%lu module=%s before=%s bytes=%s regs=RAX:%llX RBX:%llX RCX:%llX RDX:%llX RSI:%llX RDI:%llX R8:%llX R9:%llX R10:%llX R11:%llX R12:%llX R13:%llX R14:%llX R15:%llX RSP:%llX RBP:%llX EFLAGS:%llX unwind=%s\\n",
         static_cast<unsigned long>(code),
         static_cast<unsigned long>(accessOp),
         static_cast<unsigned long long>(faultAddress),
@@ -406,7 +471,25 @@ void write_first_chance_exception_log(EXCEPTION_POINTERS* exceptionPointers) {
         static_cast<unsigned long long>(ripRva),
         static_cast<unsigned long>(threadId),
         modulePathLength != 0 ? modulePath : "<unknown>",
-        bytesReadable ? instructionHex : "<unreadable>",
+        beforeRead != 0 ? instructionBeforeHex : "<unreadable>",
+        instructionReadable ? instructionHex : "<unreadable>",
+        static_cast<unsigned long long>(regRax),
+        static_cast<unsigned long long>(regRbx),
+        static_cast<unsigned long long>(regRcx),
+        static_cast<unsigned long long>(regRdx),
+        static_cast<unsigned long long>(regRsi),
+        static_cast<unsigned long long>(regRdi),
+        static_cast<unsigned long long>(regR8),
+        static_cast<unsigned long long>(regR9),
+        static_cast<unsigned long long>(regR10),
+        static_cast<unsigned long long>(regR11),
+        static_cast<unsigned long long>(regR12),
+        static_cast<unsigned long long>(regR13),
+        static_cast<unsigned long long>(regR14),
+        static_cast<unsigned long long>(regR15),
+        static_cast<unsigned long long>(regRsp),
+        static_cast<unsigned long long>(regRbp),
+        static_cast<unsigned long long>(regEFlags),
         unwindCount != 0 ? unwindText : "<unavailable>");
 
     DWORD written = 0;
