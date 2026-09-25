@@ -1,7 +1,7 @@
-## 0.2.66
-- Match the historical RDRMP package layout by placing the overridden game/content tree beside FrontierClient.dll.
-- Launch RDR.exe with the Frontier package directory as the process working directory so the client-owned game/content tree is resolved before the user's game installation.
-- Remove the previous data/game layout mismatch from the asset-overlay path.
+## 0.2.67
+- Keep the historical RDRMP-style `game/content` package beside FrontierClient.dll.
+- Revert the launcher working-directory experiment: RDR.exe must continue starting with its own installation directory as the process working directory until the historical asset/content loader is reproduced.
+- Remove the unsupported assumption that changing RDR.exe's working directory is sufficient to activate the RDRMP content tree.
 
 ## 0.2.64
 - Stage the freeroam frontend bootstrap explicitly across RDRMP's two observed UI states: send `startScreenExit` while `GET_GAME_STATE=5`, then send `net.EnterOnlineForInvite` after the frontend reaches `gameState=3`.
