@@ -4,6 +4,7 @@
 #include "frontier/game/native_invoker.hpp"
 #include "frontier/game/game_thread_dispatcher.hpp"
 #include "frontier/game/startup_native_tracer.hpp"
+#include "frontier/game/content_path_redirector.hpp"
 #include "frontier/types.hpp"
 
 #include <cstdint>
@@ -76,6 +77,7 @@ private:
     mutable GameThreadDispatcher gameThreadDispatcher_{};
     std::string gameThreadDispatcherError_;
     StartupNativeTracer startupNativeTracer_{};
+    ContentPathRedirector contentPathRedirector_{};
     mutable std::mutex runtimeSnapshotMutex_;
     mutable RuntimeSnapshot runtimeSnapshot_{};
     mutable bool runtimeRefreshPending_{};
