@@ -49,8 +49,7 @@ std::string environment_value(const char* key) {
 bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, const std::string& playerName) {
     stopRequested_.store(false, std::memory_order_release);
     lastFrontendBootstrapAttemptMs_ = 0;
-    frontendStartScreenExitSent_ = false;
-    frontendBootstrapTriggered_ = false;
+    historicalOnlineBootstrapLogged_ = false;
     frontier::game::ExecutableFingerprint fingerprint{};
     if (!frontier::game::BuildDetector::inspect_loaded_module(fingerprint)) {
         log_line("[FrontierClient] build inspection failed");
@@ -271,8 +270,6 @@ void ClientRuntime::shutdown() {
     session_.reset();
     lastSessionUpdateMs_ = 0;
     lastFrontendBootstrapAttemptMs_ = 0;
-    frontendStartScreenExitSent_ = false;
-    frontendBootstrapTriggered_ = false;
 }
 
 void ClientRuntime::update() {
@@ -295,46 +292,16 @@ void ClientRuntime::update() {
             lastSessionUpdateMs_ = now;
 
             if (sessionMode_ == "freeroam" &&
-                session_.runtime_state().state == frontier::game::FrontierSessionState::Frontend &&
-                (lastFrontendBootstrapAttemptMs_ == 0 ||
-                 now - lastFrontendBootstrapAttemptMs_ >= 750)) {
-                lastFrontendBootstrapAttemptMs_ = now;
+                !historicalOnlineBootstrapLogged_) {
+                std::string bootstrapLog;
+                const bool bootstrapComplete =
+                    gameBridge_.advance_historical_online_bootstrap(bootstrapLog);
 
-                const auto gameState = session_.runtime_state().gameState;
-                std::string bootstrapError;
-
-                // RDRMP's boot.xml performs this in two UI stages. On the
-                // initial start screen, net.EnterOnlineForInvite first sends
-                // startScreenExit and then queues the actual multiplayer
-                // event. We reproduce those stages explicitly so the second
-                // event is delivered after StartScreen2 is active.
-                if (gameState == 5 && !frontendStartScreenExitSent_) {
-                    if (gameBridge_.send_ui_event("startScreenExit", bootstrapError)) {
-                        frontendStartScreenExitSent_ = true;
-                        log_line("[FrontierSession] frontend bootstrap stage=1 sent: startScreenExit");
-                    } else {
-                        log_line("[FrontierSession] frontend bootstrap stage=1 failed: " + bootstrapError);
-                    }
-                } else if (gameState <= 3 &&
-                           frontendStartScreenExitSent_ &&
-                           !frontendBootstrapTriggered_) {
-                    if (gameBridge_.send_ui_event("net.EnterOnlineForInvite", bootstrapError)) {
-                        frontendBootstrapTriggered_ = true;
-                        log_line("[FrontierSession] frontend bootstrap stage=2 sent: net.EnterOnlineForInvite");
-                    } else {
-                        log_line("[FrontierSession] frontend bootstrap stage=2 failed: " + bootstrapError);
-                    }
-                } else if (gameState <= 3 &&
-                           !frontendStartScreenExitSent_ &&
-                           !frontendBootstrapTriggered_) {
-                    // If the first observable sample is already StartScreen2,
-                    // skip stage 1 and send the actual multiplayer event.
-                    if (gameBridge_.send_ui_event("net.EnterOnlineForInvite", bootstrapError)) {
-                        frontendBootstrapTriggered_ = true;
-                        log_line("[FrontierSession] frontend bootstrap stage=2 sent directly: net.EnterOnlineForInvite");
-                    } else {
-                        log_line("[FrontierSession] frontend bootstrap direct stage=2 failed: " + bootstrapError);
-                    }
+                if (!bootstrapLog.empty()) {
+                    log_line(bootstrapLog);
+                }
+                if (bootstrapComplete) {
+                    historicalOnlineBootstrapLogged_ = true;
                 }
             }
         }
