@@ -90,6 +90,7 @@ private:
 
     enum class HistoricalOnlineBootstrapTask : std::uint8_t {
         None,
+        SendEnterOnlineForInvite,
         FadeToLoadingScreen,
         QueryFade,
         FinishLoadOnline,
@@ -100,6 +101,7 @@ private:
         HistoricalOnlineBootstrapStage::NotStarted};
     HistoricalOnlineBootstrapTask historicalOnlineBootstrapTask_{
         HistoricalOnlineBootstrapTask::None};
+    bool historicalOnlineBootstrapEventCompleted_{};
     std::uint32_t historicalOnlineBootstrapAttempts_{};
     std::atomic<bool> historicalOnlineBootstrapTaskPending_{false};
     std::atomic<bool> historicalOnlineBootstrapTaskDone_{false};
