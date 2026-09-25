@@ -412,16 +412,25 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
     }
 
     case HistoricalOnlineBootstrapStage::WaitingForFade: {
+        ++historicalOnlineBootstrapAttempts_;
+
         bool fading = true;
+        bool fadingKnown = false;
+        std::uintptr_t fadingResult = 0u;
         std::uintptr_t authResult = 0u;
         std::string error;
         const bool completed = submit(
-            [this, &fading, &authResult]() {
+            [this, &fading, &fadingKnown, &fadingResult, &authResult]() {
                 std::uintptr_t result = 0u;
-                if (nativeInvoker_.invoke_raw(
-                        kNativeHudIsFading, nullptr, 0u, result)) {
-                    fading = result != 0u;
+                const bool queryOk = nativeInvoker_.invoke_raw(
+                    kNativeHudIsFading, nullptr, 0u, result);
+                if (!queryOk) {
+                    return;
                 }
+
+                fadingKnown = true;
+                fadingResult = result;
+                fading = result != 0u;
 
                 if (fading) {
                     return;
@@ -461,12 +470,39 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
             historicalOnlineBootstrapStage_ =
                 HistoricalOnlineBootstrapStage::Failed;
             logLine =
-                "[FrontierSession] historical LoadOnline stage=2 failed: " +
+                "[FrontierSession] historical LoadOnline stage=2 query failed: " +
                 error;
             return false;
         }
 
+        if (!fadingKnown) {
+            if (historicalOnlineBootstrapAttempts_ == 1 ||
+                (historicalOnlineBootstrapAttempts_ % 8u) == 0u) {
+                char message[256]{};
+                std::snprintf(
+                    message,
+                    sizeof(message),
+                    "[FrontierSession] historical LoadOnline waiting-for-fade "
+                    "HUD_IS_FADING invoke did not return a value attempt=%u",
+                    historicalOnlineBootstrapAttempts_);
+                logLine = message;
+            }
+            return false;
+        }
+
         if (fading) {
+            if (historicalOnlineBootstrapAttempts_ == 1 ||
+                (historicalOnlineBootstrapAttempts_ % 8u) == 0u) {
+                char message[256]{};
+                std::snprintf(
+                    message,
+                    sizeof(message),
+                    "[FrontierSession] historical LoadOnline waiting-for-fade "
+                    "HUD_IS_FADING=%u attempt=%u",
+                    static_cast<unsigned>(fadingResult != 0u),
+                    historicalOnlineBootstrapAttempts_);
+                logLine = message;
+            }
             return false;
         }
 
