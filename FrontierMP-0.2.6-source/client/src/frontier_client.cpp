@@ -135,6 +135,27 @@ LONG WINAPI frontier_unhandled_exception_filter(EXCEPTION_POINTERS* exceptionPoi
 }
 
 
+bool environment_flag_enabled(const char* name) {
+    if (name == nullptr || *name == '\0') return false;
+
+    char value[16]{};
+    const DWORD length =
+        GetEnvironmentVariableA(
+            name,
+            value,
+            static_cast<DWORD>(std::size(value)));
+
+    if (length == 0 || length >= std::size(value)) {
+        return false;
+    }
+
+    return std::strcmp(value, "1") == 0 ||
+           std::strcmp(value, "true") == 0 ||
+           std::strcmp(value, "TRUE") == 0 ||
+           std::strcmp(value, "yes") == 0 ||
+           std::strcmp(value, "YES") == 0;
+}
+
 void log_line(const std::string& line);
 
 PVOID g_frontierVectoredHandler = nullptr;
@@ -881,10 +902,15 @@ DWORD WINAPI FrontierClientWorker(LPVOID) {
         std::string("[FrontierClient] worker initialization result=") +
         (initialized ? "success" : "failure"));
 
-    if (initialized && install_frontier_callsite_diagnostic()) {
-        log_line("[FrontierDiag] RDR callsite diagnostic ready");
+    if (initialized &&
+        environment_flag_enabled("FRONTIER_ENABLE_RDR_CALLSITE_DIAGNOSTIC")) {
+        if (install_frontier_callsite_diagnostic()) {
+            log_line("[FrontierDiag] RDR callsite diagnostic ready");
+        } else {
+            log_line("[FrontierDiag] RDR callsite diagnostic requested but unavailable");
+        }
     } else {
-        log_line("[FrontierDiag] RDR callsite diagnostic unavailable");
+        log_line("[FrontierDiag] RDR callsite diagnostic disabled");
     }
 
     signal_bootstrap_ready();
