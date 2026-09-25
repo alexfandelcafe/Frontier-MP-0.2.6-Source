@@ -3,15 +3,22 @@
 [FrontierClient] game bridge initialized; local-player symbol and actor-manager paths resolved
 [FrontierClient] initialized sessionMode=freeroam
 [FrontierClient] worker initialization result=success
-[FrontierClient] bootstrap event name=Local\FrontierMP_Bootstrap_13356_66750328
+[FrontierClient] bootstrap event name=Local\FrontierMP_Bootstrap_13188_72273265
 [FrontierClient] bootstrap event signaled
 [FrontierSession] waiting for native invoker registration table error=registration table not initialized: storage=0x142B0D210 table=0 mod=0
-[FrontierClient] connected as player 2 serverTick=1389
+[FrontierClient] connected as player 1 serverTick=706
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] locomotion test phase=walk+X cycleTime=5.5 playerId=65000
-[FrontierClient] snapshot tick=1390 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1391 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1393 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1395 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1396 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1398 players=2 remoteEntities=1
+[FrontierClient] locomotion test phase=walk+X cycleTime=3.35 playerId=65000
+[FrontierClient] snapshot tick=707 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=708 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=710 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=712 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=713 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=715 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=717 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=718 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=720 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=722 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=724 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=726 players=2 remoteEntities=1
+[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
