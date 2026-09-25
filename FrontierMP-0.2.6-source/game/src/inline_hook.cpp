@@ -114,10 +114,10 @@ bool InlineHook::install(std::uintptr_t target,
     originalBytes_.resize(patchSize);
     std::memcpy(originalBytes_.data(), reinterpret_cast<const void*>(target), patchSize);
 
-    // The caller must choose a patch size that covers complete, relocation-free
-    // instructions. The historical RDR fullReadPath signature starts with three
-    // 5-byte mov stores, so the 15-byte hook used by ContentPathRedirector can
-    // be copied verbatim into the trampoline.
+    // Build a trampoline. The known RDR fullReadPath entry contains an E8 rel32
+    // call in the first 16 bytes. Re-encode that relative call with volatile R11
+    // so the trampoline does not depend on +/-2 GiB and, importantly, does not
+    // destroy RAX.
     const std::size_t trampolineCapacity = patchSize + 32;
     auto* trampoline = static_cast<std::uint8_t*>(
         VirtualAlloc(nullptr, trampolineCapacity, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
@@ -127,9 +127,35 @@ bool InlineHook::install(std::uintptr_t target,
         return false;
     }
 
+    std::size_t sourceOffset = 0;
     std::size_t trampolineOffset = 0;
-    for (std::size_t sourceOffset = 0; sourceOffset < patchSize; ++sourceOffset) {
-        trampoline[trampolineOffset++] = originalBytes_[sourceOffset];
+    while (sourceOffset < patchSize) {
+        const auto opcode = originalBytes_[sourceOffset];
+
+        if (opcode == 0xE8 && sourceOffset == 4 && sourceOffset + 5 <= patchSize) {
+            std::int32_t displacement = 0;
+            std::memcpy(&displacement,
+                        originalBytes_.data() + sourceOffset + 1,
+                        sizeof(displacement));
+
+            const auto sourceInstruction = target + sourceOffset;
+            const auto branchTarget =
+                sourceInstruction + 5 + static_cast<std::intptr_t>(displacement);
+
+            // mov r11, imm64; call r11
+            trampoline[trampolineOffset++] = 0x49;
+            trampoline[trampolineOffset++] = 0xBB;
+            std::memcpy(trampoline + trampolineOffset, &branchTarget, sizeof(branchTarget));
+            trampolineOffset += sizeof(branchTarget);
+            trampoline[trampolineOffset++] = 0x41;
+            trampoline[trampolineOffset++] = 0xFF;
+            trampoline[trampolineOffset++] = 0xD3;
+
+            sourceOffset += 5;
+            continue;
+        }
+
+        trampoline[trampolineOffset++] = originalBytes_[sourceOffset++];
     }
 
     write_absolute_jump(trampoline + trampolineOffset, target + patchSize);
