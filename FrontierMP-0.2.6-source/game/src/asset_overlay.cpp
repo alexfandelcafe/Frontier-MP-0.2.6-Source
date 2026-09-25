@@ -16,6 +16,9 @@
 #include <filesystem>
 #include <fstream>
 #include <mutex>
+#ifdef _MSC_VER
+#include <intrin.h>
+#endif
 #include <sstream>
 #include <string>
 
@@ -196,6 +199,72 @@ std::string pointer_candidates(std::initializer_list<std::uintptr_t> values) {
     return out.str();
 }
 
+std::string deep_string_probe(std::uintptr_t root) {
+    std::ostringstream out;
+    if (root < 0x10000u) return out.str();
+
+#ifdef _WIN32
+    std::array<std::uintptr_t, 64> pending{};
+    std::array<std::uintptr_t, 64> seen{};
+    std::size_t pendingCount = 0;
+    std::size_t head = 0;
+    pending[pendingCount++] = root;
+
+    while (head < pendingCount && head < 16) {
+        const auto address = pending[head++];
+        bool alreadySeen = false;
+        for (std::size_t i = 0; i < head - 1 && i < seen.size(); ++i) {
+            if (seen[i] == address) {
+                alreadySeen = true;
+                break;
+            }
+        }
+        if (alreadySeen) continue;
+        if (head - 1 < seen.size()) seen[head - 1] = address;
+
+        const auto direct = byte_string_probe(address);
+        if (!direct.empty()) {
+            out << " ptr=0x" << std::hex << address << std::dec << " bytes=" << direct;
+        }
+
+        std::array<std::uintptr_t, 16> words{};
+        SIZE_T bytesRead = 0;
+        if (!ReadProcessMemory(GetCurrentProcess(),
+                               reinterpret_cast<const void*>(address),
+                               words.data(),
+                               sizeof(words),
+                               &bytesRead) ||
+            bytesRead < sizeof(std::uintptr_t)) {
+            continue;
+        }
+
+        const std::size_t count = bytesRead / sizeof(std::uintptr_t);
+        for (std::size_t i = 0; i < count && i < 8; ++i) {
+            const auto value = words[i];
+            if (value < 0x10000u) continue;
+
+            std::string ascii;
+            std::string utf16;
+            if (guarded_ascii(value, ascii) && path_like(ascii)) {
+                out << " q" << i << "=0x" << std::hex << value << std::dec
+                    << ":ascii=" << ascii;
+            } else if (guarded_utf16(value, utf16) && path_like(utf16)) {
+                out << " q" << i << "=0x" << std::hex << value << std::dec
+                    << ":utf16=" << utf16;
+            } else if (pendingCount < pending.size() &&
+                       std::find(seen.begin(), seen.begin() + std::min(head, seen.size()), value) ==
+                           seen.begin() + std::min(head, seen.size())) {
+                pending[pendingCount++] = value;
+            }
+        }
+    }
+#else
+    (void)root;
+#endif
+
+    return out.str();
+}
+
 std::string memory_qword_probe(std::uintptr_t address) {
     std::ostringstream out;
     if (address < 0x10000u) return out.str();
@@ -257,9 +326,14 @@ std::uintptr_t hooked_full_read_path(std::uintptr_t a,
     const auto callIndex = g_observedCalls.fetch_add(1, std::memory_order_relaxed);
 
     if (callIndex < 128) {
+        std::uintptr_t caller = 0;
+#ifdef _MSC_VER
+        caller = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+#endif
         std::ostringstream before;
         before << "[FrontierAsset] fullReadPath call=" << callIndex
-               << " a=0x" << std::hex << a
+               << " caller=0x" << std::hex << caller
+               << " a=0x" << a
                << " b=0x" << b
                << " c=0x" << c
                << " d=0x" << d
@@ -270,6 +344,9 @@ std::uintptr_t hooked_full_read_path(std::uintptr_t a,
         append_address_probe(before, "a", a);
         append_address_probe(before, "b", b);
         append_address_probe(before, "e", e);
+        before << " aDeep=" << deep_string_probe(a);
+        before << " bDeep=" << deep_string_probe(b);
+        before << " eDeep=" << deep_string_probe(e);
 
         log_line(before.str());
     }
