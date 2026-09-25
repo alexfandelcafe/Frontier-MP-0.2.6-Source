@@ -1,31 +1,27 @@
 [FrontierClient] worker starting
 [FrontierClient] solo remote-player test enabled
-[FrontierContent] fullReadPath hook attached target=0x1400C8E60 rva=0xC8E60 root=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game
+[FrontierContent] fullReadPath hook attached target=0x1400C8E60 rva=0xC8E60 root=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game safeMax=240 prologue=FF 25 00 00 00 00 30 8F D7 2E F9 7F 00 00 90
+[FrontierContent] route prepared source=content/ui/boot.sc resolved=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game\content/ui/boot.sc.xml bytes=171
+[FrontierContent] route prepared source=content/ui/pausemenu/pausemenuscene.sc resolved=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game\content/ui/pausemenu/pausemenuscene.sc.xml bytes=191
+[FrontierContent] route prepared source=content/ui/pausemenu/savegame.sc resolved=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game\content/ui/pausemenu/savegame.sc.xml bytes=185
+[FrontierContent] route prepared source=content/ui/net/profileeditor/main.sc resolved=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game\content/ui/net/profileeditor/main.sc.xml bytes=189
 [FrontierClient] game bridge initialized; local-player symbol and actor-manager paths resolved
 [FrontierClient] initialized sessionMode=freeroam
 [FrontierClient] worker initialization result=success
-[FrontierDiag] pre-call breakpoint installed rva=0x1FDD7C returnRva=0x1FDD81
-[FrontierDiag] RDR callsite diagnostic ready
-[FrontierClient] bootstrap event name=Local\FrontierMP_Bootstrap_1248_14678140
+[FrontierDiag] RDR callsite diagnostic disabled
+[FrontierClient] bootstrap event name=Local\FrontierMP_Bootstrap_2624_15963906
 [FrontierClient] bootstrap event signaled
 [FrontierLauncher] RDR.exe resumed; waiting for process exit
 [FrontierSession] waiting for native invoker registration table error=native registration table not ready: candidates=1 initialized=0
-[FrontierClient] connected as player 1 serverTick=248
-[FrontierClient] locomotion test phase=walk-X cycleTime=12.4 playerId=65000
-[FrontierClient] snapshot tick=248 players=2 remoteEntities=1
+[FrontierClient] connected as player 1 serverTick=530
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=249 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=251 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=253 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=255 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=257 players=2 remoteEntities=1
-[FrontierDiag] pre-call target=0x1400CCD40 targetRva=0xCCD40 RCX=142E46300 RDX=14E820 R8=10 R9=0 RAX=1 RSI=142E45F10 RDI=0 RSP=14E0F0 stack+20=1 stack+28=752E80
-[FrontierClient] snapshot tick=259 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=261 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=263 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=265 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=267 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=269 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierDiag] post-call return RAX=1 AL=01 RIP=0x1401FDD81
-[FrontierFirstChance] exception=0xC0000005 accessOp=0 fault=0xFFFFFFFFFFFFFFFF rip=0x1400C8D1B ripRva=0xC8D1B thread=5792 module=D:\Red Dead Redemption\RDR.exe before=7C 24 50 41 C6 00 00 48 85 FF 0F 84 DE 00 00 00 bytes=80 3F 00 0F 84 D5 00 00 00 BA 2E 00 00 00 49 8B CE FF 15 26 3D F8 00 48 85 C0 74 23 BA 2E 00 00 callTarget=0x0 callTargetRva=0x0 stackArg5=0x1400C9037 stackArg6=0x0 regs=RAX:66 RBX:14DCE0 RCX:14E849 RDX:1D6 RSI:200 RDI:B726E1836588F88B R8:14DD09 R9:14E820 R10:14E3E0 R11:14E83C R12:B726E1836588F88B R13:194 R14:14E820 R15:142156150 RSP:14D850 RBP:FFFFFFFFFFFFFFFF EFLAGS:10286 unwind=0:rip=0x1400C8D1B:rva=0xC8D1B:module=D:\Red Dead Redemption\RDR.exe | 1:rip=0x1400C9037:rva=0xC9037:module=D:\Red Dead Redemption\RDR.exe | 2:rip=0x7FF92F5992CE:rva=0x192CE:module=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\FrontierClient.dll | 3:rip=0x1400CCD7B:rva=0xCCD7B:module=D:\Red Dead Redemption\RDR.exe | 4:rip=0x1401FDD81:rva=0x1FDD81:module=D:\Red Dead Redemption\RDR.exe | 5:rip=0x14007FCE2:rva=0x7FCE2:module=D:\Red Dead Redemption\RDR.exe | 6:rip=0x1400B7039:rva=0xB7039:module=D:\Red Dead Redemption\RDR.exe | 7:rip=0x1400B70C6:rva=0xB70C6:module=D:\Red Dead Redemption\RDR.exe | 8:rip=0x14007F7F0:rva=0x7F7F0:module=D:\Red Dead Redemption\RDR.exe | 9:rip=0x14007F850:rva=0x7F850:module=D:\Red Dead Redemption\RDR.exe | 10:rip=0x140F4A26A:rva=0xF4A26A:module=D:\Red Dead Redemption\RDR.exe | 11:rip=0x7FF966807374:rva=0x17374:module=C:\Windows\System32\KERNEL32.DLL\n[FrontierLauncher] RDR.exe exitCode=0xC0000005
+[FrontierClient] locomotion test phase=walk-Z cycleTime=26.55 playerId=65000
+[FrontierClient] snapshot tick=531 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=533 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=535 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=536 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=538 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=540 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=542 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=543 players=2 remoteEntities=1
+[FrontierFirstChance] exception=0xC0000005 accessOp=0 fault=0x15E6D91 rip=0x1400C8D1B ripRva=0xC8D1B thread=10016 module=D:\Red Dead Redemption\RDR.exe before=7C 24 50 41 C6 00 00 48 85 FF 0F 84 DE 00 00 00 bytes=80 3F 00 0F 84 D5 00 00 00 BA 2E 00 00 00 49 8B CE FF 15 26 3D F8 00 48 85 C0 74 23 BA 2E 00 00 callTarget=0x0 callTargetRva=0x0 stackArg5=0x1400C9037 stackArg6=0x0 regs=RAX:66 RBX:14DCE0 RCX:14E84C RDX:1D3 RSI:200 RDI:15E6D91 R8:14DD0C R9:14E820 R10:14E3E0 R11:14E83C R12:15E6D91 R13:194 R14:14E820 R15:142156150 RSP:14D8C0 RBP:FFFFFFFFFFFFFFFF EFLAGS:10202 unwind=0:rip=0x1400C8D1B:rva=0xC8D1B:module=D:\Red Dead Redemption\RDR.exe | 1:rip=0x1400C9037:rva=0xC9037:module=D:\Red Dead Redemption\RDR.exe | 2:rip=0x7FF92ED7A143:rva=0x1A143:module=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\FrontierClient.dll | 3:rip=0x1400CCD7B:rva=0xCCD7B:module=D:\Red Dead Redemption\RDR.exe | 4:rip=0x1401FDD81:rva=0x1FDD81:module=D:\Red Dead Redemption\RDR.exe | 5:rip=0x14007FCE2:rva=0x7FCE2:module=D:\Red Dead Redemption\RDR.exe | 6:rip=0x1400B7039:rva=0xB7039:module=D:\Red Dead Redemption\RDR.exe | 7:rip=0x1400B70C6:rva=0xB70C6:module=D:\Red Dead Redemption\RDR.exe | 8:rip=0x14007F7F0:rva=0x7F7F0:module=D:\Red Dead Redemption\RDR.exe | 9:rip=0x14007F850:rva=0x7F850:module=D:\Red Dead Redemption\RDR.exe | 10:rip=0x140F4A26A:rva=0xF4A26A:module=D:\Red Dead Redemption\RDR.exe | 11:rip=0x7FF966807374:rva=0x17374:module=C:\Windows\System32\KERNEL32.DLL\n[FrontierLauncher] RDR.exe exitCode=0xC0000005
