@@ -98,15 +98,16 @@ if(WIN32 AND FRONTIER_BUILD_CLIENT)
         ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}"
     )
 
-    # The launcher is kept separate from the game installation. The historical
-    # multiplayer boot XML is copied next to FrontierClient.dll so the runtime
-    # can redirect only content/ui/boot.sc.xml without modifying RDR1.
+    # Match the historical RDRMP distribution layout: the client package owns a
+    # sibling ./game/content tree next to its DLL. RDR is launched with that
+    # package root as its working directory so the normal asset resolver sees
+    # the RDRMP boot override without modifying the user's RDR installation.
     add_custom_command(TARGET frontier_client POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory
-                "$<TARGET_FILE_DIR:frontier_client>/data/game/content/ui"
+                "$<TARGET_FILE_DIR:frontier_client>/game/content/ui"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CMAKE_CURRENT_SOURCE_DIR}/resources/game/content/ui/boot.sc.xml"
-                "$<TARGET_FILE_DIR:frontier_client>/data/game/content/ui/boot.sc.xml"
+                "$<TARGET_FILE_DIR:frontier_client>/game/content/ui/boot.sc.xml"
         VERBATIM
     )
 endif()
