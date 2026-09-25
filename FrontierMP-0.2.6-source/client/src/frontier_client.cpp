@@ -245,6 +245,47 @@ void write_first_chance_exception_log(EXCEPTION_POINTERS* exceptionPointers) {
 
     const DWORD threadId = GetCurrentThreadId();
 
+    std::uintptr_t stackPointers[8]{};
+    SIZE_T stackBytesRead = 0;
+    bool stackReadable = false;
+#if defined(_M_X64)
+    if (exceptionPointers->ContextRecord != nullptr &&
+        exceptionPointers->ContextRecord->Rsp != 0) {
+        MEMORY_BASIC_INFORMATION stackMbi{};
+        if (VirtualQuery(
+                reinterpret_cast<const void*>(exceptionPointers->ContextRecord->Rsp),
+                &stackMbi,
+                sizeof(stackMbi)) == sizeof(stackMbi) &&
+            stackMbi.State == MEM_COMMIT &&
+            (stackMbi.Protect & 0xFF) != PAGE_NOACCESS &&
+            (stackMbi.Protect & 0xFF) != PAGE_GUARD) {
+            stackReadable =
+                ReadProcessMemory(
+                    GetCurrentProcess(),
+                    reinterpret_cast<const void*>(exceptionPointers->ContextRecord->Rsp),
+                    stackPointers,
+                    sizeof(stackPointers),
+                    &stackBytesRead) &&
+                stackBytesRead == sizeof(stackPointers);
+        }
+    }
+#endif
+
+    char stackHex[8 * 19 + 1]{};
+    std::size_t stackHexLength = 0;
+    if (stackReadable) {
+        for (std::size_t i = 0; i < std::size(stackPointers); ++i) {
+            const int n = std::snprintf(
+                stackHex + stackHexLength,
+                sizeof(stackHex) - stackHexLength,
+                "%s%llX",
+                i == 0 ? "" : ",",
+                static_cast<unsigned long long>(stackPointers[i]));
+            if (n <= 0) break;
+            stackHexLength += static_cast<std::size_t>(n);
+        }
+    }
+
     char localAppData[MAX_PATH]{};
     const DWORD envLength =
         GetEnvironmentVariableA(
@@ -278,7 +319,7 @@ void write_first_chance_exception_log(EXCEPTION_POINTERS* exceptionPointers) {
     const int length = std::snprintf(
         buffer,
         sizeof(buffer),
-        "[FrontierFirstChance] exception=0x%08lX accessOp=%lu fault=0x%llX rip=0x%llX ripRva=0x%llX thread=%lu module=%s bytes=%s\\n",
+        "[FrontierFirstChance] exception=0x%08lX accessOp=%lu fault=0x%llX rip=0x%llX ripRva=0x%llX thread=%lu module=%s bytes=%s stack=%s\\n",
         static_cast<unsigned long>(code),
         static_cast<unsigned long>(accessOp),
         static_cast<unsigned long long>(faultAddress),
@@ -286,7 +327,8 @@ void write_first_chance_exception_log(EXCEPTION_POINTERS* exceptionPointers) {
         static_cast<unsigned long long>(ripRva),
         static_cast<unsigned long>(threadId),
         modulePathLength != 0 ? modulePath : "<unknown>",
-        bytesReadable ? instructionHex : "<unreadable>");
+        bytesReadable ? instructionHex : "<unreadable>",
+        stackReadable ? stackHex : "<unreadable>");
 
     DWORD written = 0;
     if (length > 0) {
