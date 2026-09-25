@@ -269,9 +269,11 @@ bool NativeInvoker::initialize(std::uintptr_t moduleBase, std::size_t imageSize,
         lastError_.clear();
     }
 
-    // Resolve the RIP-relative global only once. The pointed-to table is initialized
-    // by the game at a later stage, so subsequent calls poll the same storage rather
-    // than rescanning the full .text section every frame.
+    // Do not permanently bind to the first matching RIP-relative global.
+    // RDRMP's command-registration object is initialized later in startup, and
+    // this build can contain more than one matching instruction. Keep probing
+    // every candidate until its table is actually initialized and contains the
+    // historical native-registration sentinel plus at least one known RDR native.
     if (!registrationStorageResolved_) {
         const auto* text = reinterpret_cast<const std::uint8_t*>(moduleBase_ + textRva);
         const auto registrationPattern = BytePattern::parse(kNativeRegistrationPattern);
@@ -286,8 +288,19 @@ bool NativeInvoker::initialize(std::uintptr_t moduleBase, std::size_t imageSize,
             return false;
         }
 
+        constexpr std::uint32_t kRegistrationSentinel = 0xA0AE0C98u;
+        constexpr std::uint32_t kGetPosition = 0x99BD9D6Fu;
+        constexpr std::uint32_t kGetGameState = 0xDD9BD22Bu;
+
         std::size_t candidates = 0;
+        std::size_t initializedCandidates = 0;
         std::uintptr_t selectedStorage = 0;
+        std::uintptr_t selectedTable = 0;
+        std::uint32_t selectedModulator = 0;
+        std::uintptr_t selectedSentinel = 0;
+        std::uintptr_t selectedGetPosition = 0;
+        std::uintptr_t selectedGetGameState = 0;
+
         for (std::size_t offset = 0; offset + bytes.size() <= textSize; ++offset) {
             bool match = true;
             for (std::size_t i = 0; i < bytes.size(); ++i) {
@@ -303,22 +316,47 @@ bool NativeInvoker::initialize(std::uintptr_t moduleBase, std::size_t imageSize,
             if (!PatternScanner::validate_in_module(hit, moduleBase_, imageSize_)) continue;
 
             const auto storage = resolve_rip_target(hit);
-            if (!storage) continue;
+            if (!storage ||
+                !readable(storage, sizeof(std::uintptr_t) + sizeof(std::uint32_t)) ||
+                !PatternScanner::validate_in_module(storage, moduleBase_, imageSize_)) {
+                continue;
+            }
 
-            if (!readable(storage, sizeof(std::uintptr_t))) continue;
-            if (!PatternScanner::validate_in_module(storage, moduleBase_, imageSize_)) {
-                // A RIP-referenced registration object should live inside the main image.
+            std::uintptr_t table = 0;
+            std::uint32_t modulator = 0;
+            if (!read_table(storage, table, modulator)) {
+                continue;
+            }
+
+            const auto sentinelHandler =
+                find_handler_in_table(table, modulator, kRegistrationSentinel);
+            const auto getPositionHandler =
+                find_handler_in_table(table, modulator, kGetPosition);
+            const auto getGameStateHandler =
+                find_handler_in_table(table, modulator, kGetGameState);
+
+            ++initializedCandidates;
+            if (!sentinelHandler || (!getPositionHandler && !getGameStateHandler)) {
                 continue;
             }
 
             selectedStorage = storage;
+            selectedTable = table;
+            selectedModulator = modulator;
+            selectedSentinel = sentinelHandler;
+            selectedGetPosition = getPositionHandler;
+            selectedGetGameState = getGameStateHandler;
             break;
         }
 
         if (!selectedStorage) {
-            char buffer[192]{};
-            std::snprintf(buffer, sizeof(buffer),
-                          "no registration storage: candidates=%zu", candidates);
+            char buffer[224]{};
+            std::snprintf(
+                buffer,
+                sizeof(buffer),
+                "native registration table not ready: candidates=%zu initialized=%zu",
+                candidates,
+                initializedCandidates);
             lastError_ = buffer;
             return false;
         }
@@ -326,9 +364,18 @@ bool NativeInvoker::initialize(std::uintptr_t moduleBase, std::size_t imageSize,
         nativeRegistrationStorage_ = selectedStorage;
         registrationStorageResolved_ = true;
         lastError_.clear();
-        std::fprintf(stderr,
-            "[FrontierNative] resolved registration storage=0x%llX candidates=%zu\n",
-            static_cast<unsigned long long>(nativeRegistrationStorage_), candidates);
+
+        std::fprintf(
+            stderr,
+            "[FrontierNative] resolved registration storage=0x%llX candidates=%zu "
+            "table=0x%llX mod=%u sentinel=%s getPosition=%s getGameState=%s\\n",
+            static_cast<unsigned long long>(nativeRegistrationStorage_),
+            candidates,
+            static_cast<unsigned long long>(selectedTable),
+            selectedModulator,
+            selectedSentinel ? "yes" : "no",
+            selectedGetPosition ? "yes" : "no",
+            selectedGetGameState ? "yes" : "no");
     }
 
     std::uintptr_t table = 0;
