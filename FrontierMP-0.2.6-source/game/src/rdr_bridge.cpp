@@ -224,6 +224,8 @@ bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild 
     build_ = build;
     localPlayerStorage_ = 0;
     actorManagerSlotsStorage_ = 0;
+    historicalOnlineBootstrapStage_ = HistoricalOnlineBootstrapStage::NotStarted;
+    historicalOnlineBootstrapAttempts_ = 0;
     {
         std::lock_guard lock(remoteActorTestMutex_);
         remoteActorTestPending_ = false;
@@ -354,6 +356,177 @@ bool RdrBridge::try_initialize_game_thread_dispatcher() {
     gameThreadDispatcherError_ = "game-thread dispatcher is Windows-only";
     return false;
 #endif
+}
+
+bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
+    logLine.clear();
+
+    if (!initialized_ || !nativeInvoker_.ready() ||
+        !gameThreadDispatcher_.attached()) {
+        return false;
+    }
+
+    auto submit = [this](auto&& task, std::string& error) {
+        error.clear();
+        const bool completed = gameThreadDispatcher_.submit_and_wait(
+            std::forward<decltype(task)>(task),
+            500u,
+            error);
+        if (!completed && error.empty()) {
+            error = "game-thread bootstrap task did not complete";
+        }
+        return completed;
+    };
+
+    switch (historicalOnlineBootstrapStage_) {
+    case HistoricalOnlineBootstrapStage::NotStarted: {
+        ++historicalOnlineBootstrapAttempts_;
+        std::string error;
+        const bool completed = submit(
+            [this]() {
+                std::uintptr_t result = 0u;
+                (void)nativeInvoker_.invoke_raw(
+                    0xB0B4296Au, nullptr, 0u, result);
+            },
+            error);
+        if (!completed) {
+            historicalOnlineBootstrapStage_ =
+                HistoricalOnlineBootstrapStage::Failed;
+            logLine =
+                "[FrontierSession] historical LoadOnline fade request failed: " +
+                error;
+            return false;
+        }
+
+        historicalOnlineBootstrapStage_ =
+            HistoricalOnlineBootstrapStage::WaitingForFade;
+        logLine =
+            "[FrontierSession] historical LoadOnline stage=1 "
+            "HUD_FADE_TO_LOADING_SCREEN sent";
+        return false;
+    }
+
+    case HistoricalOnlineBootstrapStage::WaitingForFade: {
+        bool fading = true;
+        std::uintptr_t authResult = 0u;
+        std::string error;
+        const bool completed = submit(
+            [this, &fading, &authResult]() {
+                std::uintptr_t result = 0u;
+                if (nativeInvoker_.invoke_raw(
+                        0xE5CC6F08u, nullptr, 0u, result)) {
+                    fading = result != 0u;
+                }
+
+                if (fading) {
+                    return;
+                }
+
+                // Exact order recovered from historical LoadOnline:
+                // HUD fade -> UI_EXIT("StartScreen1") -> file lifecycle
+                // events -> NET_AUTHENTICATE_GAMER(0, "Online").
+                std::uintptr_t args[2]{};
+                args[0] =
+                    reinterpret_cast<std::uintptr_t>("StartScreen1");
+                (void)nativeInvoker_.invoke_raw(
+                    0xB58825F5u, args, 1u, result);
+
+                args[0] =
+                    reinterpret_cast<std::uintptr_t>("fileSetForMPLoad");
+                (void)nativeInvoker_.invoke_raw(
+                    0xB58825F5u, args, 1u, result);
+
+                args[0] =
+                    reinterpret_cast<std::uintptr_t>(
+                        "fileStartupChecksComplete");
+                (void)nativeInvoker_.invoke_raw(
+                    0xB58825F5u, args, 1u, result);
+
+                args[0] = 0u;
+                args[1] =
+                    reinterpret_cast<std::uintptr_t>("Online");
+                authResult = 0u;
+                (void)nativeInvoker_.invoke_raw(
+                    0x8E0D7219u, args, 2u, authResult);
+            },
+            error);
+
+        if (!completed) {
+            historicalOnlineBootstrapStage_ =
+                HistoricalOnlineBootstrapStage::Failed;
+            logLine =
+                "[FrontierSession] historical LoadOnline stage=2 failed: " +
+                error;
+            return false;
+        }
+
+        if (fading) {
+            return false;
+        }
+
+        historicalOnlineBootstrapStage_ =
+            HistoricalOnlineBootstrapStage::WaitingForPlayerActor;
+
+        char message[256]{};
+        std::snprintf(
+            message,
+            sizeof(message),
+            "[FrontierSession] historical LoadOnline stage=2 complete "
+            "StartScreen1 exited, file events sent, "
+            "NET_AUTHENTICATE_GAMER result=0x%llX",
+            static_cast<unsigned long long>(authResult));
+        logLine = message;
+        return false;
+    }
+
+    case HistoricalOnlineBootstrapStage::WaitingForPlayerActor: {
+        std::uintptr_t actor = 0u;
+        std::string error;
+        const bool completed = submit(
+            [this, &actor]() {
+                std::uintptr_t args[1]{};
+                // Historical InitSpawn probes GET_PLAYER_ACTOR(Player(-1)).
+                args[0] = static_cast<std::uintptr_t>(0xFFFFFFFFu);
+                std::uintptr_t result = 0u;
+                if (nativeInvoker_.invoke_raw(
+                        0xE8CFDD53u, args, 1u, result)) {
+                    actor = result;
+                }
+            },
+            error);
+
+        if (!completed) {
+            logLine =
+                "[FrontierSession] historical InitSpawn player-actor query failed: " +
+                error;
+            return false;
+        }
+
+        if (actor == 0u) {
+            return false;
+        }
+
+        historicalOnlineBootstrapStage_ =
+            HistoricalOnlineBootstrapStage::Complete;
+
+        char message[256]{};
+        std::snprintf(
+            message,
+            sizeof(message),
+            "[FrontierSession] historical InitSpawn player actor ready actor=0x%08X",
+            static_cast<unsigned>(actor));
+        logLine = message;
+        return true;
+    }
+
+    case HistoricalOnlineBootstrapStage::Complete:
+        return true;
+
+    case HistoricalOnlineBootstrapStage::Failed:
+        return false;
+    }
+
+    return false;
 }
 
 bool RdrBridge::read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bool& worldLoadedKnown,
