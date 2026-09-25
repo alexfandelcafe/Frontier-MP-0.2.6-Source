@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <fstream>
 #include <cmath>
+#include <utility>
 
 namespace frontier::game {
 
@@ -26,6 +27,10 @@ constexpr const char* kLocalPlayerPattern =
 
 constexpr std::uint32_t kNativeGetGameState = 0xDD9BD22B;
 constexpr std::uint32_t kNativeUiSendEvent = 0xB58825F5;
+constexpr std::uint32_t kNativeHudFadeToLoadingScreen = 0xB0B4296A;
+constexpr std::uint32_t kNativeHudIsFading = 0xE5CC6F08;
+constexpr std::uint32_t kNativeUiExit = 0x2DF89C2E;
+constexpr std::uint32_t kNativeNetAuthenticateGamer = 0x8E0D7219;
 constexpr std::uint32_t kNativeStreamingIsWorldLoaded = 0x87B74064;
 constexpr std::uint32_t kNativeIsSimulateStartMultiplayer = 0x9A73C2CD;
 constexpr std::uint32_t kNativeIsStartPosInCommandLine = 0x814D97E8;
@@ -386,7 +391,7 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
             [this]() {
                 std::uintptr_t result = 0u;
                 (void)nativeInvoker_.invoke_raw(
-                    0xB0B4296Au, nullptr, 0u, result);
+                    kNativeHudFadeToLoadingScreen, nullptr, 0u, result);
             },
             error);
         if (!completed) {
@@ -414,7 +419,7 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
             [this, &fading, &authResult]() {
                 std::uintptr_t result = 0u;
                 if (nativeInvoker_.invoke_raw(
-                        0xE5CC6F08u, nullptr, 0u, result)) {
+                        kNativeHudIsFading, nullptr, 0u, result)) {
                     fading = result != 0u;
                 }
 
@@ -429,7 +434,7 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
                 args[0] =
                     reinterpret_cast<std::uintptr_t>("StartScreen1");
                 (void)nativeInvoker_.invoke_raw(
-                    0xB58825F5u, args, 1u, result);
+                    kNativeUiSendEvent, args, 1u, result);
 
                 args[0] =
                     reinterpret_cast<std::uintptr_t>("fileSetForMPLoad");
@@ -447,7 +452,7 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
                     reinterpret_cast<std::uintptr_t>("Online");
                 authResult = 0u;
                 (void)nativeInvoker_.invoke_raw(
-                    0x8E0D7219u, args, 2u, authResult);
+                    kNativeNetAuthenticateGamer, args, 2u, authResult);
             },
             error);
 
