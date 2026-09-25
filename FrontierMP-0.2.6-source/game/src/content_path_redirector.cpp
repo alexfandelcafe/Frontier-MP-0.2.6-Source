@@ -12,7 +12,6 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
-#include <string>
 #include <string_view>
 #include <system_error>
 
@@ -32,9 +31,6 @@ struct HistoricalContentRoute final {
     std::string_view destination;
 };
 
-// RDRMP's historical table contains four source/destination pairs.
-// The source is searched inside the normalized requested path. A request for
-// either ".../boot.sc" or ".../boot.sc.xml" therefore resolves to boot.sc.xml.
 constexpr std::array<HistoricalContentRoute, 4> kHistoricalRdrmpContentRoutes = {{
     {"content/ui/boot.sc", "content/ui/boot.sc.xml"},
     {"content/ui/pausemenu/pausemenuscene.sc",
@@ -45,23 +41,60 @@ constexpr std::array<HistoricalContentRoute, 4> kHistoricalRdrmpContentRoutes = 
      "content/ui/net/profileeditor/main.sc.xml"},
 }};
 
-void log_redirector(const char* message) {
-    std::fprintf(stderr, "%s\n", message);
+bool path_contains_route(const char* path, std::string_view route) {
+    if (path == nullptr || route.empty()) {
+        return false;
+    }
 
-#ifdef _WIN32
-    char localAppData[MAX_PATH]{};
-    const DWORD n = GetEnvironmentVariableA("LOCALAPPDATA", localAppData, MAX_PATH);
-    if (n != 0 && n < MAX_PATH) {
-        std::filesystem::path dir =
-            std::filesystem::path(localAppData) / "FrontierMP" / "logs";
-        std::error_code ec;
-        std::filesystem::create_directories(dir, ec);
-        std::ofstream file(dir / "client.log", std::ios::app);
-        if (file) {
-            file << message << "\n";
+    const std::size_t pathLength = std::strlen(path);
+    if (pathLength < route.size()) {
+        return false;
+    }
+
+    for (std::size_t start = 0; start + route.size() <= pathLength; ++start) {
+        if (start != 0 && path[start - 1] != '/' && path[start - 1] != '\') {
+            continue;
+        }
+
+        bool equal = true;
+        for (std::size_t i = 0; i < route.size(); ++i) {
+            char lhs = path[start + i];
+            const char rhs = route[i];
+
+            if (lhs == '\') {
+                lhs = '/';
+            }
+
+            if (lhs != rhs) {
+                equal = false;
+                break;
+            }
+        }
+
+        if (!equal) {
+            continue;
+        }
+
+        const std::size_t end = start + route.size();
+        if (end == pathLength || path[end] == '/' || path[end] == '\') {
+            return true;
+        }
+
+        // The historical table maps the script path to its XML resource. The
+        // same source entry can therefore be observed either as "...sc" or
+        // "...sc.xml".
+        if (route.size() >= 3 &&
+            route.substr(route.size() - 3) == ".sc" &&
+            path[end] == '.' &&
+            end + 4 <= pathLength &&
+            path[end + 1] == 'x' &&
+            path[end + 2] == 'm' &&
+            path[end + 3] == 'l') {
+            return true;
         }
     }
-#endif
+
+    return false;
 }
 
 #ifdef _WIN32
@@ -117,6 +150,22 @@ bool writable_memory_range(std::uintptr_t address, std::size_t size) {
 
     return true;
 }
+
+std::string compact_path(const std::filesystem::path& path) {
+    const std::string full = path.string();
+    char shortPath[1024]{};
+
+    const DWORD result = GetShortPathNameA(
+        full.c_str(),
+        shortPath,
+        static_cast<DWORD>(std::size(shortPath)));
+
+    if (result != 0 && result < std::size(shortPath)) {
+        return std::string(shortPath, result);
+    }
+
+    return full;
+}
 #endif
 
 } // namespace
@@ -127,6 +176,105 @@ ContentPathRedirector::~ContentPathRedirector() {
     if (active_ == this) {
         active_ = nullptr;
     }
+
+#ifdef _WIN32
+    if (logFile_ != nullptr) {
+        CloseHandle(static_cast<HANDLE>(logFile_));
+        logFile_ = nullptr;
+    }
+#endif
+}
+
+void ContentPathRedirector::log_message(const char* message) const {
+    if (message == nullptr) {
+        return;
+    }
+
+#ifdef _WIN32
+    if (logFile_ != nullptr) {
+        const DWORD length =
+            static_cast<DWORD>(std::strlen(message));
+        DWORD written = 0;
+        WriteFile(
+            static_cast<HANDLE>(logFile_),
+            message,
+            length,
+            &written,
+            nullptr);
+        const char newline = '\n';
+        WriteFile(
+            static_cast<HANDLE>(logFile_),
+            &newline,
+            1,
+            &written,
+            nullptr);
+    }
+#else
+    (void)message;
+#endif
+}
+
+bool ContentPathRedirector::prepare_routes(std::string& error) {
+    error.clear();
+
+    std::size_t enabledCount = 0;
+
+    for (std::size_t i = 0; i < kHistoricalRouteCount; ++i) {
+        const auto& source = kHistoricalRdrmpContentRoutes[i];
+        auto& route = routes_[i];
+
+        route.source = source.source.data();
+        route.sourceLength = source.source.size();
+        route.resolved[0] = '\0';
+        route.resolvedLength = 0;
+        route.enabled = false;
+
+        const std::filesystem::path candidate =
+            contentRoot_ / std::filesystem::path(source.destination);
+
+        std::error_code ec;
+        if (!std::filesystem::is_regular_file(candidate, ec) || ec) {
+            continue;
+        }
+
+#ifdef _WIN32
+        const std::string resolved = compact_path(candidate);
+#else
+        const std::string resolved = candidate.string();
+#endif
+
+        if (resolved.empty()) {
+            continue;
+        }
+
+        if (resolved.size() + 1 > sizeof(route.resolved)) {
+            continue;
+        }
+
+        // The RDR asset path call was designed around legacy path buffers.
+        // Keep a conservative bound so a deep Frontier checkout can never
+        // turn the historical redirect into an oversized write.
+        if (resolved.size() + 1 > kMaxRedirectPathBytes) {
+            continue;
+        }
+
+        std::memcpy(
+            route.resolved,
+            resolved.c_str(),
+            resolved.size() + 1);
+        route.resolvedLength = resolved.size();
+        route.enabled = true;
+        ++enabledCount;
+    }
+
+    if (enabledCount == 0) {
+        error =
+            "fullReadPath hook: no historical content routes are available "
+            "within the safe path-length limit";
+        return false;
+    }
+
+    return true;
 }
 
 bool ContentPathRedirector::install(
@@ -139,6 +287,7 @@ bool ContentPathRedirector::install(
     error.clear();
     original_ = nullptr;
     contentRoot_.clear();
+    routes_ = {};
     redirectLogCount_.store(0);
 
     if (text == nullptr || textSize == 0 || moduleBase == 0 || imageSize == 0) {
@@ -173,6 +322,42 @@ bool ContentPathRedirector::install(
         return false;
     }
 
+    if (!prepare_routes(error)) {
+        return false;
+    }
+
+#ifdef _WIN32
+    char localAppData[MAX_PATH]{};
+    const DWORD localAppDataLength =
+        GetEnvironmentVariableA(
+            "LOCALAPPDATA",
+            localAppData,
+            static_cast<DWORD>(std::size(localAppData)));
+
+    if (localAppDataLength != 0 &&
+        localAppDataLength < std::size(localAppData)) {
+        const std::filesystem::path logDir =
+            std::filesystem::path(localAppData) / "FrontierMP" / "logs";
+
+        std::error_code logError;
+        std::filesystem::create_directories(logDir, logError);
+
+        const std::filesystem::path logPath = logDir / "client.log";
+        const HANDLE file = CreateFileA(
+            logPath.string().c_str(),
+            FILE_APPEND_DATA,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            nullptr,
+            OPEN_ALWAYS,
+            FILE_ATTRIBUTE_NORMAL,
+            nullptr);
+
+        if (file != INVALID_HANDLE_VALUE) {
+            logFile_ = file;
+        }
+    }
+#endif
+
     std::string hookError;
     if (!hook_.install(
             *hit,
@@ -192,15 +377,33 @@ bool ContentPathRedirector::install(
 
     active_ = this;
 
-    char message[512]{};
+    char message[640]{};
     std::snprintf(
         message,
         sizeof(message),
-        "[FrontierContent] fullReadPath hook attached target=0x%llX rva=0x%llX root=%s",
+        "[FrontierContent] fullReadPath hook attached target=0x%llX rva=0x%llX "
+        "root=%s safeMax=%zu",
         static_cast<unsigned long long>(*hit),
         static_cast<unsigned long long>(*hit - moduleBase),
-        contentRoot_.string().c_str());
-    log_redirector(message);
+        contentRoot_.string().c_str(),
+        kMaxRedirectPathBytes);
+    log_message(message);
+
+    for (std::size_t i = 0; i < kHistoricalRouteCount; ++i) {
+        if (!routes_[i].enabled) {
+            continue;
+        }
+
+        char routeMessage[640]{};
+        std::snprintf(
+            routeMessage,
+            sizeof(routeMessage),
+            "[FrontierContent] route prepared source=%s resolved=%s bytes=%zu",
+            routes_[i].source,
+            routes_[i].resolved,
+            routes_[i].resolvedLength + 1);
+        log_message(routeMessage);
+    }
 
     return true;
 }
@@ -218,24 +421,18 @@ char __fastcall ContentPathRedirector::full_read_path_hook(
 char ContentPathRedirector::invoke_and_redirect(
     std::uintptr_t self,
     char* path) {
-    // Historical RDRMP invokes the original first and only applies its
-    // redirect when fullReadPath reports success.
+    // The historical RDRMP hook passes through to the original first and
+    // redirects only after a successful resolution.
     const char originalResult = original_(self, path);
 
     if (originalResult == 0 || path == nullptr || *path == '\0') {
         return originalResult;
     }
 
-    std::string requested(path);
-    for (char& ch : requested) {
-        if (ch == '\\') {
-            ch = '/';
-        }
-    }
-
-    const HistoricalContentRoute* matchedRoute = nullptr;
-    for (const auto& route : kHistoricalRdrmpContentRoutes) {
-        if (requested.find(route.source) != std::string::npos) {
+    const PreparedRoute* matchedRoute = nullptr;
+    for (std::size_t i = 0; i < routes_.size(); ++i) {
+        const auto& route = routes_[i];
+        if (route.enabled && path_contains_route(path, route.source)) {
             matchedRoute = &route;
             break;
         }
@@ -245,20 +442,10 @@ char ContentPathRedirector::invoke_and_redirect(
         return originalResult;
     }
 
-    const std::filesystem::path candidate =
-        contentRoot_ / std::filesystem::path(matchedRoute->destination);
-
-    std::error_code ec;
-    if (!std::filesystem::is_regular_file(candidate, ec) || ec) {
-        return originalResult;
-    }
-
-    const std::string resolved = candidate.string();
-
 #ifdef _WIN32
     if (!writable_memory_range(
             reinterpret_cast<std::uintptr_t>(path),
-            resolved.size() + 1)) {
+            matchedRoute->resolvedLength + 1)) {
         const auto logIndex = redirectLogCount_.fetch_add(1);
         if (logIndex < 16u) {
             char message[640]{};
@@ -267,16 +454,19 @@ char ContentPathRedirector::invoke_and_redirect(
                 sizeof(message),
                 "[FrontierContent] redirect skipped: destination buffer unsafe "
                 "requested=%s bytes=%zu resolved=%s",
-                requested.c_str(),
-                resolved.size() + 1,
-                resolved.c_str());
-            log_redirector(message);
+                path,
+                matchedRoute->resolvedLength + 1,
+                matchedRoute->resolved);
+            log_message(message);
         }
         return originalResult;
     }
 #endif
 
-    std::memcpy(path, resolved.c_str(), resolved.size() + 1);
+    std::memcpy(
+        path,
+        matchedRoute->resolved,
+        matchedRoute->resolvedLength + 1);
 
     const auto logIndex = redirectLogCount_.fetch_add(1);
     if (logIndex < 16u) {
@@ -284,10 +474,11 @@ char ContentPathRedirector::invoke_and_redirect(
         std::snprintf(
             message,
             sizeof(message),
-            "[FrontierContent] redirect %s -> %s",
-            requested.c_str(),
-            resolved.c_str());
-        log_redirector(message);
+            "[FrontierContent] redirect %s -> %s bytes=%zu",
+            path,
+            matchedRoute->resolved,
+            matchedRoute->resolvedLength + 1);
+        log_message(message);
     }
 
     return originalResult;
