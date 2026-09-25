@@ -268,37 +268,6 @@ bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild 
         return false;
     }
 
-    // The historical RDRMP client redirects selected game assets from its own
-    // distribution before the frontend starts. The first Frontier implementation
-    // is diagnostic-only: install the fullReadPath hook and observe its arguments
-    // before changing returned paths.
-    {
-        HMODULE clientModule = GetModuleHandleW(L"FrontierClient.dll");
-        if (clientModule) {
-            wchar_t clientPath[MAX_PATH]{};
-            const DWORD clientPathLength =
-                GetModuleFileNameW(clientModule, clientPath, MAX_PATH);
-            if (clientPathLength != 0 && clientPathLength < MAX_PATH) {
-                const std::filesystem::path overlayRoot =
-                    std::filesystem::path(std::wstring(clientPath, clientPathLength))
-                        .parent_path() / L"game";
-                std::string assetOverlayError;
-                if (!assetOverlay_.initialize(
-                        moduleBase_,
-                        fingerprint.textRva,
-                        fingerprint.textSize,
-                        overlayRoot,
-                        assetOverlayError)) {
-                    write_bridge_log_line(
-                        ("[FrontierAsset] initialization failed: " + assetOverlayError).c_str());
-                }
-            } else {
-                write_bridge_log_line("[FrontierAsset] unable to resolve FrontierClient.dll path");
-            }
-        } else {
-            write_bridge_log_line("[FrontierAsset] FrontierClient.dll module not found");
-        }
-    }
 
     initialized_ = true;
     return true;
