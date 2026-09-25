@@ -4,22 +4,36 @@
 [FrontierClient] game bridge initialized; local-player symbol and actor-manager paths resolved
 [FrontierClient] initialized sessionMode=freeroam
 [FrontierClient] worker initialization result=success
-[FrontierClient] bootstrap event name=Local\FrontierMP_Bootstrap_1780_7114500
+[FrontierClient] bootstrap event name=Local\FrontierMP_Bootstrap_6468_7518109
 [FrontierClient] bootstrap event signaled
 [FrontierSession] waiting for native invoker registration table error=registration table not initialized: storage=0x142B0D210 table=0 mod=0
-[FrontierClient] connected as player 1 serverTick=37470
+[FrontierClient] connected as player 1 serverTick=562
+[FrontierClient] locomotion test phase=walk-Z cycleTime=28.1 playerId=65000
+[FrontierClient] snapshot tick=562 players=2 remoteEntities=1
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] locomotion test phase=walk+Z cycleTime=17.55 playerId=65000
-[FrontierClient] snapshot tick=37471 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=37473 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=37474 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=37476 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=37478 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=37479 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=37480 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=37482 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=37483 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=37485 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=37487 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=37489 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=37490 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=564 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=566 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=567 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=569 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=571 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=573 players=2 remoteEntities=1
+[FrontierClient] worker starting
+[FrontierClient] solo remote-player test enabled
+[FrontierContent] fullReadPath hook attached target=0x1400C8E60 rva=0xC8E60 root=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game
+[FrontierClient] game bridge initialized; local-player symbol and actor-manager paths resolved
+[FrontierClient] initialized sessionMode=freeroam
+[FrontierClient] worker initialization result=success
+[FrontierClient] bootstrap event name=Local\FrontierMP_Bootstrap_4120_8368437
+[FrontierClient] bootstrap event signaled
+[FrontierSession] waiting for native invoker registration table error=native registration table not ready: candidates=1 initialized=0
+[FrontierClient] connected as player 1 serverTick=385
+[FrontierClient] locomotion test phase=walk+Z cycleTime=19.25 playerId=65000
+[FrontierClient] snapshot tick=385 players=2 remoteEntities=1
+[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
+[FrontierClient] snapshot tick=387 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=388 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=390 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=392 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=394 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=396 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=398 players=2 remoteEntities=1
