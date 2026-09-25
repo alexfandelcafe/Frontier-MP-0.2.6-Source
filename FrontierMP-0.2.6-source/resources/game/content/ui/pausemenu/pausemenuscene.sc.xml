@@ -1,0 +1,305 @@
+<scxml
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="file://t:\mc4\assets\tune\ui\scxml_mc4.xsd">
+	<rdrPauseMenuScene id="PauseMenuScene" movie="pause_main">
+		
+    <onunfocused expr="SetFlashInt('mp_HUD','popOff',0)"></onunfocused>
+		<onunfocused expr="SetFlashInt('mp_HUD','popOn',0)"></onunfocused>
+		<onunfocused expr="SetFlashInt('popup','popOff',0)"></onunfocused>
+		<onunfocused expr="SetFlashInt('popup','popOn',0)"></onunfocused>
+
+		<onfocused expr="SetFlashInt('mp_HUD','popOff',1)"></onfocused>
+		<onfocused expr="SetFlashInt('mp_HUD','popOn',1)"></onfocused>
+		<onfocused expr="SetFlashInt('popup','popOff',1)"></onfocused>
+		<onfocused expr="SetFlashInt('popup','popOn',1)"></onfocused>
+
+    <onfocused expr="Disable(PM_Weapons)"></onfocused>
+    <onfocused expr="Disable(PM_Outfits)"></onfocused>
+    <onfocused expr="Disable(PM_Journal)"></onfocused>
+    <onfocused expr="Disable(PM_Stats)"></onfocused>
+		
+    <!--1 day before ship hack-->
+		<onfocused expr="Exit(titles)"></onfocused>
+		<onfocused expr="Exit(IntroTitle1)"></onfocused>
+		<onfocused expr="Exit(IntroTitle2)"></onfocused>
+		<onfocused expr="Exit(IntroTitle3)"></onfocused>
+		<onfocused expr="Exit(IntroSpeckles)"></onfocused>
+		<onfocused expr="Exit(IntroCredits)"></onfocused>
+		<onpaint expr="SetFlashInt('pause_main','template',40)"></onpaint>
+		<onactivate	expr="StreamMovie('pause_main')"></onactivate>
+		<onactivate expr="StackPush(PauseMenuScene)"></onactivate>
+		<!-- <onactivate expr="Enter(MapLayer)"></onactivate> -->
+		<ondeactivate	expr="Exit(MapLayer)"></ondeactivate>
+		<ondeactivate	expr="UnstreamMovie('pause_main')"></ondeactivate>
+		<onactivate	expr="StreamStringTable('RandomCharMissions')"></onactivate>
+		<ondeactivate	expr="UnstreamStringTable('RandomCharMissions')"></ondeactivate>
+
+    <onfocused expr="Enter(PauseMenu)"></onfocused>
+		<onfocused expr="SendEvent('pauseStart')"></onfocused>
+		
+    <transition event="@UI.CANCEL*RELEASED" target="StackPop()" consume="true"></transition>
+		<transition event="@PAUSE.PAUSE*RELEASED" target="StackPop()" consume="true"></transition>
+
+		<UIList id="PauseMenu" allowWrap="true" allowMouseHoverSelect="true" allowMouseAutoSelect="true">
+			<onfocused expr="Enter(PauseMenu_Main_Prompts)"></onfocused>
+			<onunfocused expr="Exit(PauseMenu_Main_Prompts)"></onunfocused>
+			<onfocused expr="Enter(clock)"></onfocused>
+			<onfocused expr="Enter(pauseMoney)"></onfocused>
+			<onunfocused expr="Exit(pauseMoney)"></onunfocused>
+			<onfocused expr="Enter(pauseMoneyValue)"></onfocused>
+			<onunfocused expr="Exit(pauseMoneyValue)"></onunfocused>
+			<onunfocused expr="Exit(clock)"></onunfocused>
+			<UILabel id="PM_Map" text="PM_Map">
+				<!--onfocused expr="Enter(MapLayer)"></onfocused-->
+				<onfocused expr="Enter(PauseMenu_Main_Prompts)"></onfocused>
+				<onfocused expr="SetRegistryValueInt('skipfade',0)"></onfocused>
+				<transition event="@UI.ACCEPT*RELEASED" consume="true">
+					<action expr="Exit(PauseMenu_Main_Prompts)"></action>
+					<action expr="unfocus(PauseMenu)"></action>
+					<action expr="Enter(MapLayer)"></action>
+					<action expr="focus(MapLayer)"></action>
+					<action expr="SendEvent('AUDIO_StartMenuItemSelected')"></action>
+				</transition>
+				<transition event="@UI.CANCEL*RELEASED">
+					<action	expr="PlaySound('HUD_MENU_BACK_MASTER')"></action>
+					<action expr="StackPop()"></action>
+				</transition>
+			</UILabel>
+			<UILabel id="PM_Weapons" text="SatchelTab_Wares">
+				<onfocused expr="Exit(MapLayer)"></onfocused>
+				<onfocused expr="SetRegistryValueInt('skipfade',0)"></onfocused>
+				<!--<onunfocused expr="Exit(PauseMenu_Main_Prompts)"></onunfocused>-->
+				<onfocused expr="Enter(PauseMenu_Main_Prompts)"></onfocused>
+				<transition event="@UI.ACCEPT*RELEASED" consume="true">
+					<!--<action	expr="Exit(MapLayer)"></action>-->
+					<action expr="Exit(PauseMenu_Main_Prompts)"></action>
+					<action expr="unfocus(PauseMenu)"></action>
+					<action expr="Enter(SatchelTab_Weapons)"></action>
+					<action expr="Enter(SatchelMenu)"></action>
+					<action expr="SendEvent('AUDIO_StartMenuItemSelected')"></action>
+				</transition>
+				<!-- We have to do this because the satchel is defined outside of PauseMenuScene-->
+				<!--<ondeactivate	expr="Exit(SatchelMenu)"></ondeactivate>-->
+			</UILabel>
+			<UILabel id="PM_Outfits" text="SatchelTab_Outfits">
+				<onfocused expr="Enter(PauseMenu_Main_Prompts)"></onfocused>
+				<onfocused expr="SetRegistryValueInt('skipfade',0)"></onfocused>
+				<transition event="@UI.ACCEPT*RELEASED" consume="true">
+					<action expr="OutfitList.ToggleNoPauseFlag(false)"></action>
+					<action expr="Exit(PauseMenu_Main_Prompts)"></action>
+					<action expr="unfocus(PauseMenu)"></action>
+					<action expr="Enter(OutfitPanel)"></action>
+					<action expr="SendEvent('AUDIO_StartMenuItemSelected')"></action>
+				</transition>
+			</UILabel>
+			<UILabel id="PM_Journal" text="PM_Journal">
+				<onfocused expr="Enter(PauseMenu_Main_Prompts)"></onfocused>
+				<onfocused expr="SetRegistryValueInt('skipfade',0)"></onfocused>
+				<transition event="@UI.ACCEPT*RELEASED" consume="true">
+					<action expr="Exit(PauseMenu_Main_Prompts)"></action>
+					<action expr="unfocus(PauseMenu)"></action>
+					<action expr="Enter(JournalLayer)"></action>
+					<action expr="SendEvent('AUDIO_StartMenuItemSelected')"></action>
+				</transition>
+			</UILabel>
+			<UILabel id="PM_Options" text="PM_Options">
+				<onfocused expr="Enter(PauseMenu_Main_Prompts)"></onfocused>
+				<onfocused expr="SetRegistryValueInt('skipfade',0)"></onfocused>
+				<transition event="@UI.ACCEPT*RELEASED" consume="true">
+					<action expr="Exit(PauseMenu_Main_Prompts)"></action>
+					<action expr="unfocus(PauseMenu)"></action>
+					<action expr="Enter(OptionsLayer)"></action>
+					<action expr="SendEvent('AUDIO_StartMenuItemSelected')"></action>
+				</transition>
+			</UILabel>
+			<UILabel id="PM_Stats" text="PM_Stats">
+				<onfocused expr="Enter(PauseMenu_Main_Prompts)"></onfocused>
+				<onfocused expr="SetRegistryValueInt('skipfade',0)"></onfocused>
+				<transition event="@UI.ACCEPT*RELEASED" consume="true">
+					<action expr="Exit(PauseMenu_Main_Prompts)"></action>
+					<action expr="unfocus(PauseMenu)"></action>
+					<action expr="Enter(StatLayer)"></action>
+					<action expr="SendEvent('AUDIO_StartMenuItemSelected')"></action>
+				</transition>
+			</UILabel>
+			<!-- <UILabel id="PM_Network" text="PM_Network"><onfocused expr="Enter(PauseMenu_Main_Prompts)"></onfocused><onfocused expr="SetRegistryValueInt('skipfade',0)"></onfocused><transition event="@UI.ACCEPT*RELEASED" consume="true"><action expr="Exit(PauseMenu_Main_Prompts)"></action><action expr="unfocus(PauseMenu)"></action><action expr="Enter(NetworkingLayerOffline)"></action><action expr="SendEvent('AUDIO_StartMenuItemSelected')"></action></transition></UILabel><UILabel id="PM_SocialClub" text="SClubTab_Challenges"><onfocused expr="Exit(MapLayer)"></onfocused><onfocused expr="SetRegistryValueInt('skipfade',0)"></onfocused><onunfocused expr="Exit(PauseMenu_Main_Prompts)"></onunfocused><onfocused expr="Enter(PauseMenu_Main_Prompts)"></onfocused><onunfocused expr="Exit(SClub_EventHandler)"></onunfocused><onfocused expr="Enter(SClub_EventHandler)"></onfocused><transition event="@UI.ACCEPT*RELEASED" consume="true"><action expr="SendEvent('AUDIO_StartMenuItemSelected')"></action><action expr="Exit(PauseMenu_Main_Prompts)"></action><action expr="unfocus(PauseMenu)"></action><action expr="Enter(SocialClubLayer)"></action></transition></UILabel><UILabel id="PM_Leaderboards" text="StatTab_Leaderboards"><onfocused expr="Exit(MapLayer)"></onfocused><onfocused expr="SetRegistryValueInt('skipfade',0)"></onfocused><onunfocused expr="Exit(PauseMenu_Main_Prompts)"></onunfocused><onfocused expr="Enter(PauseMenu_Main_Prompts)"></onfocused><transition event="@UI.ACCEPT*RELEASED" consume="true"><action expr="Exit(PauseMenu_Main_Prompts)"></action><action expr="Enter(LB_Prompts)"></action><action expr="Unfocus(PauseMenu)"></action><action expr="Activate(NetStatsMgr)"></action><action expr="Enter(LB_Manager)"></action><action expr="Enter(LB_Categories)"></action><action expr="SendEvent('AUDIO_StartMenuItemSelected')"></action></transition></UILabel> -->
+			<UILabel id="PM_Load" text="PM_Load">
+				<onfocused expr="Exit(MapLayer)"></onfocused>
+				<onfocused expr="SetRegistryValueInt('skipfade',0)"></onfocused>
+				<onunfocused expr="Exit(PauseMenu_Main_Prompts)"></onunfocused>
+				<onfocused expr="Enter(PauseMenu_Main_Prompts)"></onfocused>
+				<transition event="@UI.ACCEPT*RELEASED" consume="true">
+					<action expr="Exit(PauseMenu_Main_Prompts)"></action>
+					<action expr="Exit(MapLayer)"></action>
+					<action expr="unfocus(PauseMenu)"></action>
+					<action expr="Enter(SaveGameLayer)"></action>
+					<action expr="SendEvent('AUDIO_StartMenuItemSelected')"></action>
+					<action expr="SendEvent('ShowVersionNumber')"></action>
+				</transition>
+			</UILabel>
+		</UIList>
+
+		<onunfocused expr="SendEvent('pauseEnd')"></onunfocused>
+
+    <include src="Map.sc.xml"></include>
+		<include src="Journal.sc.xml"></include>
+		<include src="Options.sc.xml"></include>
+		<include src="Stats.sc.xml"></include>
+		<include src="Networking.sc.xml"></include>
+		<include src="SocialClub.sc.xml"></include>
+		<include src="SaveGame.sc.xml"></include>
+		<include src="Wares.sc.xml"></include>
+		<include src="Outfit.sc.xml"></include>
+		<include src="NetStats/Main.sc"></include>
+		
+    <UILayer id="SClub_EventHandler">
+			<!-- Social Club authentication -->
+			<transition event="@UI.ACCEPT*RELEASED">
+				<action expr="SendEvent('AUDIO_StartMenuItemSelected')"></action>
+				<action expr="Exit(PauseMenu_Main_Prompts)"></action>
+				<action expr="unfocus(PauseMenu)"></action>
+				<action expr="Enter(SocialClubLayer)"></action>
+			</transition>
+		</UILayer>
+
+		<UILayer id="OutfitMenuProxy" enterParent="yeah">
+
+			<onactivate expr="Exit(PauseMenu_Main_Prompts)"></onactivate>
+			<onactivate expr="PauseMenu.SetCurrentSelectionCB('PM_Outfits',false)"></onactivate>
+			<onactivate expr="unfocus(PauseMenu)"></onactivate>
+			<onactivate expr="Enter(OutfitPanel)"></onactivate>
+			<ondeactivate expr="Exit(OutfitPanel)"></ondeactivate>
+		</UILayer>
+
+		<UILayer id="MapProxy" enterParent="yeah">
+
+			<onactivate expr="Exit(PauseMenu_Main_Prompts)"></onactivate>
+			<onactivate expr="unfocus(PauseMenu)"></onactivate>
+			<onactivate expr="Enter(MapLayer)"></onactivate>
+			<onactivate expr="focus(MapLayer)"></onactivate>
+		</UILayer>
+
+		<UILayer id="JournalMenuProxy" enterParent="yeah">
+
+			<onactivate expr="Exit(PauseMenu_Main_Prompts)"></onactivate>
+			<onactivate expr="unfocus(PauseMenu)"></onactivate>
+			<onactivate expr="PauseMenu.SetCurrentSelectionCB('PM_Journal',false)"></onactivate>
+			<onactivate expr="Enter(JournalLayer)"></onactivate>
+			<ondeactivate expr="Exit(JournalLayer)"></ondeactivate>
+		</UILayer>
+
+		<UIPromptStrip id="PauseMenu_Main_Prompts" flashObject="_global.prompt">
+
+			<UIButton icon="{@UI.ACCEPT}" text="Common_Select"></UIButton>
+			<UIButton icon="{@UI.CANCEL}" text="Common_Back"></UIButton>
+			<UIButton icon="{@UI.NAVIGATE_UP}{@UI.NAVIGATE_DOWN}" text="Common_Scroll"></UIButton>
+		</UIPromptStrip>
+
+		<UIClock id="clock" movie="pause_main" flashObject="clock"></UIClock>
+		<UILabel id="pauseMoney" movie="pause_main" flashObject="money" text="StatTab_Money"></UILabel>
+		<UILabel id="pauseMoneyValue" movie="pause_main" flashObject="clock" text="Dmoney_amount"></UILabel>
+		<UILabel id="pauseBounty" movie="pause_main" flashObject="bounty" text="PlayerBountyTitle_pause"></UILabel>
+		<UILabel id="pauseBountyValue" movie="pause_main" flashObject="bountyamount" text="PlayerBounty"></UILabel>
+
+		<!-- Had to move this outside of the social club layer so we can kick the player out and show thie dialog -->
+		<UIMessageBox id ="popup_cheatInput" movie="popup">
+    
+			<data name="title" expr="RDR2_KEYBOARD_TITLE_CHEATS"></data>
+			<data name="description" expr="Enter_Cheat_Dialog"></data>
+			
+      <transition event="@UI.ACCEPT*RELEASED" consume="false">
+
+				<action expr="Exit(popup_cheatInput)"></action>
+				<action expr="SendEvent('UI_CheatEntered')"></action>
+			</transition>
+			
+      <transition event="@UI.VKB_CANCEL*RELEASED" consume="false">
+
+				<action expr="Exit(popup_cheatInput)"></action>
+				<action expr="SendEvent('UI_CheatCancelled')"></action>
+			</transition>
+			
+      <UIPromptStrip>
+
+				<UIButton text="Common_Ok" icon="{@UI.ACCEPT}"></UIButton>
+				<UIButton text="Common_Cancel" icon="{@UI.VKB_CANCEL}"></UIButton>
+			</UIPromptStrip>
+		</UIMessageBox>
+
+		<UIMessageBox id ="popup_cheatUnlocked" movie="popup">
+
+			<transition event="@UI.ACCEPT*RELEASED" consume="false">
+
+				<action expr="Exit(popup_cheatUnlocked)"></action>
+			</transition>
+
+			<UIPromptStrip>
+
+				<UIButton text="Common_Ok" icon="{@UI.ACCEPT}"></UIButton>
+			</UIPromptStrip>
+		</UIMessageBox>
+
+		<UIMessageBox id ="popup_cheatEnabled" movie="popup">
+
+			<data name="alert"></data>
+			<data name="description" expr="Cheat_Enabled_Alert"></data>
+
+			<transition event="@UI.ACCEPT*RELEASED" consume="false">
+
+				<action expr="Exit(popup_cheatEnabled)"></action>
+				<action expr="SendEvent('UI_CheatAccepted')"></action>
+			</transition>
+
+			<transition event="@UI.CANCEL*RELEASED" consume="false">
+
+				<action expr="Exit(popup_cheatEnabled)"></action>
+				<action expr="SendEvent('UI_CheatDeclined')"></action>
+			</transition>
+
+			<UIPromptStrip>
+
+				<UIButton text="Common_Ok" icon="{@UI.ACCEPT}"></UIButton>
+				<UIButton text="Common_Cancel" icon="{@UI.CANCEL}"></UIButton>
+			</UIPromptStrip>
+		</UIMessageBox>
+
+		<UIMessageBox id ="popup_cheatEnabledAccepted" movie="popup">
+
+			<data name="warning"></data>
+			<data name="description" expr="Cheat_Enabled_Warning"></data>
+
+			<transition event="@UI.ACCEPT*RELEASED" consume="false">
+
+				<action expr="Exit(popup_cheatEnabledAccepted)"></action>
+			</transition>
+
+			<UIPromptStrip>
+
+				<UIButton text="Common_Ok" icon="{@UI.ACCEPT}"></UIButton>
+			</UIPromptStrip>
+		</UIMessageBox>
+
+		<uiobject id ="SG_NewGameConfirmation" class="UIMessageBox" movie="popup">
+			<data name="warning"></data>
+			<data name="description" expr="Save_Dialog_NewGameConfirmation"></data>
+			<UIPromptStrip>
+				<uiobject text="Common_Yes" class="UIButton" icon="{@UI.ACCEPT}">
+					<transition event="@UI.ACCEPT*RELEASED" consume="false">
+						<action expr="Exit(SG_NewGameConfirmation)"></action>
+						<action expr="SendEvent('fileStartNewGame')"></action>
+					</transition>
+				</uiobject>
+				<uiobject text="Common_No" class="UIButton" icon="{@UI.CANCEL}">
+					<transition event="@UI.CANCEL*RELEASED" consume="false">
+						<action expr="Exit(SG_NewGameConfirmation)"></action>
+					</transition>
+				</uiobject>
+			</UIPromptStrip>
+		</uiobject>
+		<UILayer id="PauseMenuIsOnline">
+			<transition event="@GENERIC.INVENTORY*RELEASED">
+				<action expr="StackPop()"></action>
+				<action expr="StackPush(OL_NetworkingMenu)"></action>
+			</transition>
+		</UILayer>
+	</rdrPauseMenuScene>
+</scxml>
