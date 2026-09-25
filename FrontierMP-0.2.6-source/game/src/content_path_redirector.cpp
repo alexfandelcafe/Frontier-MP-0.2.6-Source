@@ -382,11 +382,27 @@ bool ContentPathRedirector::install(
         message,
         sizeof(message),
         "[FrontierContent] fullReadPath hook attached target=0x%llX rva=0x%llX "
-        "root=%s safeMax=%zu",
+        "root=%s safeMax=%zu prologue=%02X %02X %02X %02X %02X %02X %02X %02X "
+        "%02X %02X %02X %02X %02X %02X %02X",
         static_cast<unsigned long long>(*hit),
         static_cast<unsigned long long>(*hit - moduleBase),
         contentRoot_.string().c_str(),
-        kMaxRedirectPathBytes);
+        kMaxRedirectPathBytes,
+        static_cast<unsigned int>(reinterpret_cast<const std::uint8_t*>(*hit)[0]),
+        static_cast<unsigned int>(reinterpret_cast<const std::uint8_t*>(*hit)[1]),
+        static_cast<unsigned int>(reinterpret_cast<const std::uint8_t*>(*hit)[2]),
+        static_cast<unsigned int>(reinterpret_cast<const std::uint8_t*>(*hit)[3]),
+        static_cast<unsigned int>(reinterpret_cast<const std::uint8_t*>(*hit)[4]),
+        static_cast<unsigned int>(reinterpret_cast<const std::uint8_t*>(*hit)[5]),
+        static_cast<unsigned int>(reinterpret_cast<const std::uint8_t*>(*hit)[6]),
+        static_cast<unsigned int>(reinterpret_cast<const std::uint8_t*>(*hit)[7]),
+        static_cast<unsigned int>(reinterpret_cast<const std::uint8_t*>(*hit)[8]),
+        static_cast<unsigned int>(reinterpret_cast<const std::uint8_t*>(*hit)[9]),
+        static_cast<unsigned int>(reinterpret_cast<const std::uint8_t*>(*hit)[10]),
+        static_cast<unsigned int>(reinterpret_cast<const std::uint8_t*>(*hit)[11]),
+        static_cast<unsigned int>(reinterpret_cast<const std::uint8_t*>(*hit)[12]),
+        static_cast<unsigned int>(reinterpret_cast<const std::uint8_t*>(*hit)[13]),
+        static_cast<unsigned int>(reinterpret_cast<const std::uint8_t*>(*hit)[14]));
     log_message(message);
 
     for (std::size_t i = 0; i < kHistoricalRouteCount; ++i) {
@@ -463,11 +479,6 @@ char ContentPathRedirector::invoke_and_redirect(
     }
 #endif
 
-    std::memcpy(
-        path,
-        matchedRoute->resolved,
-        matchedRoute->resolvedLength + 1);
-
     const auto logIndex = redirectLogCount_.fetch_add(1);
     if (logIndex < 16u) {
         char message[640]{};
@@ -480,6 +491,11 @@ char ContentPathRedirector::invoke_and_redirect(
             matchedRoute->resolvedLength + 1);
         log_message(message);
     }
+
+    std::memcpy(
+        path,
+        matchedRoute->resolved,
+        matchedRoute->resolvedLength + 1);
 
     return originalResult;
 }
