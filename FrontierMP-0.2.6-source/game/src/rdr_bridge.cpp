@@ -230,7 +230,13 @@ bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild 
     localPlayerStorage_ = 0;
     actorManagerSlotsStorage_ = 0;
     historicalOnlineBootstrapStage_ = HistoricalOnlineBootstrapStage::NotStarted;
+    historicalOnlineBootstrapTask_ = HistoricalOnlineBootstrapTask::None;
     historicalOnlineBootstrapAttempts_ = 0;
+    historicalOnlineBootstrapTaskPending_.store(false, std::memory_order_release);
+    historicalOnlineBootstrapTaskDone_.store(false, std::memory_order_release);
+    historicalOnlineBootstrapTaskFailed_.store(false, std::memory_order_release);
+    historicalOnlineBootstrapTaskResult_.store(0u, std::memory_order_release);
+    historicalOnlineBootstrapAuthResult_.store(0u, std::memory_order_release);
     {
         std::lock_guard lock(remoteActorTestMutex_);
         remoteActorTestPending_ = false;
