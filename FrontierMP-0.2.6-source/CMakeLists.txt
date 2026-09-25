@@ -105,10 +105,10 @@ if(WIN32 AND FRONTIER_BUILD_CLIENT)
     # changing RDR.exe's working directory.
     add_custom_command(TARGET frontier_client POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory
-                "$<TARGET_FILE_DIR:frontier_client>/game/content/ui"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_CURRENT_SOURCE_DIR}/resources/game/content/ui/boot.sc.xml"
-                "$<TARGET_FILE_DIR:frontier_client>/game/content/ui/boot.sc.xml"
+                "$<TARGET_FILE_DIR:frontier_client>/game/content"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_CURRENT_SOURCE_DIR}/resources/game/content"
+                "$<TARGET_FILE_DIR:frontier_client>/game/content"
         VERBATIM
     )
 endif()
