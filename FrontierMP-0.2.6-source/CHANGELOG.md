@@ -1,3 +1,9 @@
+## 0.2.68
+- Reproduce the historical RDRMP `rage::fiAssetManager::fullReadPath` hook in FrontierClient.
+- Redirect the eight historical RDRMP UI content paths into the external `FrontierClient.dll/game/content` package.
+- Keep RDR.exe's original installation directory as its working directory; content routing is now performed by the game-facing hook instead of CWD changes.
+- Do not introduce any local-player creation or native Player bootstrap as part of the content-loader work.
+
 ## 0.2.67
 - Keep the historical RDRMP-style `game/content` package beside FrontierClient.dll.
 - Revert the launcher working-directory experiment: RDR.exe must continue starting with its own installation directory as the process working directory until the historical asset/content loader is reproduced.
