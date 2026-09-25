@@ -3,7 +3,6 @@
 #include "frontier/game/build_fingerprint.hpp"
 #include "frontier/game/native_invoker.hpp"
 #include "frontier/game/game_thread_dispatcher.hpp"
-#include "frontier/game/asset_overlay.hpp"
 #include "frontier/game/startup_native_tracer.hpp"
 #include "frontier/types.hpp"
 
@@ -77,7 +76,6 @@ private:
     mutable GameThreadDispatcher gameThreadDispatcher_{};
     std::string gameThreadDispatcherError_;
     StartupNativeTracer startupNativeTracer_{};
-    AssetOverlay assetOverlay_{};
     mutable std::mutex runtimeSnapshotMutex_;
     mutable RuntimeSnapshot runtimeSnapshot_{};
     mutable bool runtimeRefreshPending_{};
