@@ -291,8 +291,14 @@ void ClientRuntime::update() {
             if (!sessionLog.empty()) log_line(sessionLog);
             lastSessionUpdateMs_ = now;
 
+            // The custom historical boot.sc flow is driven from StartScreen1.
+            // Do not emit net.EnterOnlineForInvite while the native frontend is
+            // still being constructed; the stock event dispatcher can otherwise
+            // consume the event before the UI state machine exists.
             if (sessionMode_ == "freeroam" &&
-                !historicalOnlineBootstrapLogged_) {
+                !historicalOnlineBootstrapLogged_ &&
+                session_.runtime_state().state ==
+                    frontier::game::FrontierSessionState::Frontend) {
                 std::string bootstrapLog;
                 const bool bootstrapComplete =
                     gameBridge_.advance_historical_online_bootstrap(bootstrapLog);
