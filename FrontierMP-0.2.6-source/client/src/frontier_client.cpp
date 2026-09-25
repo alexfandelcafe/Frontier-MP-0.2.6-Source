@@ -136,6 +136,134 @@ LONG WINAPI frontier_unhandled_exception_filter(EXCEPTION_POINTERS* exceptionPoi
 PVOID g_frontierVectoredHandler = nullptr;
 volatile LONG g_frontierFirstChanceLogged = 0;
 
+std::uintptr_t g_frontierDiagnosticCallSite = 0;
+std::uintptr_t g_frontierDiagnosticReturnSite = 0;
+unsigned char g_frontierDiagnosticCallOriginalByte = 0;
+unsigned char g_frontierDiagnosticReturnOriginalByte = 0;
+volatile LONG g_frontierDiagnosticCallArmed = 0;
+volatile LONG g_frontierDiagnosticReturnArmed = 0;
+
+bool frontier_patch_byte(
+    std::uintptr_t address,
+    unsigned char value,
+    unsigned char* originalByte) {
+    if (address == 0) return false;
+
+    MEMORY_BASIC_INFORMATION mbi{};
+    if (VirtualQuery(
+            reinterpret_cast<const void*>(address),
+            &mbi,
+            sizeof(mbi)) != sizeof(mbi) ||
+        mbi.State != MEM_COMMIT) {
+        return false;
+    }
+
+    DWORD oldProtect = 0;
+    if (!VirtualProtect(
+            reinterpret_cast<void*>(address),
+            1,
+            PAGE_EXECUTE_READWRITE,
+            &oldProtect)) {
+        return false;
+    }
+
+    if (originalByte != nullptr) {
+        *originalByte =
+            *reinterpret_cast<const unsigned char*>(address);
+    }
+
+    *reinterpret_cast<unsigned char*>(address) = value;
+    FlushInstructionCache(
+        GetCurrentProcess(),
+        reinterpret_cast<const void*>(address),
+        1);
+
+    DWORD unusedProtect = 0;
+    VirtualProtect(
+        reinterpret_cast<void*>(address),
+        1,
+        oldProtect,
+        &unusedProtect);
+
+    return true;
+}
+
+bool frontier_write_byte(
+    std::uintptr_t address,
+    unsigned char value) {
+    if (address == 0) return false;
+
+    DWORD oldProtect = 0;
+    if (!VirtualProtect(
+            reinterpret_cast<void*>(address),
+            1,
+            PAGE_EXECUTE_READWRITE,
+            &oldProtect)) {
+        return false;
+    }
+
+    *reinterpret_cast<unsigned char*>(address) = value;
+    FlushInstructionCache(
+        GetCurrentProcess(),
+        reinterpret_cast<const void*>(address),
+        1);
+
+    DWORD unusedProtect = 0;
+    VirtualProtect(
+        reinterpret_cast<void*>(address),
+        1,
+        oldProtect,
+        &unusedProtect);
+
+    return true;
+}
+
+bool install_frontier_callsite_diagnostic() {
+    HMODULE module = GetModuleHandleA("RDR.exe");
+    if (module == nullptr) return false;
+
+    const std::uintptr_t moduleBase =
+        reinterpret_cast<std::uintptr_t>(module);
+
+    constexpr std::uintptr_t kCallSiteRva = 0x1FDD7C;
+    constexpr std::uintptr_t kReturnSiteRva = kCallSiteRva + 5;
+
+    const auto callSite = moduleBase + kCallSiteRva;
+    const auto returnSite = moduleBase + kReturnSiteRva;
+
+    if (*reinterpret_cast<const unsigned char*>(callSite) != 0xE8 ||
+        *reinterpret_cast<const unsigned char*>(returnSite) != 0x84 ||
+        *reinterpret_cast<const unsigned char*>(returnSite + 1) != 0xC0) {
+        return false;
+    }
+
+    unsigned char originalCallByte = 0;
+    if (!frontier_patch_byte(
+            callSite,
+            0xCC,
+            &originalCallByte)) {
+        return false;
+    }
+
+    g_frontierDiagnosticCallSite = callSite;
+    g_frontierDiagnosticReturnSite = returnSite;
+    g_frontierDiagnosticCallOriginalByte = originalCallByte;
+    g_frontierDiagnosticReturnOriginalByte =
+        *reinterpret_cast<const unsigned char*>(returnSite);
+    InterlockedExchange(&g_frontierDiagnosticReturnArmed, 0);
+    InterlockedExchange(&g_frontierDiagnosticCallArmed, 1);
+
+    char message[256]{};
+    std::snprintf(
+        message,
+        sizeof(message),
+        "[FrontierDiag] pre-call breakpoint installed rva=0x%llX returnRva=0x%llX",
+        static_cast<unsigned long long>(kCallSiteRva),
+        static_cast<unsigned long long>(kReturnSiteRva));
+    log_line(message);
+    return true;
+}
+
 void write_first_chance_exception_log(EXCEPTION_POINTERS* exceptionPointers) {
     if (exceptionPointers == nullptr || exceptionPointers->ExceptionRecord == nullptr) return;
 
@@ -554,6 +682,118 @@ void write_first_chance_exception_log(EXCEPTION_POINTERS* exceptionPointers) {
 }
 
 LONG WINAPI frontier_vectored_exception_handler(EXCEPTION_POINTERS* exceptionPointers) {
+    if (exceptionPointers != nullptr &&
+        exceptionPointers->ExceptionRecord != nullptr &&
+        exceptionPointers->ExceptionRecord->ExceptionCode == EXCEPTION_BREAKPOINT) {
+        const std::uintptr_t exceptionAddress =
+            reinterpret_cast<std::uintptr_t>(
+                exceptionPointers->ExceptionRecord->ExceptionAddress);
+
+#if defined(_M_X64)
+        if (exceptionAddress == g_frontierDiagnosticCallSite &&
+            InterlockedCompareExchange(
+                &g_frontierDiagnosticCallArmed,
+                0,
+                1) == 1) {
+            const CONTEXT* context = exceptionPointers->ContextRecord;
+            if (context != nullptr) {
+                std::uintptr_t stackArg5 = 0;
+                std::uintptr_t stackArg6 = 0;
+                SIZE_T copied = 0;
+
+                ReadProcessMemory(
+                    GetCurrentProcess(),
+                    reinterpret_cast<const void*>(context->Rsp + 0x20),
+                    &stackArg5,
+                    sizeof(stackArg5),
+                    &copied);
+
+                copied = 0;
+                ReadProcessMemory(
+                    GetCurrentProcess(),
+                    reinterpret_cast<const void*>(context->Rsp + 0x28),
+                    &stackArg6,
+                    sizeof(stackArg6),
+                    &copied);
+
+                char message[1536]{};
+                std::snprintf(
+                    message,
+                    sizeof(message),
+                    "[FrontierDiag] pre-call target=0x%llX targetRva=0x%llX "
+                    "RCX=%llX RDX=%llX R8=%llX R9=%llX "
+                    "RAX=%llX RSI=%llX RDI=%llX RSP=%llX "
+                    "stack+20=%llX stack+28=%llX",
+                    static_cast<unsigned long long>(
+                        g_frontierDiagnosticCallSite + 5 +
+                        *reinterpret_cast<const std::int32_t*>(
+                            g_frontierDiagnosticCallSite + 1)),
+                    static_cast<unsigned long long>(
+                        (g_frontierDiagnosticCallSite + 5 +
+                         *reinterpret_cast<const std::int32_t*>(
+                             g_frontierDiagnosticCallSite + 1)) -
+                        reinterpret_cast<std::uintptr_t>(
+                            GetModuleHandleA("RDR.exe"))),
+                    static_cast<unsigned long long>(context->Rcx),
+                    static_cast<unsigned long long>(context->Rdx),
+                    static_cast<unsigned long long>(context->R8),
+                    static_cast<unsigned long long>(context->R9),
+                    static_cast<unsigned long long>(context->Rax),
+                    static_cast<unsigned long long>(context->Rsi),
+                    static_cast<unsigned long long>(context->Rdi),
+                    static_cast<unsigned long long>(context->Rsp),
+                    static_cast<unsigned long long>(stackArg5),
+                    static_cast<unsigned long long>(stackArg6));
+                log_line(message);
+            }
+
+            // Restore the original CALL and put an INT3 on the instruction
+            // immediately after it. The CALL then runs normally and breaks
+            // once on return, before TEST AL,AL consumes the return value.
+            frontier_write_byte(
+                g_frontierDiagnosticCallSite,
+                g_frontierDiagnosticCallOriginalByte);
+            frontier_write_byte(
+                g_frontierDiagnosticReturnSite,
+                0xCC);
+            InterlockedExchange(&g_frontierDiagnosticReturnArmed, 1);
+
+            exceptionPointers->ContextRecord->Rip =
+                g_frontierDiagnosticCallSite;
+            return EXCEPTION_CONTINUE_EXECUTION;
+        }
+
+        if (exceptionAddress == g_frontierDiagnosticReturnSite &&
+            InterlockedCompareExchange(
+                &g_frontierDiagnosticReturnArmed,
+                0,
+                1) == 1) {
+            const CONTEXT* context = exceptionPointers->ContextRecord;
+            if (context != nullptr) {
+                char message[768]{};
+                std::snprintf(
+                    message,
+                    sizeof(message),
+                    "[FrontierDiag] post-call return RAX=%llX AL=%02X "
+                    "RIP=0x%llX",
+                    static_cast<unsigned long long>(context->Rax),
+                    static_cast<unsigned int>(
+                        context->Rax & 0xFFu),
+                    static_cast<unsigned long long>(context->Rip));
+                log_line(message);
+            }
+
+            frontier_write_byte(
+                g_frontierDiagnosticReturnSite,
+                g_frontierDiagnosticReturnOriginalByte);
+
+            exceptionPointers->ContextRecord->Rip =
+                g_frontierDiagnosticReturnSite;
+            return EXCEPTION_CONTINUE_EXECUTION;
+        }
+#endif
+    }
+
     write_first_chance_exception_log(exceptionPointers);
     return EXCEPTION_CONTINUE_SEARCH;
 }
@@ -636,6 +876,13 @@ DWORD WINAPI FrontierClientWorker(LPVOID) {
     log_line(
         std::string("[FrontierClient] worker initialization result=") +
         (initialized ? "success" : "failure"));
+
+    if (initialized && install_frontier_callsite_diagnostic()) {
+        log_line("[FrontierDiag] RDR callsite diagnostic ready");
+    } else {
+        log_line("[FrontierDiag] RDR callsite diagnostic unavailable");
+    }
+
     signal_bootstrap_ready();
 
     if (!initialized) {
