@@ -468,85 +468,88 @@ char ContentPathRedirector::invoke_and_redirect(
     std::uintptr_t arg4,
     std::uintptr_t arg5,
     std::uintptr_t arg6) {
-    // The historical RDRMP hook passes through to the original first and
-    // redirects only after a successful resolution. Forward every captured
-    // ABI argument slot so the detour does not discard volatile/stack inputs.
+    // The historical RDRMP hook rewrites the requested script path before
+    // calling the original resolver. Calling the original first is too late:
+    // RDR may already have resolved the stock content.rpf entry.
+    const PreparedRoute* matchedRoute = nullptr;
+    if (path != nullptr && *path != '\0') {
+        for (std::size_t i = 0; i < routes_.size(); ++i) {
+            const auto& route = routes_[i];
+            if (route.enabled && path_contains_route(path, route.source)) {
+                matchedRoute = &route;
+                break;
+            }
+        }
+    }
+
+    char originalPath[256]{};
+    if (matchedRoute != nullptr) {
+        make_path_preview(path, originalPath, sizeof(originalPath));
+
+#ifdef _WIN32
+        if (!writable_memory_range(
+                reinterpret_cast<std::uintptr_t>(path),
+                matchedRoute->resolvedLength + 1)) {
+            const auto logIndex = redirectLogCount_.fetch_add(1);
+            if (logIndex < 16u) {
+                char message[640]{};
+                std::snprintf(
+                    message,
+                    sizeof(message),
+                    "[FrontierContent] redirect skipped: destination buffer unsafe "
+                    "requested=%s bytes=%zu resolved=%s",
+                    originalPath,
+                    matchedRoute->resolvedLength + 1,
+                    matchedRoute->resolved);
+                log_message(message);
+            }
+            matchedRoute = nullptr;
+        } else {
+            std::memcpy(
+                path,
+                matchedRoute->resolved,
+                matchedRoute->resolvedLength + 1);
+        }
+#else
+        std::memcpy(
+            path,
+            matchedRoute->resolved,
+            matchedRoute->resolvedLength + 1);
+#endif
+    }
+
     const char originalResult = original_(
         self, path, arg3, arg4, arg5, arg6);
 
     const auto callIndex = callLogCount_.fetch_add(1);
     if (callIndex < 32u) {
-        char preview[256]{};
-        make_path_preview(path, preview, sizeof(preview));
-
-        char message[512]{};
-        std::snprintf(
-            message,
-            sizeof(message),
-            "[FrontierContent] fullReadPath call=%u result=%d path=%s",
-            callIndex,
-            static_cast<int>(originalResult),
-            preview);
-        log_message(message);
-    }
-
-    if (originalResult == 0 || path == nullptr || *path == '\0') {
-        return originalResult;
-    }
-
-    const PreparedRoute* matchedRoute = nullptr;
-    for (std::size_t i = 0; i < routes_.size(); ++i) {
-        const auto& route = routes_[i];
-        if (route.enabled && path_contains_route(path, route.source)) {
-            matchedRoute = &route;
-            break;
-        }
-    }
-
-    if (matchedRoute == nullptr) {
-        return originalResult;
-    }
-
-#ifdef _WIN32
-    if (!writable_memory_range(
-            reinterpret_cast<std::uintptr_t>(path),
-            matchedRoute->resolvedLength + 1)) {
-        const auto logIndex = redirectLogCount_.fetch_add(1);
-        if (logIndex < 16u) {
-            char message[640]{};
+        char message[640]{};
+        if (matchedRoute != nullptr && originalPath[0] != '\0') {
             std::snprintf(
                 message,
                 sizeof(message),
-                "[FrontierContent] redirect skipped: destination buffer unsafe "
-                "requested=%s bytes=%zu resolved=%s",
-                path,
-                matchedRoute->resolvedLength + 1,
+                "[FrontierContent] fullReadPath call=%u result=%d "
+                "requested=%s redirected=%s",
+                callIndex,
+                static_cast<int>(originalResult),
+                originalPath,
                 matchedRoute->resolved);
-            log_message(message);
+        } else {
+            char preview[256]{};
+            make_path_preview(path, preview, sizeof(preview));
+            std::snprintf(
+                message,
+                sizeof(message),
+                "[FrontierContent] fullReadPath call=%u result=%d path=%s",
+                callIndex,
+                static_cast<int>(originalResult),
+                preview);
         }
-        return originalResult;
-    }
-#endif
-
-    const auto logIndex = redirectLogCount_.fetch_add(1);
-    if (logIndex < 16u) {
-        char message[640]{};
-        std::snprintf(
-            message,
-            sizeof(message),
-            "[FrontierContent] redirect %s -> %s bytes=%zu",
-            path,
-            matchedRoute->resolved,
-            matchedRoute->resolvedLength + 1);
         log_message(message);
     }
 
-    std::memcpy(
-        path,
-        matchedRoute->resolved,
-        matchedRoute->resolvedLength + 1);
-
     return originalResult;
+}
 }
 
 } // namespace frontier::game
