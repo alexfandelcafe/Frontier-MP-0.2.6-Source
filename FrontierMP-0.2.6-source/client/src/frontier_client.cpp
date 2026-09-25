@@ -24,6 +24,7 @@ void write_crash_log(EXCEPTION_POINTERS* exceptionPointers) {
     std::filesystem::create_directories(dir, ec);
 
     const std::filesystem::path path = dir / "client_crash.log";
+    const std::filesystem::path clientLogPath = dir / "client.log";
     const HANDLE file = CreateFileA(
         path.string().c_str(),
         FILE_APPEND_DATA,
@@ -106,6 +107,24 @@ void write_crash_log(EXCEPTION_POINTERS* exceptionPointers) {
         WriteFile(file, buffer, static_cast<DWORD>(length), &written, nullptr);
     }
     CloseHandle(file);
+
+    // Also mirror the crash line into the regular client.log so the crash
+    // address travels with the log already collected by the launcher workflow.
+    const HANDLE clientLog = CreateFileA(
+        clientLogPath.string().c_str(),
+        FILE_APPEND_DATA,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        nullptr,
+        OPEN_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        nullptr);
+    if (clientLog != INVALID_HANDLE_VALUE) {
+        DWORD clientWritten = 0;
+        if (length > 0) {
+            WriteFile(clientLog, buffer, static_cast<DWORD>(length), &clientWritten, nullptr);
+        }
+        CloseHandle(clientLog);
+    }
 }
 
 LONG WINAPI frontier_unhandled_exception_filter(EXCEPTION_POINTERS* exceptionPointers) {
