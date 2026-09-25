@@ -231,6 +231,7 @@ bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild 
     actorManagerSlotsStorage_ = 0;
     historicalOnlineBootstrapStage_ = HistoricalOnlineBootstrapStage::NotStarted;
     historicalOnlineBootstrapTask_ = HistoricalOnlineBootstrapTask::None;
+    historicalOnlineBootstrapEventCompleted_ = false;
     historicalOnlineBootstrapAttempts_ = 0;
     historicalOnlineBootstrapTaskPending_.store(false, std::memory_order_release);
     historicalOnlineBootstrapTaskDone_.store(false, std::memory_order_release);
@@ -397,6 +398,18 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
                 std::uintptr_t result = 0u;
 
                 switch (task) {
+                case HistoricalOnlineBootstrapTask::SendEnterOnlineForInvite: {
+                    std::uintptr_t args[1]{};
+                    args[0] = reinterpret_cast<std::uintptr_t>(
+                        "net.EnterOnlineForInvite");
+                    ok = nativeInvoker_.invoke_raw(
+                        kNativeUiSendEvent, args, 1u, result);
+                    historicalOnlineBootstrapTaskResult_.store(
+                        static_cast<std::uint32_t>(result),
+                        std::memory_order_release);
+                    break;
+                }
+
                 case HistoricalOnlineBootstrapTask::FadeToLoadingScreen:
                     ok = nativeInvoker_.invoke_raw(
                         kNativeHudFadeToLoadingScreen, nullptr, 0u, result);
@@ -488,21 +501,21 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
         ++historicalOnlineBootstrapAttempts_;
         std::string error;
         if (!submitTask(
-                HistoricalOnlineBootstrapTask::FadeToLoadingScreen,
+                HistoricalOnlineBootstrapTask::SendEnterOnlineForInvite,
                 error)) {
             historicalOnlineBootstrapStage_ =
                 HistoricalOnlineBootstrapStage::Failed;
             logLine =
-                "[FrontierSession] historical LoadOnline fade request queue failed: " +
-                error;
+                "[FrontierSession] historical boot.sc stage=1 "
+                "net.EnterOnlineForInvite queue failed: " + error;
             return false;
         }
 
         historicalOnlineBootstrapStage_ =
-            HistoricalOnlineBootstrapStage::WaitingForFade;
+            HistoricalOnlineBootstrapStage::WaitingForPlayerActor;
         logLine =
-            "[FrontierSession] historical LoadOnline stage=1 "
-            "HUD_FADE_TO_LOADING_SCREEN queued";
+            "[FrontierSession] historical boot.sc stage=1 "
+            "net.EnterOnlineForInvite queued";
         return false;
     }
 
@@ -631,30 +644,62 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
 
         if (historicalOnlineBootstrapTaskDone_.exchange(
                 false, std::memory_order_acq_rel)) {
-            if (historicalOnlineBootstrapTaskFailed_.load(
-                    std::memory_order_acquire)) {
-                logLine =
-                    "[FrontierSession] historical InitSpawn GET_PLAYER_ACTOR invoke failed";
-                return false;
-            }
-
-            const auto actor =
-                historicalOnlineBootstrapTaskResult_.load(
+            const auto completedTask = historicalOnlineBootstrapTask_;
+            const bool failed =
+                historicalOnlineBootstrapTaskFailed_.load(
                     std::memory_order_acquire);
 
-            if (actor != 0u) {
-                historicalOnlineBootstrapStage_ =
-                    HistoricalOnlineBootstrapStage::Complete;
+            if (completedTask ==
+                HistoricalOnlineBootstrapTask::SendEnterOnlineForInvite) {
+                if (failed) {
+                    historicalOnlineBootstrapStage_ =
+                        HistoricalOnlineBootstrapStage::Failed;
+                    logLine =
+                        "[FrontierSession] historical boot.sc stage=1 "
+                        "net.EnterOnlineForInvite invoke failed";
+                    return false;
+                }
 
-                char message[256]{};
-                std::snprintf(
-                    message,
-                    sizeof(message),
-                    "[FrontierSession] historical InitSpawn player actor ready actor=0x%08X",
-                    static_cast<unsigned>(actor));
-                logLine = message;
-                return true;
+                historicalOnlineBootstrapEventCompleted_ = true;
+                historicalOnlineBootstrapTask_ =
+                    HistoricalOnlineBootstrapTask::None;
+                logLine =
+                    "[FrontierSession] historical boot.sc stage=1 complete "
+                    "net.EnterOnlineForInvite delivered";
+            } else if (completedTask ==
+                       HistoricalOnlineBootstrapTask::QueryPlayerActor) {
+                if (failed) {
+                    if (historicalOnlineBootstrapAttempts_ == 1 ||
+                        (historicalOnlineBootstrapAttempts_ % 8u) == 0u) {
+                        logLine =
+                            "[FrontierSession] historical boot.sc "
+                            "GET_PLAYER_ACTOR invoke failed; retrying";
+                    }
+                } else {
+                    const auto actor =
+                        historicalOnlineBootstrapTaskResult_.load(
+                            std::memory_order_acquire);
+
+                    if (actor != 0u) {
+                        historicalOnlineBootstrapStage_ =
+                            HistoricalOnlineBootstrapStage::Complete;
+
+                        char message[256]{};
+                        std::snprintf(
+                            message,
+                            sizeof(message),
+                            "[FrontierSession] historical InitSpawn "
+                            "player actor ready actor=0x%08X",
+                            static_cast<unsigned>(actor));
+                        logLine = message;
+                        return true;
+                    }
+                }
             }
+        }
+
+        if (!historicalOnlineBootstrapEventCompleted_) {
+            return false;
         }
 
         if (!historicalOnlineBootstrapTaskPending_.load(
@@ -667,8 +712,8 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
                 (historicalOnlineBootstrapAttempts_ == 1 ||
                  (historicalOnlineBootstrapAttempts_ % 8u) == 0u)) {
                 logLine =
-                    "[FrontierSession] historical InitSpawn GET_PLAYER_ACTOR "
-                    "queue delayed: " + error;
+                    "[FrontierSession] historical boot.sc "
+                    "GET_PLAYER_ACTOR queue delayed: " + error;
             }
         }
 
