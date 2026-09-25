@@ -52,7 +52,7 @@ bool path_contains_route(const char* path, std::string_view route) {
     }
 
     for (std::size_t start = 0; start + route.size() <= pathLength; ++start) {
-        if (start != 0 && path[start - 1] != '/' && path[start - 1] != '\') {
+        if (start != 0 && path[start - 1] != '/' && path[start - 1] != '\\') {
             continue;
         }
 
@@ -61,7 +61,7 @@ bool path_contains_route(const char* path, std::string_view route) {
             char lhs = path[start + i];
             const char rhs = route[i];
 
-            if (lhs == '\') {
+            if (lhs == '\\') {
                 lhs = '/';
             }
 
@@ -76,7 +76,7 @@ bool path_contains_route(const char* path, std::string_view route) {
         }
 
         const std::size_t end = start + route.size();
-        if (end == pathLength || path[end] == '/' || path[end] == '\') {
+        if (end == pathLength || path[end] == '/' || path[end] == '\\') {
             return true;
         }
 
