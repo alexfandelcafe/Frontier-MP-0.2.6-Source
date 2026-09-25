@@ -3,6 +3,8 @@
 #include <windows.h>
 
 #include <array>
+#include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -132,6 +134,8 @@ LONG WINAPI frontier_unhandled_exception_filter(EXCEPTION_POINTERS* exceptionPoi
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
+
+void log_line(const std::string& line);
 
 PVOID g_frontierVectoredHandler = nullptr;
 volatile LONG g_frontierFirstChanceLogged = 0;
