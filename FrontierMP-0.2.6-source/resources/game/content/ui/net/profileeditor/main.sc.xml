@@ -1,0 +1,298 @@
+<scxml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="file://t:\mc4\assets\tune\ui\scxml_mc4.xsd">
+  <UILayer id="MP_ProfileEditor" movie="pause_main">
+
+    <!--Streaming Movies-->
+    <onactivate expr="StreamMovie('pause_main')"></onactivate>
+    <ondeactivate   expr="UnstreamMovie('pause_main')"></ondeactivate>    
+    <!-- Fix streaming mapping issues with scrollable lists -->
+    <ondeactivate   expr="SetSelection(MP_AvatarGroupSelector,0)"></ondeactivate>
+    <ondeactivate   expr="SetSelection(MP_TitleGroupXp,0)"></ondeactivate>
+    <ondeactivate   expr="SetSelection(MP_TitleGroupAmbient,0)"></ondeactivate>
+    <ondeactivate   expr="SetSelection(MP_TitleGroupWeapon,0)"></ondeactivate>
+    <ondeactivate   expr="SetSelection(MP_TitleGroupPvP,0)"></ondeactivate>
+    <ondeactivate   expr="SetSelection(MP_TitleGroupDLC1,0)"></ondeactivate>
+    <ondeactivate   expr="SetSelection(MP_TitleGroupDLC2,0)"></ondeactivate>
+    <ondeactivate   expr="SetSelection(MP_TitleGroupDLC3,0)"></ondeactivate>
+    <ondeactivate   expr="SetSelection(MP_TitleGroupDLC4,0)"></ondeactivate>
+
+    <onactivate expr="Enter(HudRankIcons)"></onactivate>
+    <ondeactivate expr="Exit(HudRankIcons)"></ondeactivate>
+
+    <onshow expr="Show(MPEditor_Icons)"></onshow>
+    <onhide expr="Hide(MPEditor_Icons)"></onhide>
+    <UILayer id="MPEditor_Icons" movie="multiplayerIcons">
+      <onshow   expr="StreamMovie('multiplayerIcons')"></onshow>
+      <onhide   expr="UnstreamMovie('multiplayerIcons')"></onhide>
+    </UILayer>
+
+    <onpaint expr="SetFlashInt('pause_main','template',41)"></onpaint>
+
+    <onfocused expr="Enter(MP_ProfileMenu)"></onfocused>
+    <onunfocused expr="Exit(MP_ProfileMenu)" ></onunfocused>
+    <UIMenu id="MP_ProfileMenu">
+      <onfocused expr="SetSelection(MP_ProfileMenu,0)" ></onfocused>
+      <onfocused expr="Select(MPAP_profile_ps)"></onfocused>
+
+      <transition event="@UI.CANCEL*RELEASED">
+        <action expr="PlaySound('HUD_MENU_BACK_MASTER')"></action>
+        <action expr="SendEvent('Profile_Cancelled')"></action>
+      </transition>
+      
+      <transition event="@UI.ACCEPT*RELEASED">
+        <action expr="PlaySound('HUD_MENU_SELECT_MASTER')"></action>
+        <action expr="unfocus(MP_ProfileMenu)"></action>
+        <action expr="SendEvent('Profile_Selected')"></action>
+      </transition>
+
+      <UIButton text="mp_fe_profile_avatar" id="mp_fe_profile_avatar" target="Enter(MP_AvatarGroupSelector)"  consume="false"></UIButton>
+
+      <UIButton text="mp_fe_profile_mount" id="mp_fe_profile_mount" >
+        <transition event="@UI.ACCEPT*RELEASED" consume="false">
+          <action expr="PlaySound('HUD_MENU_SELECT_MASTER')"></action>
+          <action expr="Activate(MP_MountSelector)"></action>
+          <action expr="Focus(MP_MountSelector)"></action>
+        </transition>
+      </UIButton>
+
+      <UIButton text="mp_fe_profile_title" id="mp_fe_profile_title" target="Enter(MP_TitleGroupSelector)"        consume="false"></UIButton>
+    </UIMenu>
+
+    <UIScrollableList id="MP_AvatarGroupSelector" flashObject="menu.elements[0]" scrollable="true" allowScrollbar="true" MaxHeight="9">
+      <onshow expr="SetSelection(MP_AvatarGroupSelector,0)" ></onshow>
+      <onfocused expr="Select(MPAP_profile_ps)"></onfocused>
+
+      <transition event="net.JoinWishPosted"  target="SendEvent('avt.Back')" consume="false"></transition>
+      <transition event="net.InviteFailed_NoPlaylist"  target="SendEvent('avt.Back')" consume="false"></transition>
+      
+      <transition event="avt.Back" consume="false" >
+        <action expr="Exit(MP_AvatarGroupSelector)"></action>
+        <action expr="Enter(MP_ProfileMenu)"></action>
+      </transition>
+      
+      <transition event="@UI.CANCEL*RELEASED" consume="true" >
+        <action expr="PlaySound('HUD_MENU_BACK_MASTER')"></action>
+        <action expr="SendEvent('AvatarGroup_Cancelled')"></action>
+        <action expr="Exit(MP_AvatarGroupSelector)"></action>
+        <action expr="focus(MP_ProfileMenu)"></action>
+      </transition>
+      <transition event="@UI.ACCEPT*RELEASED">
+        <action expr="PlaySound('HUD_MENU_SELECT_MASTER')"></action>
+        <action expr="unfocus(MP_AvatarGroupSelector)"></action>
+        <action expr="activate(MP_AvatarModelSelector)"></action>
+        <action expr="focus(MP_AvatarModelSelector)"></action>
+        <action expr="SendEvent('AvatarGroup_Selected')"></action>
+      </transition>
+      <UIButton text="mp_avatar_group0" id="mp_avatar_group0"></UIButton>
+      <UIButton text="mp_avatar_group1" id="mp_avatar_group1"></UIButton>
+      <UIButton text="mp_avatar_group2" id="mp_avatar_group2"></UIButton>
+      <UIButton text="mp_avatar_group3" id="mp_avatar_group3"></UIButton>
+      <UIButton text="mp_avatar_group4" id="mp_avatar_group4"></UIButton>
+      <UIButton text="mp_avatar_group5" id="mp_avatar_group5"></UIButton>
+      <UIButton text="mp_avatar_group6" id="mp_avatar_group6"></UIButton>
+      <UIButton text="mp_avatar_group7" id="mp_avatar_group7"></UIButton>
+      <UIButton text="mp_avatar_group8" id="mp_avatar_group8"></UIButton>
+      <UIButton text="mp_avatar_group9" id="mp_avatar_group9"></UIButton>
+      <UIButton text="mp_avatar_group10" id="mp_avatar_group10"></UIButton>
+      <UIButton text="mp_avatar_group11" id="mp_avatar_group11"></UIButton>
+      <UIButton text="mp_avatar_group12" id="mp_avatar_group12"></UIButton>
+      <UIButton text="mp_avatar_group13" id="mp_avatar_group13"></UIButton>
+      <UIButton text="mp_avatar_group14" id="mp_avatar_group14"></UIButton>
+      <UIButton text="mp_avatar_group15" id="mp_avatar_group15"></UIButton>
+      <UIButton text="mp_avatar_group16" id="mp_avatar_group16"></UIButton>
+      <UIButton text="mp_avatar_group17" id="mp_avatar_group17"></UIButton>
+      <UIButton text="mp_avatar_group18" id="mp_avatar_group18"></UIButton>
+      <UIButton text="mp_avatar_group19" id="mp_avatar_group19"></UIButton>
+      <UIButton text="mp_avatar_group20" id="mp_avatar_group20"></UIButton>
+      <UIButton text="mp_avatar_group21" id="mp_avatar_group21"></UIButton>
+      <UIButton text="mp_avatar_group22" id="mp_avatar_group22"></UIButton>
+      <UIButton text="mp_avatar_group23" id="mp_avatar_group23"></UIButton>
+      <UIButton text="mp_avatar_group24" id="mp_avatar_group24"></UIButton>
+      <UIButton text="mp_avatar_group25" id="mp_avatar_group25"></UIButton>
+    </UIScrollableList>
+
+    <UIMenu id="MP_AvatarModelSelector" flashObject="submenu" horizontal="true" AllowWrap="false" repeatDelay="1">
+      <onfocused expr="MP_AvatarModelSelector.SetCurrentSelectionCB('mp_avatar0',false)" ></onfocused>
+      <onfocused expr="Select(MPAP_model_ps)"></onfocused>
+
+      <transition event="net.JoinWishPosted"  target="SendEvent('avt.Back')" consume="false"></transition>
+      <transition event="net.InviteFailed_NoPlaylist"  target="SendEvent('avt.Back')" consume="false"></transition>
+      
+      <transition event="avt.Back" consume="false" >
+        <action expr="Exit(MP_AvatarModelSelector)"></action>
+        <action expr="Exit(MP_AvatarGroupSelector)"></action>
+        <action expr="Enter(MP_ProfileMenu)"></action>
+      </transition>
+
+      <transition event="@UI.CANCEL*RELEASED">
+        <action expr="PlaySound('HUD_MENU_BACK_MASTER')"></action>
+        <action expr="SendEvent('AvatarModel_Cancelled')"></action>
+        <action expr="Exit(MP_AvatarModelSelector)"></action>
+        <action expr="Enter(MP_AvatarGroupSelector)"></action>
+      </transition>
+      
+      <transition event="@UI.ACCEPT*RELEASED">
+        <action expr="SendEvent('AvatarModel_Selected')"></action>
+      </transition>
+
+      <UIButton text="mp_avatar0" id="mp_avatar0"></UIButton>
+      <UIButton text="mp_avatar1" id="mp_avatar1"></UIButton>
+      <UIButton text="mp_avatar2" id="mp_avatar2"></UIButton>
+      <UIButton text="mp_avatar3" id="mp_avatar3"></UIButton>
+      <UIButton text="mp_avatar4" id="mp_avatar4"></UIButton>
+      <UIButton text="mp_avatar5" id="mp_avatar5"></UIButton>
+      <UIButton text="mp_avatar6" id="mp_avatar6"></UIButton>
+      <UIButton text="mp_avatar7" id="mp_avatar7"></UIButton>
+      <UIButton text="mp_avatar8" id="mp_avatar8"></UIButton>
+      <UIButton text="mp_avatar9" id="mp_avatar9"></UIButton>
+      <UIButton text="mp_avatar10" id="mp_avatar10"></UIButton>
+      <UIButton text="mp_avatar11" id="mp_avatar11"></UIButton>
+      <UIButton text="mp_avatar12" id="mp_avatar12"></UIButton>
+      <UIButton text="mp_avatar13" id="mp_avatar13"></UIButton>
+    </UIMenu>
+
+    <UIMenu id="MP_MountSelector" horizontal="true" AllowWrap="false" movie="playerlist" repeatDelay="1">
+      <onfocused expr="Select(MPAP_model_ps)"></onfocused>
+
+      <transition event="net.JoinWishPosted"  target="SendEvent('avt.Back')" consume="false"></transition>
+      <transition event="net.InviteFailed_NoPlaylist"  target="SendEvent('avt.Back')" consume="false"></transition>
+      
+      <transition event="avt.Back" consume="false" >
+        <action expr="Exit(MP_MountSelector)"></action>
+        <action expr="Enter(MP_ProfileMenu)"></action>
+      </transition>
+      
+      <transition event="@UI.CANCEL*RELEASED">
+        <action expr="PlaySound('HUD_MENU_BACK_MASTER')"></action>
+        <action expr="SendEvent('Mount_Cancelled')"></action>
+        <action expr="Exit(MP_MountSelector)"></action>
+        <action expr="Enter(MP_ProfileMenu)"></action>
+      </transition>
+
+      <transition event="@UI.ACCEPT*RELEASED">
+        <action expr="SendEvent('Mount_Selected')"></action>
+      </transition>
+      
+      <UILabel text="RIDEABLE_ANIMAL_MEX_Mule01"></UILabel>
+      <UILabel text="RIDEABLE_ANIMAL_HorseMangy01"></UILabel>
+      <UILabel text="RIDEABLE_ANIMAL_Horse12"></UILabel>
+      <UILabel text="RIDEABLE_ANIMAL_Horse01"></UILabel>
+      <UILabel text="RIDEABLE_ANIMAL_Horse07"></UILabel>
+      <UILabel text="RIDEABLE_ANIMAL_Horse04"></UILabel>
+      <UILabel text="RIDEABLE_ANIMAL_Bull04"></UILabel>
+      <UILabel text="RIDEABLE_ANIMAL_Buffalo"></UILabel>
+      <UILabel text="RIDEABLE_ANIMAL_Buffalo04"></UILabel>
+      <UILabel text="RIDEABLE_ANIMAL_Bull05"></UILabel>
+      <UILabel text="RIDEABLE_ANIMAL_MEX_Mule04"></UILabel>
+    </UIMenu>
+
+    <UIMenu id="MP_TitleGroupSelector" flashObject="menu.elements[2]"  scrollable="true">
+      <onfocused expr="Select(MPAP_title_ps)"></onfocused>
+
+      <transition event="net.JoinWishPosted"  target="SendEvent('avt.Back')" consume="false"></transition>
+      <transition event="net.InviteFailed_NoPlaylist"  target="SendEvent('avt.Back')" consume="false"></transition>
+      
+      <transition event="avt.Back" consume="false" >
+        <action expr="Exit(MP_TitleGroupSelector)"></action>
+        <action expr="Enter(MP_ProfileMenu)"></action>
+      </transition>
+      
+      <transition event="@UI.CANCEL*RELEASED" consume="true" >
+        <action expr="PlaySound('HUD_MENU_BACK_MASTER')"></action>
+        <action expr="SendEvent('Title_Cancelled')"></action>
+        <action expr="Exit(MP_TitleGroupSelector)"></action>
+        <action expr="focus(MP_ProfileMenu)"></action>
+      </transition>
+
+      <transition event="@UI.ACCEPT*RELEASED">
+        <action expr="PlaySound('HUD_MENU_SELECT_MASTER')"></action>
+        <action expr="Unfocus(MP_TitleGroupSelector)"></action>
+      </transition>
+
+      <UIButton text="title_group_xplvl" id="title_group_xplvl"  target="Enter(MP_TitleGroupXp)"      consume="false"></UIButton>
+      <UIButton text="title_group_amb"   id="title_group_amb"    target="Enter(MP_TitleGroupAmbient)" consume="false"></UIButton>
+      <UIButton text="title_group_weap"  id="title_group_weap"   target="Enter(MP_TitleGroupWeapon)"  consume="false"></UIButton>
+      <UIButton text="title_group_pvp"   id="title_group_pvp"    target="Enter(MP_TitleGroupPvP)"     consume="false"></UIButton>
+      <UIButton text="title_group_stat"  id="title_group_stat"   target="Enter(MP_TitleGroupStat)"    consume="false"></UIButton>
+      <UIButton text="title_group_dlc1"  id="title_group_dlc1"   target="Enter(MP_TitleGroupDLC1)"    consume="false"></UIButton>
+      <UIButton text="title_group_dlc2"  id="title_group_dlc2"   target="Enter(MP_TitleGroupDLC2)"    consume="false"></UIButton>
+      <UIButton text="title_group_dlc3"  id="title_group_dlc3"   target="Enter(MP_TitleGroupDLC3)"    consume="false"></UIButton>
+      <UIButton text="title_group_dlc4"  id="title_group_dlc4"   target="Enter(MP_TitleGroupDLC4)"    consume="false"></UIButton>
+    </UIMenu>
+
+    <include src="Titles.sc.xml"></include>
+
+    <onfocused expr="Enter(MP_AvPrompts)"></onfocused>
+    <onunfocused expr="Exit(MP_AvPrompts)" ></onunfocused>
+    <UILayer id="MP_AvPrompts">
+      <UIPromptStrip id="MPAP_profile_ps"      flashObject="_global.prompt"     orientation="vertical">
+          <UIButton icon="accept" text="Common_Select"></UIButton>
+          <UIButton icon="cancel" text="Common_Back"></UIButton>
+          <UIButton icon="lAnalog_UpDown" text="Common_Scroll"></UIButton>
+      </UIPromptStrip>
+
+      <UIPromptStrip id="MPAP_title_ps"      flashObject="_global.prompt"       orientation="vertical">
+          <UIButton icon="accept" text="Common_Select" id="MPAP_title_ps_accept_button"></UIButton>
+          <UIButton icon="cancel" text="Common_Back"></UIButton>
+          <UIButton icon="lAnalog_UpDown" text="Common_Scroll"></UIButton>
+      </UIPromptStrip>
+      
+      <UIPromptStrip id="MPAP_group_ps"      flashObject="_global.prompt"       orientation="vertical">
+          <UIButton icon="accept" text="Common_Select"></UIButton>
+          <UIButton icon="cancel" text="Common_Back"></UIButton>
+          <UIButton icon="lAnalog_UpDown" text="Common_Scroll"></UIButton>
+      </UIPromptStrip>
+
+
+      <UIPromptStrip id="MPAP_model_ps"      flashObject="_global.prompt"       orientation="vertical">
+          <UIButton icon="accept" text="Common_Select" id="MPAP_model_ps_accept_button"></UIButton>
+          <UIButton icon="cancel" text="Common_Back"></UIButton>
+          <UIButton icon="lAnalog_LeftRight" text="Common_Change"></UIButton>
+      </UIPromptStrip>
+    </UILayer>
+
+    <UIProgressBar id ="AP_LoadFile" movie="popup" style="1">
+        <data name="icontext" expr="Save_Icon_Loading"></data>
+        <data name="text" expr="Load_Message"></data>
+        <onshow expr="Exit(LoadingSpinner)"></onshow>
+    </UIProgressBar>
+
+    <!-- DIALOGS -->
+    <onunfocused expr="Exit(MP_AvatarConfirm)" ></onunfocused>
+    <UIMessageBox id="MP_AvatarConfirm" title="MP_avatar_confirm_title" description="MP_avatar_confirm_desc">
+      <data name="Ok_Cancel"></data>
+      <data name="description" expr="MP_avatar_confirm_desc"></data>
+      <UIPromptStrip orientation="vertical">
+          <UIButton text="Common_Yes" icon="action" e_action_released="SendEvent('RollOver_Yes')"></UIButton>
+          <UIButton text="Common_No"  icon="cancel" e_cancel_released="Exit(MP_AvatarConfirm)"></UIButton>
+      </UIPromptStrip>
+    </UIMessageBox>
+
+    <onunfocused expr="Exit(MP_MountConfirm)" ></onunfocused>
+    <UIMessageBox id="MP_MountConfirm" title="MP_mount_confirm_title"   description="MP_mount_confirm_desc">
+      <data name="Ok_Cancel"></data>
+      <UIPromptStrip orientation="vertical">
+          <UIButton text="Common_Yes" icon="action" e_action_released="SendEvent('RollOver_Yes')"></UIButton>
+          <UIButton text="Common_No"  icon="cancel" e_cancel_released="Exit(MP_MountConfirm)"></UIButton>
+      </UIPromptStrip>
+    </UIMessageBox>
+
+    <onunfocused expr="Exit(MP_TitleConfirm)" ></onunfocused>
+    <UIMessageBox id="MP_TitleConfirm" title="MP_title_confirm_title"   description="MP_title_confirm_desc">
+      <data name="Ok_Cancel"></data>
+      <UIPromptStrip orientation="vertical">
+          <UIButton text="Common_Yes" icon="action" e_action_released="SendEvent('RollOver_Yes')"></UIButton>
+          <UIButton text="Common_No"  icon="cancel" e_cancel_released="Exit(MP_TitleConfirm)"></UIButton>
+      </UIPromptStrip>
+    </UIMessageBox>
+
+    <onunfocused expr="Exit(MP_AvatarQuit)" ></onunfocused>
+    <UIMessageBox id="MP_AvatarQuit" title="MP_avatar_quit_title"       description="MP_avatar_quit_desc">
+      <data name="Ok_Cancel"></data>
+      <UIPromptStrip orientation="vertical">
+          <UIButton e_action_released="SendEvent('RollOver_Yes')" icon="action" text="Common_Yes"></UIButton>
+          <UIButton e_cancel_released="Exit(MP_AvatarQuit)" icon="cancel" text="Common_No"></UIButton>
+      </UIPromptStrip>
+    </UIMessageBox>
+    
+  </UILayer>
+</scxml>
