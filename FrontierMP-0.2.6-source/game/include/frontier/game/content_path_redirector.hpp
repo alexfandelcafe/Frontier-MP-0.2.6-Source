@@ -20,6 +20,7 @@ public:
     bool install(const std::uint8_t* text,
                  std::size_t textSize,
                  std::uintptr_t moduleBase,
+                 std::size_t imageSize,
                  const std::filesystem::path& clientPackageRoot,
                  std::string& error);
 
