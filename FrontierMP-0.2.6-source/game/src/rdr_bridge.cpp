@@ -371,37 +371,123 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
         return false;
     }
 
-    auto submit = [this](auto&& task, std::string& error) {
+    auto submitTask = [this](HistoricalOnlineBootstrapTask task,
+                             std::string& error) {
         error.clear();
-        // Startup can spend several frames without entering scrThread::Wait.
-        // Do not treat the dispatcher queue latency itself as a bootstrap failure.
-        constexpr std::uint32_t kBootstrapDispatchTimeoutMs = 3000u;
-        const bool completed = gameThreadDispatcher_.submit_and_wait(
-            std::forward<decltype(task)>(task),
-            kBootstrapDispatchTimeoutMs,
-            error);
-        if (!completed && error.empty()) {
-            error = "game-thread bootstrap task did not complete";
+
+        if (historicalOnlineBootstrapTaskPending_.load(
+                std::memory_order_acquire)) {
+            return true;
         }
-        return completed;
+
+        historicalOnlineBootstrapTask_ = task;
+        historicalOnlineBootstrapTaskDone_.store(false, std::memory_order_release);
+        historicalOnlineBootstrapTaskFailed_.store(false, std::memory_order_release);
+        historicalOnlineBootstrapTaskPending_.store(true, std::memory_order_release);
+
+        const bool submitted = gameThreadDispatcher_.submit(
+            [this, task]() {
+                bool ok = true;
+                std::uintptr_t result = 0u;
+
+                switch (task) {
+                case HistoricalOnlineBootstrapTask::FadeToLoadingScreen:
+                    ok = nativeInvoker_.invoke_raw(
+                        kNativeHudFadeToLoadingScreen, nullptr, 0u, result);
+                    break;
+
+                case HistoricalOnlineBootstrapTask::QueryFade:
+                    ok = nativeInvoker_.invoke_raw(
+                        kNativeHudIsFading, nullptr, 0u, result);
+                    historicalOnlineBootstrapTaskResult_.store(
+                        static_cast<std::uint32_t>(result),
+                        std::memory_order_release);
+                    break;
+
+                case HistoricalOnlineBootstrapTask::FinishLoadOnline: {
+                    std::uintptr_t exitArgs[1]{};
+                    exitArgs[0] =
+                        reinterpret_cast<std::uintptr_t>("StartScreen1");
+                    ok = nativeInvoker_.invoke_raw(
+                        kNativeUiExit, exitArgs, 1u, result);
+
+                    if (ok) {
+                        std::uintptr_t args[2]{};
+                        args[0] = reinterpret_cast<std::uintptr_t>(
+                            "fileSetForMPLoad");
+                        ok = nativeInvoker_.invoke_raw(
+                            kNativeUiSendEvent, args, 1u, result);
+                        if (ok) {
+                            args[0] = reinterpret_cast<std::uintptr_t>(
+                                "fileStartupChecksComplete");
+                            ok = nativeInvoker_.invoke_raw(
+                                kNativeUiSendEvent, args, 1u, result);
+                        }
+                        if (ok) {
+                            args[0] = 0u;
+                            args[1] =
+                                reinterpret_cast<std::uintptr_t>("Online");
+                            ok = nativeInvoker_.invoke_raw(
+                                kNativeNetAuthenticateGamer,
+                                args,
+                                2u,
+                                result);
+                            historicalOnlineBootstrapAuthResult_.store(
+                                result,
+                                std::memory_order_release);
+                        }
+                    }
+                    break;
+                }
+
+                case HistoricalOnlineBootstrapTask::QueryPlayerActor: {
+                    std::uintptr_t args[1]{};
+                    args[0] = static_cast<std::uintptr_t>(0xFFFFFFFFu);
+                    ok = nativeInvoker_.invoke_raw(
+                        kNativeGetPlayerActor, args, 1u, result);
+                    historicalOnlineBootstrapTaskResult_.store(
+                        static_cast<std::uint32_t>(result),
+                        std::memory_order_release);
+                    break;
+                }
+
+                case HistoricalOnlineBootstrapTask::None:
+                    ok = false;
+                    break;
+                }
+
+                historicalOnlineBootstrapTaskFailed_.store(
+                    !ok, std::memory_order_release);
+                historicalOnlineBootstrapTaskPending_.store(
+                    false, std::memory_order_release);
+                historicalOnlineBootstrapTaskDone_.store(
+                    true, std::memory_order_release);
+            },
+            error);
+
+        if (!submitted) {
+            historicalOnlineBootstrapTaskPending_.store(
+                false, std::memory_order_release);
+            historicalOnlineBootstrapTaskFailed_.store(
+                true, std::memory_order_release);
+            historicalOnlineBootstrapTaskDone_.store(
+                true, std::memory_order_release);
+        }
+
+        return submitted;
     };
 
     switch (historicalOnlineBootstrapStage_) {
     case HistoricalOnlineBootstrapStage::NotStarted: {
         ++historicalOnlineBootstrapAttempts_;
         std::string error;
-        const bool completed = submit(
-            [this]() {
-                std::uintptr_t result = 0u;
-                (void)nativeInvoker_.invoke_raw(
-                    kNativeHudFadeToLoadingScreen, nullptr, 0u, result);
-            },
-            error);
-        if (!completed) {
+        if (!submitTask(
+                HistoricalOnlineBootstrapTask::FadeToLoadingScreen,
+                error)) {
             historicalOnlineBootstrapStage_ =
                 HistoricalOnlineBootstrapStage::Failed;
             logLine =
-                "[FrontierSession] historical LoadOnline fade request failed: " +
+                "[FrontierSession] historical LoadOnline fade request queue failed: " +
                 error;
             return false;
         }
@@ -410,162 +496,177 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
             HistoricalOnlineBootstrapStage::WaitingForFade;
         logLine =
             "[FrontierSession] historical LoadOnline stage=1 "
-            "HUD_FADE_TO_LOADING_SCREEN sent";
+            "HUD_FADE_TO_LOADING_SCREEN queued";
         return false;
     }
 
     case HistoricalOnlineBootstrapStage::WaitingForFade: {
-        ++historicalOnlineBootstrapAttempts_;
+        if (historicalOnlineBootstrapTaskPending_.load(
+                std::memory_order_acquire)) {
+            return false;
+        }
 
-        bool fading = true;
-        bool fadingKnown = false;
-        std::uintptr_t fadingResult = 0u;
-        std::uintptr_t authResult = 0u;
-        std::string error;
-        const bool completed = submit(
-            [this, &fading, &fadingKnown, &fadingResult, &authResult]() {
-                std::uintptr_t result = 0u;
-                const bool queryOk = nativeInvoker_.invoke_raw(
-                    kNativeHudIsFading, nullptr, 0u, result);
-                if (!queryOk) {
-                    return;
+        if (historicalOnlineBootstrapTaskDone_.exchange(
+                false, std::memory_order_acq_rel)) {
+            if (historicalOnlineBootstrapTaskFailed_.load(
+                    std::memory_order_acquire)) {
+                if (historicalOnlineBootstrapTask_ ==
+                    HistoricalOnlineBootstrapTask::FadeToLoadingScreen) {
+                    historicalOnlineBootstrapStage_ =
+                        HistoricalOnlineBootstrapStage::Failed;
+                    logLine =
+                        "[FrontierSession] historical LoadOnline "
+                        "HUD_FADE_TO_LOADING_SCREEN invoke failed";
+                } else {
+                    logLine =
+                        "[FrontierSession] historical LoadOnline "
+                        "HUD_IS_FADING invoke failed; retrying";
+                }
+                return false;
+            }
+
+            if (historicalOnlineBootstrapTask_ ==
+                HistoricalOnlineBootstrapTask::FinishLoadOnline) {
+                historicalOnlineBootstrapStage_ =
+                    HistoricalOnlineBootstrapStage::WaitingForPlayerActor;
+
+                char message[256]{};
+                std::snprintf(
+                    message,
+                    sizeof(message),
+                    "[FrontierSession] historical LoadOnline stage=2 complete "
+                    "StartScreen1 exited, file events sent, "
+                    "NET_AUTHENTICATE_GAMER result=0x%llX",
+                    static_cast<unsigned long long>(
+                        historicalOnlineBootstrapAuthResult_.load(
+                            std::memory_order_acquire)));
+                logLine = message;
+                return false;
+            }
+
+            if (historicalOnlineBootstrapTask_ ==
+                HistoricalOnlineBootstrapTask::QueryFade) {
+                const auto fading =
+                    historicalOnlineBootstrapTaskResult_.load(
+                        std::memory_order_acquire);
+
+                if (fading != 0u) {
+                    ++historicalOnlineBootstrapAttempts_;
+                    if (historicalOnlineBootstrapAttempts_ == 1 ||
+                        (historicalOnlineBootstrapAttempts_ % 8u) == 0u) {
+                        char message[256]{};
+                        std::snprintf(
+                            message,
+                            sizeof(message),
+                            "[FrontierSession] historical LoadOnline waiting-for-fade "
+                            "HUD_IS_FADING=1 attempt=%u",
+                            historicalOnlineBootstrapAttempts_);
+                        logLine = message;
+                    }
+                    return false;
                 }
 
-                fadingKnown = true;
-                fadingResult = result;
-                fading = result != 0u;
-
-                if (fading) {
-                    return;
+                std::string error;
+                if (!submitTask(
+                        HistoricalOnlineBootstrapTask::FinishLoadOnline,
+                        error)) {
+                    historicalOnlineBootstrapStage_ =
+                        HistoricalOnlineBootstrapStage::Failed;
+                    logLine =
+                        "[FrontierSession] historical LoadOnline stage=2 queue failed: " +
+                        error;
                 }
+                return false;
+            }
+        }
 
-                // Exact order recovered from historical LoadOnline:
-                // HUD fade -> UI_EXIT("StartScreen1") -> file lifecycle
-                // events -> NET_AUTHENTICATE_GAMER(0, "Online").
-                std::uintptr_t exitArgs[1]{};
-                exitArgs[0] =
-                    reinterpret_cast<std::uintptr_t>("StartScreen1");
-                (void)nativeInvoker_.invoke_raw(
-                    kNativeUiExit, exitArgs, 1u, result);
-
-                std::uintptr_t args[2]{};
-                args[0] =
-                    reinterpret_cast<std::uintptr_t>("fileSetForMPLoad");
-                (void)nativeInvoker_.invoke_raw(
-                    kNativeUiSendEvent, args, 1u, result);
-
-                args[0] =
-                    reinterpret_cast<std::uintptr_t>(
-                        "fileStartupChecksComplete");
-                (void)nativeInvoker_.invoke_raw(
-                    kNativeUiSendEvent, args, 1u, result);
-
-                args[0] = 0u;
-                args[1] =
-                    reinterpret_cast<std::uintptr_t>("Online");
-                authResult = 0u;
-                (void)nativeInvoker_.invoke_raw(
-                    kNativeNetAuthenticateGamer, args, 2u, authResult);
-            },
-            error);
-
-        if (!completed) {
-            // Keep the state machine alive. A dispatcher timeout here only means
-            // the game thread did not pump the queue inside the current window;
-            // it does not prove that HUD_IS_FADING failed.
-            if ((historicalOnlineBootstrapAttempts_ == 1) ||
-                (historicalOnlineBootstrapAttempts_ % 8u) == 0u) {
+        if (!historicalOnlineBootstrapTaskPending_.load(
+                std::memory_order_acquire) &&
+            historicalOnlineBootstrapTask_ ==
+                HistoricalOnlineBootstrapTask::FadeToLoadingScreen) {
+            std::string error;
+            if (!submitTask(
+                    HistoricalOnlineBootstrapTask::QueryFade,
+                    error)) {
                 logLine =
-                    "[FrontierSession] historical LoadOnline stage=2 dispatch "
-                    "delayed: " + error;
+                    "[FrontierSession] historical LoadOnline HUD_IS_FADING "
+                    "queue delayed: " + error;
             }
-            return false;
+        } else if (!historicalOnlineBootstrapTaskPending_.load(
+                       std::memory_order_acquire) &&
+                   historicalOnlineBootstrapTask_ ==
+                       HistoricalOnlineBootstrapTask::QueryFade) {
+            const auto fading =
+                historicalOnlineBootstrapTaskResult_.load(
+                    std::memory_order_acquire);
+            if (fading != 0u) {
+                std::string error;
+                if (!submitTask(
+                        HistoricalOnlineBootstrapTask::QueryFade,
+                        error)) {
+                    if (historicalOnlineBootstrapAttempts_ == 1 ||
+                        (historicalOnlineBootstrapAttempts_ % 8u) == 0u) {
+                        logLine =
+                            "[FrontierSession] historical LoadOnline HUD_IS_FADING "
+                            "queue delayed: " + error;
+                    }
+                }
+            }
         }
 
-        if (!fadingKnown) {
-            if (historicalOnlineBootstrapAttempts_ == 1 ||
-                (historicalOnlineBootstrapAttempts_ % 8u) == 0u) {
-                char message[256]{};
-                std::snprintf(
-                    message,
-                    sizeof(message),
-                    "[FrontierSession] historical LoadOnline waiting-for-fade "
-                    "HUD_IS_FADING invoke did not return a value attempt=%u",
-                    historicalOnlineBootstrapAttempts_);
-                logLine = message;
-            }
-            return false;
-        }
-
-        if (fading) {
-            if (historicalOnlineBootstrapAttempts_ == 1 ||
-                (historicalOnlineBootstrapAttempts_ % 8u) == 0u) {
-                char message[256]{};
-                std::snprintf(
-                    message,
-                    sizeof(message),
-                    "[FrontierSession] historical LoadOnline waiting-for-fade "
-                    "HUD_IS_FADING=%u attempt=%u",
-                    static_cast<unsigned>(fadingResult != 0u),
-                    historicalOnlineBootstrapAttempts_);
-                logLine = message;
-            }
-            return false;
-        }
-
-        historicalOnlineBootstrapStage_ =
-            HistoricalOnlineBootstrapStage::WaitingForPlayerActor;
-
-        char message[256]{};
-        std::snprintf(
-            message,
-            sizeof(message),
-            "[FrontierSession] historical LoadOnline stage=2 complete "
-            "StartScreen1 exited, file events sent, "
-            "NET_AUTHENTICATE_GAMER result=0x%llX",
-            static_cast<unsigned long long>(authResult));
-        logLine = message;
         return false;
     }
 
     case HistoricalOnlineBootstrapStage::WaitingForPlayerActor: {
-        std::uintptr_t actor = 0u;
-        std::string error;
-        const bool completed = submit(
-            [this, &actor]() {
-                std::uintptr_t args[1]{};
-                // Historical InitSpawn probes GET_PLAYER_ACTOR(Player(-1)).
-                args[0] = static_cast<std::uintptr_t>(0xFFFFFFFFu);
-                std::uintptr_t result = 0u;
-                if (nativeInvoker_.invoke_raw(
-                        kNativeGetPlayerActor, args, 1u, result)) {
-                    actor = result;
-                }
-            },
-            error);
-
-        if (!completed) {
-            logLine =
-                "[FrontierSession] historical InitSpawn player-actor query failed: " +
-                error;
+        if (historicalOnlineBootstrapTaskPending_.load(
+                std::memory_order_acquire)) {
             return false;
         }
 
-        if (actor == 0u) {
-            return false;
+        if (historicalOnlineBootstrapTaskDone_.exchange(
+                false, std::memory_order_acq_rel)) {
+            if (historicalOnlineBootstrapTaskFailed_.load(
+                    std::memory_order_acquire)) {
+                logLine =
+                    "[FrontierSession] historical InitSpawn GET_PLAYER_ACTOR invoke failed";
+                return false;
+            }
+
+            const auto actor =
+                historicalOnlineBootstrapTaskResult_.load(
+                    std::memory_order_acquire);
+
+            if (actor != 0u) {
+                historicalOnlineBootstrapStage_ =
+                    HistoricalOnlineBootstrapStage::Complete;
+
+                char message[256]{};
+                std::snprintf(
+                    message,
+                    sizeof(message),
+                    "[FrontierSession] historical InitSpawn player actor ready actor=0x%08X",
+                    static_cast<unsigned>(actor));
+                logLine = message;
+                return true;
+            }
         }
 
-        historicalOnlineBootstrapStage_ =
-            HistoricalOnlineBootstrapStage::Complete;
+        if (!historicalOnlineBootstrapTaskPending_.load(
+                std::memory_order_acquire)) {
+            ++historicalOnlineBootstrapAttempts_;
+            std::string error;
+            if (!submitTask(
+                    HistoricalOnlineBootstrapTask::QueryPlayerActor,
+                    error) &&
+                (historicalOnlineBootstrapAttempts_ == 1 ||
+                 (historicalOnlineBootstrapAttempts_ % 8u) == 0u)) {
+                logLine =
+                    "[FrontierSession] historical InitSpawn GET_PLAYER_ACTOR "
+                    "queue delayed: " + error;
+            }
+        }
 
-        char message[256]{};
-        std::snprintf(
-            message,
-            sizeof(message),
-            "[FrontierSession] historical InitSpawn player actor ready actor=0x%08X",
-            static_cast<unsigned>(actor));
-        logLine = message;
-        return true;
+        return false;
     }
 
     case HistoricalOnlineBootstrapStage::Complete:
