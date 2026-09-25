@@ -7,6 +7,7 @@
 #include "frontier/game/content_path_redirector.hpp"
 #include "frontier/types.hpp"
 
+#include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <string>
@@ -87,9 +88,24 @@ private:
         Failed
     };
 
+    enum class HistoricalOnlineBootstrapTask : std::uint8_t {
+        None,
+        FadeToLoadingScreen,
+        QueryFade,
+        FinishLoadOnline,
+        QueryPlayerActor
+    };
+
     HistoricalOnlineBootstrapStage historicalOnlineBootstrapStage_{
         HistoricalOnlineBootstrapStage::NotStarted};
+    HistoricalOnlineBootstrapTask historicalOnlineBootstrapTask_{
+        HistoricalOnlineBootstrapTask::None};
     std::uint32_t historicalOnlineBootstrapAttempts_{};
+    std::atomic<bool> historicalOnlineBootstrapTaskPending_{false};
+    std::atomic<bool> historicalOnlineBootstrapTaskDone_{false};
+    std::atomic<bool> historicalOnlineBootstrapTaskFailed_{false};
+    std::atomic<std::uint32_t> historicalOnlineBootstrapTaskResult_{};
+    std::atomic<std::uintptr_t> historicalOnlineBootstrapAuthResult_{};
     mutable std::mutex runtimeSnapshotMutex_;
     mutable RuntimeSnapshot runtimeSnapshot_{};
     mutable bool runtimeRefreshPending_{};
