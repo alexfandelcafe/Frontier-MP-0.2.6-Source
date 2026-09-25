@@ -88,9 +88,10 @@ std::filesystem::path frontier_client_package_root() {
     if (!module) return {};
 
     wchar_t modulePath[32768]{};
-    const DWORD length = GetModuleFileNameW(module, modulePath,
-                                            static_cast<DWORD>(std::size(modulePath)));
-    if (length == 0 || length >= std::size(modulePath)) return {};
+    constexpr DWORD kModulePathCapacity =
+        static_cast<DWORD>(sizeof(modulePath) / sizeof(modulePath[0]));
+    const DWORD length = GetModuleFileNameW(module, modulePath, kModulePathCapacity);
+    if (length == 0 || length >= kModulePathCapacity) return {};
 
     return std::filesystem::path(modulePath).parent_path();
 }
