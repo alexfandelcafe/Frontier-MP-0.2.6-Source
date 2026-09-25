@@ -2,6 +2,7 @@
 
 #include "frontier/game/pattern_scanner.hpp"
 #include "frontier/game/game_thread_dispatcher.hpp"
+#include "frontier/game/content_path_redirector.hpp"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -80,6 +81,20 @@ void write_bridge_log_line(const char* message) {
 #endif
     std::fprintf(stderr, "%s\n", message);
 }
+
+#ifdef _WIN32
+std::filesystem::path frontier_client_package_root() {
+    HMODULE module = GetModuleHandleW(L"FrontierClient.dll");
+    if (!module) return {};
+
+    wchar_t modulePath[32768]{};
+    const DWORD length = GetModuleFileNameW(module, modulePath,
+                                            static_cast<DWORD>(std::size(modulePath)));
+    if (length == 0 || length >= std::size(modulePath)) return {};
+
+    return std::filesystem::path(modulePath).parent_path();
+}
+#endif
 
 struct MinimalSagActor final {
     std::byte padding0[0xB0];
@@ -268,6 +283,26 @@ bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild 
         return false;
     }
 
+    const auto packageRoot = frontier_client_package_root();
+    if (packageRoot.empty()) {
+        write_bridge_log_line(
+            "[FrontierContent] unable to resolve FrontierClient.dll package root; "
+            "content hook disabled");
+    } else {
+        std::string contentHookError;
+        if (!contentPathRedirector_.install(
+                text,
+                fingerprint.textSize,
+                moduleBase_,
+                nt->OptionalHeader.SizeOfImage,
+                packageRoot,
+                contentHookError)) {
+            std::string message =
+                "[FrontierContent] fullReadPath hook not attached: " +
+                contentHookError;
+            write_bridge_log_line(message.c_str());
+        }
+    }
 
     initialized_ = true;
     return true;
