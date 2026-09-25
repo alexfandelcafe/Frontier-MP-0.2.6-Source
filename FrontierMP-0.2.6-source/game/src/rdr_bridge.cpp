@@ -430,12 +430,13 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
                 // Exact order recovered from historical LoadOnline:
                 // HUD fade -> UI_EXIT("StartScreen1") -> file lifecycle
                 // events -> NET_AUTHENTICATE_GAMER(0, "Online").
-                std::uintptr_t args[2]{};
-                args[0] =
+                std::uintptr_t exitArgs[1]{};
+                exitArgs[0] =
                     reinterpret_cast<std::uintptr_t>("StartScreen1");
                 (void)nativeInvoker_.invoke_raw(
-                    kNativeUiSendEvent, args, 1u, result);
+                    kNativeUiExit, exitArgs, 1u, result);
 
+                std::uintptr_t args[1]{};
                 args[0] =
                     reinterpret_cast<std::uintptr_t>("fileSetForMPLoad");
                 (void)nativeInvoker_.invoke_raw(
@@ -445,7 +446,7 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
                     reinterpret_cast<std::uintptr_t>(
                         "fileStartupChecksComplete");
                 (void)nativeInvoker_.invoke_raw(
-                    0xB58825F5u, args, 1u, result);
+                    kNativeUiSendEvent, args, 1u, result);
 
                 args[0] = 0u;
                 args[1] =
@@ -494,7 +495,7 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
                 args[0] = static_cast<std::uintptr_t>(0xFFFFFFFFu);
                 std::uintptr_t result = 0u;
                 if (nativeInvoker_.invoke_raw(
-                        0xE8CFDD53u, args, 1u, result)) {
+                        kNativeGetPlayerActor, args, 1u, result)) {
                     actor = result;
                 }
             },
