@@ -373,9 +373,12 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
 
     auto submit = [this](auto&& task, std::string& error) {
         error.clear();
+        // Startup can spend several frames without entering scrThread::Wait.
+        // Do not treat the dispatcher queue latency itself as a bootstrap failure.
+        constexpr std::uint32_t kBootstrapDispatchTimeoutMs = 3000u;
         const bool completed = gameThreadDispatcher_.submit_and_wait(
             std::forward<decltype(task)>(task),
-            500u,
+            kBootstrapDispatchTimeoutMs,
             error);
         if (!completed && error.empty()) {
             error = "game-thread bootstrap task did not complete";
@@ -467,11 +470,15 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
             error);
 
         if (!completed) {
-            historicalOnlineBootstrapStage_ =
-                HistoricalOnlineBootstrapStage::Failed;
-            logLine =
-                "[FrontierSession] historical LoadOnline stage=2 query failed: " +
-                error;
+            // Keep the state machine alive. A dispatcher timeout here only means
+            // the game thread did not pump the queue inside the current window;
+            // it does not prove that HUD_IS_FADING failed.
+            if ((historicalOnlineBootstrapAttempts_ == 1) ||
+                (historicalOnlineBootstrapAttempts_ % 8u) == 0u) {
+                logLine =
+                    "[FrontierSession] historical LoadOnline stage=2 dispatch "
+                    "delayed: " + error;
+            }
             return false;
         }
 
