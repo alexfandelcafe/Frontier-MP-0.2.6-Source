@@ -48,6 +48,7 @@ bool ContentPathRedirector::install(
     const std::uint8_t* text,
     std::size_t textSize,
     std::uintptr_t moduleBase,
+    std::size_t imageSize,
     const std::filesystem::path& clientPackageRoot,
     std::string& error) {
     error.clear();
@@ -55,7 +56,7 @@ bool ContentPathRedirector::install(
     contentRoot_.clear();
     redirectLogCount_.store(0);
 
-    if (text == nullptr || textSize == 0 || moduleBase == 0) {
+    if (text == nullptr || textSize == 0 || moduleBase == 0 || imageSize == 0) {
         error = "fullReadPath hook: invalid game text/module";
         return false;
     }
@@ -73,7 +74,7 @@ bool ContentPathRedirector::install(
     }
 
     if (!PatternScanner::validate_in_module(
-            *hit, moduleBase, 0x5A5EC600u)) {
+            *hit, moduleBase, imageSize)) {
         error = "fullReadPath hook: target outside RDR image";
         return false;
     }
