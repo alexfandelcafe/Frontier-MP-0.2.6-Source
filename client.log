@@ -4,17 +4,17 @@
 [FrontierClient] game bridge initialized; local-player symbol and actor-manager paths resolved
 [FrontierClient] initialized sessionMode=freeroam
 [FrontierClient] worker initialization result=success
-[FrontierClient] bootstrap event name=Local\FrontierMP_Bootstrap_12732_9298671
+[FrontierClient] bootstrap event name=Local\FrontierMP_Bootstrap_7740_9976718
 [FrontierClient] bootstrap event signaled
 [FrontierLauncher] RDR.exe resumed; waiting for process exit
 [FrontierSession] waiting for native invoker registration table error=native registration table not ready: candidates=1 initialized=0
-[FrontierClient] connected as player 1 serverTick=513
-[FrontierClient] locomotion test phase=walk-Z cycleTime=25.65 playerId=65000
-[FrontierClient] snapshot tick=513 players=2 remoteEntities=1
+[FrontierClient] connected as player 1 serverTick=395
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=515 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=517 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=519 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=521 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=523 players=2 remoteEntities=1
-[FrontierLauncher] RDR.exe exitCode=0x80000003
+[FrontierClient] locomotion test phase=walk+Z cycleTime=19.8 playerId=65000
+[FrontierClient] snapshot tick=396 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=398 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=400 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=402 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=404 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=405 players=2 remoteEntities=1
+[FrontierFirstChance] exception=0x80000003 accessOp=4294967295 fault=0x1401FDD85 rip=0x1401FDD85 ripRva=0x1FDD85 module=D:\Red Dead Redemption\RDR.exe\n[FrontierLauncher] RDR.exe exitCode=0x80000003
