@@ -436,11 +436,11 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
                 (void)nativeInvoker_.invoke_raw(
                     kNativeUiExit, exitArgs, 1u, result);
 
-                std::uintptr_t args[1]{};
+                std::uintptr_t args[2]{};
                 args[0] =
                     reinterpret_cast<std::uintptr_t>("fileSetForMPLoad");
                 (void)nativeInvoker_.invoke_raw(
-                    0xB58825F5u, args, 1u, result);
+                    kNativeUiSendEvent, args, 1u, result);
 
                 args[0] =
                     reinterpret_cast<std::uintptr_t>(
