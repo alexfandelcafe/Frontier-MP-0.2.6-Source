@@ -370,7 +370,7 @@ int Launcher::run(const LaunchOptions& options) const {
             FALSE,
             CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT,
             environment.data(),
-            dllPath.parent_path().c_str(),
+            gamePath.parent_path().c_str(),
             &startup,
             &processInfo)) {
         std::wcerr
