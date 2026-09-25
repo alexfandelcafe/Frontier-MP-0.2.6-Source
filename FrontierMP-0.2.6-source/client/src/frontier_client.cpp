@@ -245,44 +245,123 @@ void write_first_chance_exception_log(EXCEPTION_POINTERS* exceptionPointers) {
 
     const DWORD threadId = GetCurrentThreadId();
 
-    std::uintptr_t stackPointers[8]{};
-    SIZE_T stackBytesRead = 0;
-    bool stackReadable = false;
+    std::uintptr_t unwindIps[12]{};
+    std::uintptr_t unwindRvas[12]{};
+    HMODULE unwindModules[12]{};
+    std::size_t unwindCount = 0;
+
 #if defined(_M_X64)
-    if (exceptionPointers->ContextRecord != nullptr &&
-        exceptionPointers->ContextRecord->Rsp != 0) {
-        MEMORY_BASIC_INFORMATION stackMbi{};
-        if (VirtualQuery(
-                reinterpret_cast<const void*>(exceptionPointers->ContextRecord->Rsp),
-                &stackMbi,
-                sizeof(stackMbi)) == sizeof(stackMbi) &&
-            stackMbi.State == MEM_COMMIT &&
-            (stackMbi.Protect & 0xFF) != PAGE_NOACCESS &&
-            (stackMbi.Protect & 0xFF) != PAGE_GUARD) {
-            stackReadable =
-                ReadProcessMemory(
-                    GetCurrentProcess(),
-                    reinterpret_cast<const void*>(exceptionPointers->ContextRecord->Rsp),
-                    stackPointers,
-                    sizeof(stackPointers),
-                    &stackBytesRead) &&
-                stackBytesRead == sizeof(stackPointers);
+    if (exceptionPointers->ContextRecord != nullptr) {
+        CONTEXT unwindContext = *exceptionPointers->ContextRecord;
+
+        for (std::size_t i = 0; i < std::size(unwindIps); ++i) {
+            const std::uintptr_t frameRip =
+                static_cast<std::uintptr_t>(unwindContext.Rip);
+            if (frameRip == 0) break;
+
+            unwindIps[unwindCount] = frameRip;
+
+            MEMORY_BASIC_INFORMATION frameMbi{};
+            if (VirtualQuery(
+                    reinterpret_cast<const void*>(frameRip),
+                    &frameMbi,
+                    sizeof(frameMbi)) == sizeof(frameMbi)) {
+                HMODULE frameModule =
+                    static_cast<HMODULE>(frameMbi.AllocationBase);
+                unwindModules[unwindCount] = frameModule;
+
+                const std::uintptr_t frameModuleBase =
+                    reinterpret_cast<std::uintptr_t>(frameModule);
+                if (frameModuleBase != 0 && frameRip >= frameModuleBase) {
+                    unwindRvas[unwindCount] = frameRip - frameModuleBase;
+                }
+            }
+
+            ++unwindCount;
+
+            DWORD64 imageBase = 0;
+            PRUNTIME_FUNCTION runtimeFunction =
+                RtlLookupFunctionEntry(
+                    unwindContext.Rip,
+                    &imageBase,
+                    nullptr);
+
+            if (runtimeFunction == nullptr) {
+                // Leaf function or missing unwind metadata: recover the caller
+                // from the saved return address at RSP.
+                const auto returnAddress =
+                    reinterpret_cast<const std::uintptr_t*>(
+                        unwindContext.Rsp);
+                std::uintptr_t nextRip = 0;
+                SIZE_T copied = 0;
+
+                if (returnAddress != nullptr &&
+                    ReadProcessMemory(
+                        GetCurrentProcess(),
+                        returnAddress,
+                        &nextRip,
+                        sizeof(nextRip),
+                        &copied) &&
+                    copied == sizeof(nextRip)) {
+                    unwindContext.Rip = nextRip;
+                    unwindContext.Rsp += sizeof(std::uintptr_t);
+                    if (unwindContext.Rip == 0) break;
+                    continue;
+                }
+
+                break;
+            }
+
+            PVOID handlerData = nullptr;
+            DWORD64 establisherFrame = 0;
+            CONTEXT previousContext = unwindContext;
+
+            RtlVirtualUnwind(
+                UNW_FLAG_NHANDLER,
+                imageBase,
+                unwindContext.Rip,
+                runtimeFunction,
+                &unwindContext,
+                &handlerData,
+                &establisherFrame,
+                nullptr);
+
+            if (unwindContext.Rip == 0 ||
+                unwindContext.Rip == previousContext.Rip ||
+                unwindContext.Rsp <= previousContext.Rsp) {
+                break;
+            }
         }
     }
 #endif
 
-    char stackHex[8 * 19 + 1]{};
-    std::size_t stackHexLength = 0;
-    if (stackReadable) {
-        for (std::size_t i = 0; i < std::size(stackPointers); ++i) {
-            const int n = std::snprintf(
-                stackHex + stackHexLength,
-                sizeof(stackHex) - stackHexLength,
-                "%s%llX",
-                i == 0 ? "" : ",",
-                static_cast<unsigned long long>(stackPointers[i]));
-            if (n <= 0) break;
-            stackHexLength += static_cast<std::size_t>(n);
+    char unwindText[12 * 96 + 1]{};
+    std::size_t unwindTextLength = 0;
+    for (std::size_t i = 0; i < unwindCount; ++i) {
+        char modulePath[MAX_PATH]{};
+        DWORD modulePathLength = 0;
+        if (unwindModules[i] != nullptr) {
+            modulePathLength = GetModuleFileNameA(
+                unwindModules[i],
+                modulePath,
+                MAX_PATH);
+        }
+
+        const int n = std::snprintf(
+            unwindText + unwindTextLength,
+            sizeof(unwindText) - unwindTextLength,
+            "%s%zu:rip=0x%llX:rva=0x%llX:module=%s",
+            i == 0 ? "" : " | ",
+            i,
+            static_cast<unsigned long long>(unwindIps[i]),
+            static_cast<unsigned long long>(unwindRvas[i]),
+            modulePathLength != 0 ? modulePath : "<unknown>");
+
+        if (n <= 0) break;
+        unwindTextLength += static_cast<std::size_t>(n);
+        if (unwindTextLength >= sizeof(unwindText)) {
+            unwindText[sizeof(unwindText) - 1] = '\0';
+            break;
         }
     }
 
@@ -319,7 +398,7 @@ void write_first_chance_exception_log(EXCEPTION_POINTERS* exceptionPointers) {
     const int length = std::snprintf(
         buffer,
         sizeof(buffer),
-        "[FrontierFirstChance] exception=0x%08lX accessOp=%lu fault=0x%llX rip=0x%llX ripRva=0x%llX thread=%lu module=%s bytes=%s stack=%s\\n",
+        "[FrontierFirstChance] exception=0x%08lX accessOp=%lu fault=0x%llX rip=0x%llX ripRva=0x%llX thread=%lu module=%s bytes=%s unwind=%s\\n",
         static_cast<unsigned long>(code),
         static_cast<unsigned long>(accessOp),
         static_cast<unsigned long long>(faultAddress),
@@ -328,7 +407,7 @@ void write_first_chance_exception_log(EXCEPTION_POINTERS* exceptionPointers) {
         static_cast<unsigned long>(threadId),
         modulePathLength != 0 ? modulePath : "<unknown>",
         bytesReadable ? instructionHex : "<unreadable>",
-        stackReadable ? stackHex : "<unreadable>");
+        unwindCount != 0 ? unwindText : "<unavailable>");
 
     DWORD written = 0;
     if (length > 0) {
