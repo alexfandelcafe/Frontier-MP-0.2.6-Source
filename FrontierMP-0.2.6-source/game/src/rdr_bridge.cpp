@@ -2379,6 +2379,111 @@ bool RdrBridge::ensure_local_player(
                 if (error.empty()) error = message;
             };
 
+            auto verify_local_actor = [this, &ready, &actorHandle, &error](
+                                          std::uint32_t candidateActor,
+                                          bool created) {
+                if (candidateActor == 0u) {
+                    if (error.empty()) error = "local player actor handle is zero";
+                    return;
+                }
+
+                std::uintptr_t validArgs[1]{candidateActor};
+                std::uintptr_t validResult = 0u;
+                const bool validOk = nativeInvoker_.invoke_raw(
+                    kNativeIsActorValid, validArgs, 1u, validResult);
+                const bool valid = validOk && validResult != 0u;
+
+                std::uintptr_t playerArgs[1]{candidateActor};
+                std::uintptr_t playerResult = 0u;
+                const bool isPlayerOk = nativeInvoker_.invoke_raw(
+                    kNativeIsActorPlayer, playerArgs, 1u, playerResult);
+                const bool isPlayer = isPlayerOk && playerResult != 0u;
+
+                std::uintptr_t localArgs[1]{candidateActor};
+                std::uintptr_t localResult = 0u;
+                const bool isLocalOk = nativeInvoker_.invoke_raw(
+                    kNativeIsActorLocalPlayer, localArgs, 1u, localResult);
+                const bool isLocal = isLocalOk && localResult != 0u;
+
+                std::uintptr_t actorSlotArgs[1]{candidateActor};
+                std::uintptr_t actorSlotResult = 0u;
+                const bool actorSlotOk = nativeInvoker_.invoke_raw(
+                    kNativeGetActorSlot, actorSlotArgs, 1u, actorSlotResult);
+
+                std::uintptr_t localSlotResult = 0u;
+                const bool localSlotOk = nativeInvoker_.invoke_raw(
+                    kNativeGetLocalSlot, nullptr, 0u, localSlotResult);
+
+                // Match the historical local branch exactly: Camera follows the
+                // actor and player slot 0 is given control with (true, 0, 0).
+                std::uintptr_t cameraArgs[1]{candidateActor};
+                std::uintptr_t cameraResult = 0u;
+                const bool cameraOk = nativeInvoker_.invoke_raw(
+                    kNativeSetCameraFollowActor, cameraArgs, 1u, cameraResult);
+
+                std::uintptr_t controlArgs[4]{0u, 1u, 0u, 0u};
+                std::uintptr_t controlResult = 0u;
+                const bool controlOk = nativeInvoker_.invoke_raw(
+                    kNativeSetPlayerControl, controlArgs, 4u, controlResult);
+
+                // Re-query the canonical engine accessor after the create/setup
+                // sequence. This is the strongest runtime check that the actor is
+                // actually registered as the local player's actor.
+                std::uintptr_t playerActorArgs[1]{0xFFFFFFFFu};
+                std::uintptr_t playerActorResult = 0u;
+                const bool playerActorOk = nativeInvoker_.invoke_raw(
+                    kNativeGetPlayerActor, playerActorArgs, 1u, playerActorResult);
+
+                const std::uint32_t playerActorHandle =
+                    static_cast<std::uint32_t>(playerActorResult);
+                const bool playerActorMatches =
+                    playerActorOk && playerActorHandle != 0u &&
+                    playerActorHandle == candidateActor;
+
+                char message[768]{};
+                std::snprintf(
+                    message,
+                    sizeof(message),
+                    "[FrontierLocalPlayer] setup actor=0x%08X created=%u "
+                    "valid=%s%u isPlayer=%s%u isLocalPlayer=%s%u "
+                    "actorSlot=%s%u localSlot=%s%u "
+                    "cameraFollow=%s%u playerControl=%s%u "
+                    "getPlayerActor=0x%08X match=%u",
+                    candidateActor,
+                    created ? 1u : 0u,
+                    validOk ? "" : "<unreadable>",
+                    validOk ? static_cast<unsigned>(valid) : 0u,
+                    isPlayerOk ? "" : "<unreadable>",
+                    isPlayerOk ? static_cast<unsigned>(isPlayer) : 0u,
+                    isLocalOk ? "" : "<unreadable>",
+                    isLocalOk ? static_cast<unsigned>(isLocal) : 0u,
+                    actorSlotOk ? "" : "<unreadable>",
+                    actorSlotOk ? static_cast<unsigned>(actorSlotResult) : 0u,
+                    localSlotOk ? "" : "<unreadable>",
+                    localSlotOk ? static_cast<unsigned>(localSlotResult) : 0u,
+                    cameraOk ? "" : "<failed>",
+                    cameraOk ? 1u : 0u,
+                    controlOk ? "" : "<failed>",
+                    controlOk ? 1u : 0u,
+                    playerActorHandle,
+                    playerActorMatches ? 1u : 0u);
+                write_bridge_log_line(message);
+
+                if (!valid) {
+                    if (error.empty()) error = "local player actor failed IS_ACTOR_VALID";
+                    return;
+                }
+                if (!playerActorMatches) {
+                    if (error.empty()) {
+                        error = "GET_PLAYER_ACTOR(-1) did not resolve created local actor";
+                    }
+                    return;
+                }
+
+                actorHandle = candidateActor;
+                ready = true;
+            };
+
             std::uintptr_t actorQueryArgs[1]{0xFFFFFFFFu};
             std::uintptr_t existingResult = 0u;
             if (!nativeInvoker_.invoke_raw(
@@ -2389,19 +2494,8 @@ bool RdrBridge::ensure_local_player(
 
             if (existingResult != 0u) {
                 actorHandle = static_cast<std::uint32_t>(existingResult);
-                std::uintptr_t validArgs[1]{actorHandle};
-                std::uintptr_t validResult = 0u;
-                if (!nativeInvoker_.invoke_raw(
-                        kNativeIsActorValid, validArgs, 1u, validResult)) {
-                    set_error("IS_ACTOR_VALID invoke failed for existing player");
-                    return;
-                }
-                if (validResult == 0u) {
-                    set_error("existing local player actor is invalid");
-                    return;
-                }
-                ready = true;
                 creationObserved = true;
+                verify_local_actor(actorHandle, false);
                 return;
             }
 
@@ -2538,27 +2632,7 @@ bool RdrBridge::ensure_local_player(
             }
             creationObserved = true;
 
-            // Historical local branch immediately prepares camera and controls.
-            std::uintptr_t cameraArgs[1]{actorHandle};
-            std::uintptr_t cameraResult = 0u;
-            (void)nativeInvoker_.invoke_raw(
-                kNativeSetCameraFollowActor, cameraArgs, 1u, cameraResult);
-
-            std::uintptr_t controlArgs[4]{0u, 1u, 0u, 0u};
-            std::uintptr_t controlResult = 0u;
-            (void)nativeInvoker_.invoke_raw(
-                kNativeSetPlayerControl, controlArgs, 4u, controlResult);
-
-            std::uintptr_t validArgs[1]{actorHandle};
-            std::uintptr_t validResult = 0u;
-            if (!nativeInvoker_.invoke_raw(
-                    kNativeIsActorValid, validArgs, 1u, validResult) ||
-                validResult == 0u) {
-                set_error("created local player actor failed validity check");
-                return;
-            }
-
-            ready = true;
+            verify_local_actor(actorHandle, true);
         },
         500u,
         dispatchError);
