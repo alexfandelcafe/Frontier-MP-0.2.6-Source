@@ -2,18 +2,18 @@
 
 ## Purpose
 
-FrontierMP must eventually start an RDR process into a server-driven free-roam session instead of presenting the normal single-player frontend. The current project stage deliberately separates observation from mutation.
+FrontierMP starts RDR in its normal process context, keeps the native Title Screen 3D scene as the initial visual layer, and transfers multiplayer session ownership to the CEF frontend. Native menu buttons are not required for the normal path.
 
-## Current 0.2.0 stage
+## Current 0.2.6 stage
 
-The client now resolves an internal native-registration table using build-gated signatures and exposes a minimal read-only native invocation path. `FrontierSession` polls:
+The client resolves the build-gated native registration table, dispatches native work on the RDR game thread, hosts transparent CEF OSR rendering, and exposes the historical online transition as an explicit runtime operation. `FrontierSession` polls:
 
 - `GET_GAME_STATE` (`0xDD9BD22B`)
 - `STREAMING_IS_WORLD_LOADED` (`0x87B74064`)
 - `IS_SIMULATE_START_MULTIPLAYER` (`0x9A73C2CD`)
 - `IS_STARTPOS_IN_COMMANDLINE` (`0x814D97E8`)
 
-These calls are used only for diagnostics and readiness decisions.
+These calls are used for diagnostics and readiness decisions. They do not, by themselves, prove that the multiplayer gameplay session is active.
 
 ## Why this is staged
 
