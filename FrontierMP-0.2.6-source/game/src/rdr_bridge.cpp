@@ -264,6 +264,75 @@ bool guarded_read_code_byte(std::uintptr_t address, std::uint8_t& out) {
 }
 #endif
 
+
+
+bool historical_wait_target_plausible(std::uintptr_t target) {
+#ifdef _WIN32
+    std::uint8_t bytes[4]{};
+    for (std::size_t i = 0; i < sizeof(bytes); ++i) {
+        if (!guarded_read_code_byte(target + i, bytes[i])) return false;
+    }
+
+    // Reject obvious tail/landing bytes. The current weak E8 signature resolved
+    // to an address beginning with "add esp, imm32; ret", which is not a valid
+    // x64 function entry and caused the hook to execute into a bogus stack frame.
+    if (bytes[0] == 0xC3 || bytes[0] == 0xC2 || bytes[0] == 0xCC ||
+        bytes[0] == 0xE9 || bytes[0] == 0xEB) {
+        return false;
+    }
+    if (bytes[0] == 0x81 && bytes[1] == 0xC4) return false;
+    if (bytes[0] == 0x83 && bytes[1] == 0xC4) return false;
+
+    // Common MSVC/RAGE x64 function-entry families: push/mov/sub/REX prologues.
+    switch (bytes[0]) {
+        case 0x40:
+        case 0x41:
+        case 0x48:
+        case 0x49:
+        case 0x4C:
+        case 0x55:
+        case 0x56:
+        case 0x57:
+        case 0x53:
+        case 0xF3:
+            return true;
+        default:
+            return false;
+    }
+#else
+    (void)target;
+    return false;
+#endif
+}
+
+std::vector<std::uintptr_t> find_pattern_hits(
+    const std::uint8_t* data,
+    std::size_t size,
+    const BytePattern& pattern,
+    std::size_t maxHits) {
+    std::vector<std::uintptr_t> hits;
+    if (data == nullptr || pattern.bytes.empty() || size < pattern.bytes.size()) {
+        return hits;
+    }
+
+    for (std::size_t offset = 0;
+         offset + pattern.bytes.size() <= size && hits.size() < maxHits;
+         ++offset) {
+        bool match = true;
+        for (std::size_t i = 0; i < pattern.bytes.size(); ++i) {
+            if (pattern.bytes[i].has_value() &&
+                data[offset + i] != *pattern.bytes[i]) {
+                match = false;
+                break;
+            }
+        }
+        if (match) {
+            hits.push_back(reinterpret_cast<std::uintptr_t>(data + offset));
+        }
+    }
+    return hits;
+}
+
 void log_code_window(
     const char* label,
     std::uintptr_t address,
@@ -516,24 +585,91 @@ bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild 
         BytePattern::parse(kHistoricalStartNewThreadOverridePattern);
 
     if (waitPattern) {
-        const auto waitHit =
-            PatternScanner::scan_buffer(text, fingerprint.textSize, *waitPattern);
-        if (waitHit &&
-            PatternScanner::validate_in_module(
-                *waitHit, moduleBase_, nt->OptionalHeader.SizeOfImage)) {
-            historicalWaitTarget_ = resolve_relative_call_target(
-                *waitHit, moduleBase_, nt->OptionalHeader.SizeOfImage);
-            if (historicalWaitTarget_ != 0) {
+        // The historical E8 signature is intentionally treated as a candidate
+        // locator, not a proof of function identity. The first hit on this build
+        // decoded to 0x1E6A60, whose bytes are an x64-invalid tail ("add esp; ret")
+        // immediately followed by a different function at +0x10. Hook only when
+        // exactly one decoded target has a plausible x64 function entry.
+        const waitHits = find_pattern_hits(
+            text,
+            fingerprint.textSize,
+            *waitPattern,
+            16u);
+        if (waitHits.empty()) {
+            write_bridge_log_line(
+                "[FrontierScript] historical scrThread::Wait pattern not found");
+        } else {
+            std::size_t plausibleCount = 0;
+            std::uintptr_t plausibleTarget = 0;
+            std::uintptr_t plausibleCallSite = 0;
+
+            for (std::size_t i = 0; i < waitHits.size(); ++i) {
+                const auto callSite = waitHits[i];
+                const auto target = resolve_relative_call_target(
+                    callSite,
+                    moduleBase_,
+                    nt->OptionalHeader.SizeOfImage);
+
+                char candidate[384]{};
+                std::snprintf(
+                    candidate,
+                    sizeof(candidate),
+                    "[FrontierScript] historical scrThread::Wait candidate=%u callsite=0x%llX rva=0x%llX target=0x%llX targetRva=0x%llX plausible=%u",
+                    static_cast<unsigned>(i),
+                    static_cast<unsigned long long>(callSite),
+                    static_cast<unsigned long long>(callSite - moduleBase_),
+                    static_cast<unsigned long long>(target),
+                    target != 0
+                        ? static_cast<unsigned long long>(target - moduleBase_)
+                        : 0ull,
+                    target != 0 && historical_wait_target_plausible(target) ? 1u : 0u);
+                write_bridge_log_line(candidate);
+
+                log_code_window(
+                    "scrThread::Wait candidate callsite",
+                    callSite,
+                    moduleBase_,
+                    24u,
+                    32u);
+                if (target != 0 &&
+                    PatternScanner::validate_in_module(
+                        target,
+                        moduleBase_,
+                        nt->OptionalHeader.SizeOfImage)) {
+                    log_code_window(
+                        "scrThread::Wait candidate target",
+                        target,
+                        moduleBase_,
+                        8u,
+                        32u);
+                }
+
+                if (target != 0 &&
+                    PatternScanner::validate_in_module(
+                        target,
+                        moduleBase_,
+                        nt->OptionalHeader.SizeOfImage) &&
+                    historical_wait_target_plausible(target)) {
+                    ++plausibleCount;
+                    plausibleTarget = target;
+                    plausibleCallSite = callSite;
+                }
+            }
+
+            if (plausibleCount == 1) {
+                historicalWaitTarget_ = plausibleTarget;
                 log_historical_script_resolution(
-                    "scrThread::Wait", *waitHit, historicalWaitTarget_, moduleBase_);
-                log_code_window("scrThread::Wait callsite", *waitHit, moduleBase_, 24u, 64u);
-                log_code_window("scrThread::Wait target", historicalWaitTarget_, moduleBase_, 16u, 64u);
+                    "scrThread::Wait",
+                    plausibleCallSite,
+                    historicalWaitTarget_,
+                    moduleBase_);
 
                 std::string hookError;
                 activeHistoricalScriptTrace_ = this;
-                // game-core's PostLoad pattern identifies a CALL site,
-                // but its native hooker resolves the E8 target and patches that
-                // function. n_Wait itself is void(InfoBase*).
+                // game-core's PostLoad pattern identifies a CALL site, but its
+                // hooker resolves the E8 target and patches that function.
+                // Keep the ABI probe disabled unless the target itself passes
+                // the x64 entry-point sanity check above.
                 if (!historicalWaitHook_.install(
                         historicalWaitTarget_,
                         reinterpret_cast<std::uintptr_t>(&RdrBridge::historical_wait_hook),
@@ -557,12 +693,20 @@ bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild 
                     write_bridge_log_line(message);
                 }
             } else {
-                write_bridge_log_line(
-                    "[FrontierScript] historical scrThread::Wait call target decode failed");
+                activeHistoricalScriptTrace_ = nullptr;
+                if (plausibleCount == 0) {
+                    write_bridge_log_line(
+                        "[FrontierScript] historical scrThread::Wait no plausible target; hook disabled");
+                } else {
+                    char message[256]{};
+                    std::snprintf(
+                        message,
+                        sizeof(message),
+                        "[FrontierScript] historical scrThread::Wait ambiguous plausible targets=%u; hook disabled",
+                        static_cast<unsigned>(plausibleCount));
+                    write_bridge_log_line(message);
+                }
             }
-        } else {
-            write_bridge_log_line(
-                "[FrontierScript] historical scrThread::Wait pattern not found");
         }
     }
 
