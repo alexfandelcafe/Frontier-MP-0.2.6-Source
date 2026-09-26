@@ -90,6 +90,7 @@ bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, cons
 
     g_network = std::make_unique<NetworkClient>();
     g_network->set_on_welcome([this](const auto& welcome) {
+        connected_ = true;
         localPlayerId_ = welcome.playerId;
         localSpawnPoint_ = welcome.spawn;
         lastLocalPlayerSpawnAttemptMs_ = 0;
@@ -238,11 +239,21 @@ bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, cons
         log_line("[FrontierClient] " + reason);
     });
 
-    connected_ = g_network->start(host, port, playerName_, buildId_, buildHash_);
-    if (!connected_) {
+#ifdef FRONTIER_ENABLE_CEF
+    // CEF owns the frontend and therefore owns the initial server connection.
+    // Keep the transport object ready, but do not contact the server until
+    // window.app.connect(host, port) is invoked from the browser.
+    connected_ = false;
+    log_line("[FrontierClient] waiting for CEF server connection request");
+#else
+    const bool transportStarted =
+        g_network->start(host, port, playerName_, buildId_, buildHash_);
+    if (!transportStarted) {
         log_line("[FrontierClient] network initialization failed");
         return false;
     }
+    connected_ = false;
+#endif
     log_line("[FrontierClient] initialized sessionMode=" + sessionMode_);
     return true;
 }
@@ -363,15 +374,16 @@ void ClientRuntime::update() {
             gameBridge_.reset_historical_online_bootstrap();
             session_.reset();
 
-            connected_ = g_network->start(
+            const bool transportStarted = g_network->start(
                 requestedHost,
                 requestedPort,
                 playerName_,
                 buildId_,
                 buildHash_);
+            connected_ = false;
             log_line(
                 std::string("[FrontierClient] CEF server connection request ") +
-                (connected_ ? "accepted" : "failed") +
+                (transportStarted ? "started" : "failed") +
                 " host=" + requestedHost +
                 " port=" + std::to_string(requestedPort));
         }
