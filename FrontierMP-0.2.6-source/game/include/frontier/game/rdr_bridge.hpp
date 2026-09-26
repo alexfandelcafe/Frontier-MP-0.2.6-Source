@@ -89,6 +89,8 @@ private:
     std::uintptr_t historicalRdrStartNewScriptTarget_{};
     std::uintptr_t historicalStartNewThreadOverrideTarget_{};
     std::atomic<std::uint32_t> historicalWaitTraceCount_{};
+    std::atomic<bool> historicalPressStartObserved_{false};
+    std::atomic<bool> historicalMainScriptObserved_{false};
     static RdrBridge* activeHistoricalScriptTrace_;
     enum class HistoricalOnlineBootstrapStage : std::uint8_t {
         NotStarted,

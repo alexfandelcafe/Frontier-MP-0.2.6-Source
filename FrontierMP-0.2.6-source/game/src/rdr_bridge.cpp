@@ -461,20 +461,75 @@ void RdrBridge::on_historical_wait(void* context) {
         }
     }
 
-    char line[640]{};
+    const char* observedScriptName = nullptr;
+    if (scriptNameText != nullptr &&
+        std::strcmp(scriptNameText, "<native-not-ready>") != 0 &&
+        std::strcmp(scriptNameText, "<unreadable>") != 0) {
+        observedScriptName = scriptNameText;
+    }
+
+    bool isPressStartScript = false;
+    bool isMainScript = false;
+    if (observedScriptName != nullptr) {
+        const std::size_t scriptLength = std::strlen(observedScriptName);
+        constexpr const char* kPressStartSuffix = "pressstart";
+        constexpr std::size_t kPressStartSuffixLength = 10u;
+        isPressStartScript =
+            scriptLength >= kPressStartSuffixLength &&
+            std::strcmp(
+                observedScriptName + scriptLength - kPressStartSuffixLength,
+                kPressStartSuffix) == 0;
+        isMainScript = std::strstr(observedScriptName, "content/main") != nullptr;
+    }
+
+    char line[720]{};
     std::snprintf(
         line,
         sizeof(line),
         "[FrontierScript] historical scrThread::Wait trace=%u "
-        "thread=%lu infoBase=0x%llX script=%s return=0x%llX",
+        "thread=%lu infoBase=0x%llX script=%s pressstart=%u mainScript=%u return=0x%llX",
         static_cast<unsigned>(traceIndex),
         static_cast<unsigned long>(GetCurrentThreadId()),
         static_cast<unsigned long long>(
             reinterpret_cast<std::uintptr_t>(context)),
         scriptNameText,
+        isPressStartScript ? 1u : 0u,
+        isMainScript ? 1u : 0u,
         static_cast<unsigned long long>(
             reinterpret_cast<std::uintptr_t>(_ReturnAddress())));
     write_bridge_log_line(line);
+
+    if (isPressStartScript &&
+        !historicalPressStartObserved_.exchange(true, std::memory_order_acq_rel)) {
+        char callbackLine[560]{};
+        std::snprintf(
+            callbackLine,
+            sizeof(callbackLine),
+            "[FrontierScript] historical callback candidate "
+            "OnPressStartScriptRunning script=%s thread=%lu infoBase=0x%llX "
+            "action=dispatch-before-original-Wait",
+            scriptNameText,
+            static_cast<unsigned long>(GetCurrentThreadId()),
+            static_cast<unsigned long long>(
+                reinterpret_cast<std::uintptr_t>(context)));
+        write_bridge_log_line(callbackLine);
+    }
+
+    if (isMainScript &&
+        !historicalMainScriptObserved_.exchange(true, std::memory_order_acq_rel)) {
+        char callbackLine[560]{};
+        std::snprintf(
+            callbackLine,
+            sizeof(callbackLine),
+            "[FrontierScript] historical callback candidate "
+            "OnMainScriptRunning script=%s thread=%lu infoBase=0x%llX "
+            "action=dispatch-before-original-Wait",
+            scriptNameText,
+            static_cast<unsigned long>(GetCurrentThreadId()),
+            static_cast<unsigned long long>(
+                reinterpret_cast<std::uintptr_t>(context)));
+        write_bridge_log_line(callbackLine);
+    }
 #else
     (void)context;
 #endif
@@ -504,6 +559,8 @@ bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild 
     historicalRdrStartNewScriptTarget_ = 0;
     historicalStartNewThreadOverrideTarget_ = 0;
     historicalWaitTraceCount_.store(0, std::memory_order_release);
+    historicalPressStartObserved_.store(false, std::memory_order_release);
+    historicalMainScriptObserved_.store(false, std::memory_order_release);
     if (activeHistoricalScriptTrace_ == this) {
         activeHistoricalScriptTrace_ = nullptr;
     }
