@@ -77,9 +77,9 @@ if(WIN32 AND FRONTIER_CEF_PACKAGE_DIR)
             "FRONTIER_CEF_PACKAGE_DIR must point to a CEF distribution containing include/")
     endif()
 
-    if(NOT EXISTS "${FRONTIER_CEF_PACKAGE_DIR}/libcef_dll_wrapper/CMakeLists.txt")
+    if(NOT EXISTS "${FRONTIER_CEF_PACKAGE_DIR}/libcef_dll/CMakeLists.txt")
         message(FATAL_ERROR
-            "FRONTIER_CEF_PACKAGE_DIR must include libcef_dll_wrapper/ from the CEF binary distribution")
+            "FRONTIER_CEF_PACKAGE_DIR must include libcef_dll/ from the CEF binary distribution")
     endif()
 
     find_library(FRONTIER_CEF_LIBRARY
@@ -96,7 +96,7 @@ if(WIN32 AND FRONTIER_CEF_PACKAGE_DIR)
     endif()
 
     add_subdirectory(
-        "${FRONTIER_CEF_PACKAGE_DIR}/libcef_dll_wrapper"
+        "${FRONTIER_CEF_PACKAGE_DIR}/libcef_dll"
         "${CMAKE_CURRENT_BINARY_DIR}/frontier_cef_dll_wrapper"
         EXCLUDE_FROM_ALL
     )
