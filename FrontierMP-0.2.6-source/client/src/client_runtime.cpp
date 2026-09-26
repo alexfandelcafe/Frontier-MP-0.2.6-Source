@@ -297,8 +297,8 @@ void ClientRuntime::update() {
             // consume the event before the UI state machine exists.
             if (sessionMode_ == "freeroam" &&
                 !historicalOnlineBootstrapLogged_ &&
-                session_.runtime_state().state ==
-                    frontier::game::FrontierSessionState::Frontend) {
+                session_.runtime_state().state !=
+                    frontier::game::FrontierSessionState::RuntimeQueryFailed) {
                 std::string bootstrapLog;
                 const bool bootstrapComplete =
                     gameBridge_.advance_historical_online_bootstrap(bootstrapLog);
