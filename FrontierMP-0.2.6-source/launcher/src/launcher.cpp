@@ -370,10 +370,9 @@ int Launcher::run(const LaunchOptions& options) const {
         return 2;
     }
 
-    const std::array<std::filesystem::path, 4> cefRuntimeFiles = {
+    const std::array<std::filesystem::path, 3> cefRuntimeFiles = {
         dllPath.parent_path() / L"libcef.dll",
         dllPath.parent_path() / L"chrome_elf.dll",
-        dllPath.parent_path() / L"icudtl.dat",
         dllPath.parent_path() / L"v8_context_snapshot.bin",
     };
 
@@ -385,6 +384,22 @@ int Launcher::run(const LaunchOptions& options) const {
                 << L"\n";
             return 2;
         }
+    }
+
+    // icudtl.dat is a CEF resource and our runtime explicitly points CEF at
+    // cef\\Resources. Accept the standard CEF package location there (or a
+    // side-by-side copy in the launcher directory).
+    const auto icuRoot = dllPath.parent_path() / L"icudtl.dat";
+    const auto icuResources = dllPath.parent_path() / L"cef" / L"Resources" / L"icudtl.dat";
+    if (!std::filesystem::exists(icuRoot) &&
+        !std::filesystem::exists(icuResources)) {
+        std::wcerr
+            << L"Required CEF resource is missing: "
+            << icuRoot.wstring()
+            << L" or "
+            << icuResources.wstring()
+            << L"\n";
+        return 2;
     }
 
     if (!verify_game(gamePath.wstring())) {
