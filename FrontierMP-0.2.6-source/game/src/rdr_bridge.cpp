@@ -896,6 +896,11 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
         return false;
     }
 
+    // Some multiplayer/session natives are not present in the registration
+    // table during the initial attach. Retry their hooks on each bootstrap
+    // pass so we observe the exact runtime point at which they become active.
+    (void)startupNativeTracer_.retry_network_optional_hooks();
+
     auto submitTask = [this](HistoricalOnlineBootstrapTask task,
                              std::string& error) {
         error.clear();

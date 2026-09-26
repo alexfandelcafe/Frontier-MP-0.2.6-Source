@@ -12,6 +12,9 @@ class GameThreadDispatcher;
 class StartupNativeTracer final {
 public:
     bool attach(NativeInvoker& invoker, GameThreadDispatcher& dispatcher, std::string& error);
+    // Retry the network/session hooks whose native handlers can appear after
+    // the initial registration table becomes available.
+    bool retry_network_optional_hooks();
     bool attached() const { return attached_; }
 
 private:

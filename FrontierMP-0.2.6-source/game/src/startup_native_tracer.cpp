@@ -707,6 +707,64 @@ bool StartupNativeTracer::attach(NativeInvoker& invoker, GameThreadDispatcher& d
     return true;
 }
 
+bool StartupNativeTracer::retry_network_optional_hooks() {
+    if (!attached_ || !invoker_) return false;
+
+    bool attachedAny = false;
+    const auto retry = [&](std::uint32_t hash,
+                            NativeInvoker::NativeHandler replacement,
+                            NativeInvoker::NativeHandler& original,
+                            const char* label) {
+        if (original != nullptr || !invoker_->has_handler(hash)) return;
+
+        std::string hookError;
+        if (!invoker_->hook_native(hash, replacement, original, &hookError)) {
+            return;
+        }
+
+        char buffer[224]{};
+        std::snprintf(
+            buffer,
+            sizeof(buffer),
+            "[FrontierNativeTrace] deferred optional hook attached %s hash=0x%08X",
+            label,
+            hash);
+        log(buffer);
+        attachedAny = true;
+    };
+
+    retry(kNetEnableMultiplayer,
+          &StartupNativeTracer::net_enable_multiplayer_hook,
+          originalNetEnableMultiplayer_,
+          "NET_ENABLE_MULTIPLAYER");
+    retry(kNetIsInSession,
+          &StartupNativeTracer::net_is_in_session_hook,
+          originalNetIsInSession_,
+          "NET_IS_IN_SESSION");
+    retry(kNetIsSessionClient,
+          &StartupNativeTracer::net_is_session_client_hook,
+          originalNetIsSessionClient_,
+          "NET_IS_SESSION_CLIENT");
+    retry(kNetSessionQuickJoin,
+          &StartupNativeTracer::net_session_quick_join_hook,
+          originalNetSessionQuickJoin_,
+          "NET_SESSION_QUICK_JOIN_NATIVE");
+    retry(kNetSessionStartGameplay,
+          &StartupNativeTracer::net_session_start_gameplay_hook,
+          originalNetSessionStartGameplay_,
+          "NET_SESSION_START_GAMEPLAY");
+    retry(kNetSessionEndGameplay,
+          &StartupNativeTracer::net_session_end_gameplay_hook,
+          originalNetSessionEndGameplay_,
+          "NET_SESSION_END_GAMEPLAY");
+    retry(kNetSessionIsGameplayStarted,
+          &StartupNativeTracer::net_session_is_gameplay_started_hook,
+          originalNetSessionIsGameplayStarted_,
+          "NET_SESSION_IS_GAMEPLAY_STARTED");
+
+    return attachedAny;
+}
+
 void StartupNativeTracer::log(const char* message) {
     write_log_line(message);
 }
