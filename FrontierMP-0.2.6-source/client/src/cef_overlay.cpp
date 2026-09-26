@@ -408,7 +408,11 @@ bool CefOverlay::initialize_on_game_thread() {
 
     log_line("[FrontierCEF] initializing on RDR game thread");
     if (!CefInitialize(mainArgs, settings, state.app, nullptr)) {
-        log_line("[FrontierCEF] CefInitialize failed");
+        const int cefExitCode = CefGetExitCode();
+        std::ostringstream message;
+        message << "[FrontierCEF] CefInitialize failed exitCode=0x"
+                << std::hex << cefExitCode;
+        log_line(message.str());
         state.app = nullptr;
         return false;
     }
