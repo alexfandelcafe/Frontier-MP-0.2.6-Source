@@ -10,8 +10,8 @@
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
-#include <fstream>
-#include <string>
+#include <fstream>#include <string>
+#include <vector>
 #include <cstdio>
 
 namespace {
