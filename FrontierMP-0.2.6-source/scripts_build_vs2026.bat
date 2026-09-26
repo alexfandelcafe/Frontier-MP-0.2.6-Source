@@ -39,7 +39,7 @@ if defined FRONTIER_CEF_PACKAGE_DIR (
     )
     echo.
     echo Configuring CMake with CEF...
-    cmake --preset windows-vs2026-x64 -DFRONTIER_CEF_PACKAGE_DIR="%FRONTIER_CEF_PACKAGE_DIR%" -DFRONTIER_BUILD_CLIENT=ON -DFRONTIER_BUILD_LAUNCHER=ON -DFRONTIER_BUILD_TOOLS=ON -DFRONTIER_BUILD_TESTS=ON > "build\vs2026-x64\cef_configure.log" 2>&1
+    cmake --preset windows-vs2026-x64 -DFRONTIER_CEF_PACKAGE_DIR="%FRONTIER_CEF_PACKAGE_DIR%" -DCEF_RUNTIME_LIBRARY_FLAG=/MD -DFRONTIER_BUILD_CLIENT=ON -DFRONTIER_BUILD_LAUNCHER=ON -DFRONTIER_BUILD_TOOLS=ON -DFRONTIER_BUILD_TESTS=ON > "build\vs2026-x64\cef_configure.log" 2>&1
 ) else (
     echo CEF SDK: disabled
     echo Set FRONTIER_CEF_PACKAGE_DIR to a full CEF Windows distribution to build the CEF overlay.
