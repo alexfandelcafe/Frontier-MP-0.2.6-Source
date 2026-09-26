@@ -927,6 +927,27 @@ DWORD WINAPI FrontierClientWorker(LPVOID) {
 
 #ifdef FRONTIER_ENABLE_CEF
     log_line("[FrontierCEF] compile support enabled");
+    g_cefOverlay.set_frontend_command_handler(
+        [](const std::string& command, const std::vector<std::string>& arguments) {
+            if (command != "connect") return;
+
+            std::string host = arguments.empty() || arguments[0].empty()
+                ? "127.0.0.1"
+                : arguments[0];
+            std::uint16_t port = 30120;
+
+            if (arguments.size() >= 2 && !arguments[1].empty()) {
+                try {
+                    const auto parsed = std::stoul(arguments[1]);
+                    if (parsed >= 1u && parsed <= 65535u) {
+                        port = static_cast<std::uint16_t>(parsed);
+                    }
+                } catch (...) {
+                }
+            }
+
+            g_runtime.request_server_connection(host, port);
+        });
     if (g_cefOverlay.start(g_runtime.game_bridge())) {
         log_line("[FrontierCEF] overlay startup requested");
     } else {
