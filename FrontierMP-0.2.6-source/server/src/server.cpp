@@ -87,6 +87,13 @@ void Server::handle_packet(Connection* connection, const std::vector<std::uint8_
     protocol::Message message{};
     if (!protocol::decode_packet(bytes, header, message)) return;
 
+    // Hello establishes the session. After Welcome, reject packets that do
+    // not carry the server-issued connection id recorded for this endpoint.
+    if (message.type != protocol::MessageType::Hello &&
+        (!connection->welcomed || header.connectionId != connection->connectionId)) {
+        return;
+    }
+
     connection->reliability.acknowledge(header.ack, header.ackBits);
     if (!connection->receiveHistory.accept(header.sequence)) return;
     connection->lastReceiveMs = nowMs;
