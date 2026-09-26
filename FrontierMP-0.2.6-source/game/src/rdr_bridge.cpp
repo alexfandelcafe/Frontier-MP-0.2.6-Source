@@ -447,88 +447,30 @@ void RdrBridge::on_historical_wait(void* context) {
         historicalWaitTraceCount_.fetch_add(1, std::memory_order_relaxed);
     if (traceIndex >= 256) return;
 
-    char scriptName[128]{};
-    const char* scriptNameText = "<native-not-ready>";
-    if (nativeInvoker_.ready()) {
-        std::uintptr_t result = 0;
-        if (nativeInvoker_.invoke_raw(
-                kNativeGetScriptName, nullptr, 0u, result) &&
-            result != 0 &&
-            guarded_read_c_string(result, scriptName, sizeof(scriptName))) {
-            scriptNameText = scriptName;
-        } else {
-            scriptNameText = "<unreadable>";
-        }
-    }
-
-    const char* observedScriptName = nullptr;
-    if (scriptNameText != nullptr &&
-        std::strcmp(scriptNameText, "<native-not-ready>") != 0 &&
-        std::strcmp(scriptNameText, "<unreadable>") != 0) {
-        observedScriptName = scriptNameText;
-    }
-
-    bool isPressStartScript = false;
-    bool isMainScript = false;
-    if (observedScriptName != nullptr) {
-        const std::size_t scriptLength = std::strlen(observedScriptName);
-        constexpr const char* kPressStartSuffix = "pressstart";
-        constexpr std::size_t kPressStartSuffixLength = 10u;
-        isPressStartScript =
-            scriptLength >= kPressStartSuffixLength &&
-            std::strcmp(
-                observedScriptName + scriptLength - kPressStartSuffixLength,
-                kPressStartSuffix) == 0;
-        isMainScript = std::strstr(observedScriptName, "content/main") != nullptr;
-    }
-
-    char line[720]{};
+    // Do not invoke another native from inside scrThread::Wait. Wait is itself
+    // part of the script scheduler path; re-entering NativeInvoker here can
+    // mutate the live script/native context and corrupt the return path.
+    // Keep this hook observational only. Script-name correlation can be added
+    // later through a separate, non-reentrant observation point.
+    char line[560]{};
     std::snprintf(
         line,
         sizeof(line),
         "[FrontierScript] historical scrThread::Wait trace=%u "
-        "thread=%lu infoBase=0x%llX script=%s pressstart=%u mainScript=%u return=0x%llX",
+        "thread=%lu infoBase=0x%llX script=<not-sampled-in-wait-hook> "
+        "return=0x%llX",
         static_cast<unsigned>(traceIndex),
         static_cast<unsigned long>(GetCurrentThreadId()),
         static_cast<unsigned long long>(
             reinterpret_cast<std::uintptr_t>(context)),
-        scriptNameText,
-        isPressStartScript ? 1u : 0u,
-        isMainScript ? 1u : 0u,
         static_cast<unsigned long long>(
             reinterpret_cast<std::uintptr_t>(_ReturnAddress())));
     write_bridge_log_line(line);
 
-    if (isPressStartScript &&
-        !historicalPressStartObserved_.exchange(true, std::memory_order_acq_rel)) {
-        char callbackLine[560]{};
-        std::snprintf(
-            callbackLine,
-            sizeof(callbackLine),
-            "[FrontierScript] historical callback candidate "
-            "OnPressStartScriptRunning script=%s thread=%lu infoBase=0x%llX "
-            "action=dispatch-before-original-Wait",
-            scriptNameText,
-            static_cast<unsigned long>(GetCurrentThreadId()),
-            static_cast<unsigned long long>(
-                reinterpret_cast<std::uintptr_t>(context)));
-        write_bridge_log_line(callbackLine);
-    }
-
-    if (isMainScript &&
-        !historicalMainScriptObserved_.exchange(true, std::memory_order_acq_rel)) {
-        char callbackLine[560]{};
-        std::snprintf(
-            callbackLine,
-            sizeof(callbackLine),
-            "[FrontierScript] historical callback candidate "
-            "OnMainScriptRunning script=%s thread=%lu infoBase=0x%llX "
-            "action=dispatch-before-original-Wait",
-            scriptNameText,
-            static_cast<unsigned long>(GetCurrentThreadId()),
-            static_cast<unsigned long long>(
-                reinterpret_cast<std::uintptr_t>(context)));
-        write_bridge_log_line(callbackLine);
+    if (traceIndex == 0u) {
+        write_bridge_log_line(
+            "[FrontierScript] historical scrThread::Wait is observational-only; "
+            "no native re-entry from Wait hook");
     }
 #else
     (void)context;
