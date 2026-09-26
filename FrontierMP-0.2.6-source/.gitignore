@@ -1,0 +1,20 @@
+# Build outputs
+build/
+out/
+cmake-build-*/
+
+# Runtime diagnostics
+*.log
+client_crash.log
+
+# Local CEF caches
+cef-cache/
+cef/Cache/
+cef/Code Cache/
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
