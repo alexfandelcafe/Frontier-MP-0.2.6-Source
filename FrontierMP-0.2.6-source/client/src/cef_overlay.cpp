@@ -2,6 +2,7 @@
 #include "frontier/game/rdr_bridge.hpp"
 
 #include <windows.h>
+#include <windowsx.h>
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <dxgi.h>
@@ -290,6 +291,7 @@ struct PresentHookState final {
     IDXGISwapChain* hookedSwapChain{};
     std::array<void*, 18> hookedVtable{};
     std::array<void*, 18> originalVtable{};
+    void** originalVtableAddress{};
     bool swapchainHooked{};
     bool installed{};
 };
@@ -445,23 +447,7 @@ HRESULT STDMETHODCALLTYPE frontier_present(
     UINT flags);
 
 void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
-    if (swapChain == nullptr) return;
-
-    std::lock_guard lock(state.mutex);
-    if (state.swapchainHooked) {
-        if (state.hookedSwapChain == swapChain) return;
-
-        void*** currentVtable =
-            reinterpret_cast<void***>(state.hookedSwapChain);
-        if (currentVtable != nullptr) {
-            *currentVtable = state.originalVtable.data();
-        }
-        state.hookedSwapChain = nullptr;
-        state.hookedVtable.fill(nullptr);
-        state.originalVtable.fill(nullptr);
-        state.presentOriginal = nullptr;
-        state.swapchainHooked = false;
-    }
+    if (swapChain == nullptr || state.swapchainHooked) return;
 
     void*** vtable =
         reinterpret_cast<void***>(swapChain);
@@ -484,6 +470,7 @@ void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
     state.hookedVtable[8] =
         reinterpret_cast<void*>(&frontier_present);
 
+    state.originalVtableAddress = *vtable;
     *vtable = state.hookedVtable.data();
     state.hookedSwapChain = swapChain;
     state.swapchainHooked = true;
@@ -552,14 +539,16 @@ void unhook_render_path() {
         g_presentHook.hookedSwapChain != nullptr) {
         void*** vtable =
             reinterpret_cast<void***>(g_presentHook.hookedSwapChain);
-        if (vtable != nullptr) {
-            *vtable = g_presentHook.originalVtable.data();
+        if (vtable != nullptr &&
+            g_presentHook.originalVtableAddress != nullptr) {
+            *vtable = g_presentHook.originalVtableAddress;
         }
     }
 
     g_presentHook.hookedSwapChain = nullptr;
     g_presentHook.hookedVtable.fill(nullptr);
     g_presentHook.originalVtable.fill(nullptr);
+    g_presentHook.originalVtableAddress = nullptr;
     g_presentHook.presentOriginal = nullptr;
     g_presentHook.swapchainHooked = false;
 
