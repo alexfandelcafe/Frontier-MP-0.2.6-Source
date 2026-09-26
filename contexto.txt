@@ -1,0 +1,1457 @@
+FRONTIER-MP — CONTEXTO COMPLETO PARA CONTINUAR EN UN CHAT NUEVO
+Actualizado: 2026-09-26
+Branch de trabajo: game-thread/remote-actor-spawn-test-0.2.41
+
+============================================================
+1. OBJETIVO GENERAL DEL PROYECTO
+============================================================
+
+Proyecto: Frontier-MP
+Repositorio principal:
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source
+
+Branch activa:
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/tree/game-thread/remote-actor-spawn-test-0.2.41
+
+Objetivo funcional:
+- Crear un multiplayer funcional para Red Dead Redemption 1 PC.
+- Arrancar directamente en un mundo multiplayer/freeroam.
+- Evitar el flujo de "Load Game" y evitar depender de un save/misión de historia.
+- Crear un player local real de RAGE, no solamente un actor genérico.
+- Mantener intacto el sistema de remote actors que ya funciona/progresa.
+- Reproducir, donde sea posible, la secuencia histórica de RDRMP en vez de inventar otra arquitectura.
+
+Regla de trabajo:
+- Los cambios importantes deben hacerse realmente en GitHub.
+- Branch de trabajo siempre: game-thread/remote-actor-spawn-test-0.2.41
+- Antes de modificar un archivo: obtener contenido actual y SHA.
+- Modificar sobre la versión actual.
+- Commit directo sobre la branch.
+- Informar archivo(s), comportamiento reproducido, commit y logs esperados.
+- No romper sistemas existentes, especialmente RemotePlayerManager y remote actor lifecycle.
+- Separar evidencia estática del dump de inferencias.
+- No afirmar runtime verification si no se ejecutó RDR1.
+
+============================================================
+2. REPOSITORIOS DE REFERENCIA
+============================================================
+
+Frontier source:
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source
+
+Dump/decomp histórico RDRMP:
+https://github.com/alexfandelcafe/DLL-descomprimidos-
+
+Cliente histórico RDRMP:
+https://github.com/alexfandelcafe/client-rdrmp2
+
+Server histórico RDRMP:
+https://github.com/alexfandelcafe/RDRMP-Server-Revival-Test1
+
+RDR-PC-Natives-DB:
+https://github.com/K3rhos/RDR-PC-Natives-DB
+
+RDRMP Docs:
+https://github.com/Red-Mods/RDRMP-Docs
+
+RDRMP Server Resources:
+https://github.com/Red-Mods/RDRMP-Server-Resources
+
+G.R.E-Lab:
+https://github.com/Red-Mods/G.R.E-Lab
+
+============================================================
+3. ARCHIVOS DE FRONTIER IMPORTANTES
+============================================================
+
+Build:
+FrontierMP-0.2.6-source/CMakeLists.txt
+
+Bridge:
+FrontierMP-0.2.6-source/game/include/frontier/game/rdr_bridge.hpp
+FrontierMP-0.2.6-source/game/src/rdr_bridge.cpp
+
+Runtime cliente:
+FrontierMP-0.2.6-source/client/include/frontier/client/client_runtime.hpp
+FrontierMP-0.2.6-source/client/src/client_runtime.cpp
+
+Remote actors:
+FrontierMP-0.2.6-source/client/src/remote_player_manager.cpp
+
+Session:
+FrontierMP-0.2.6-source/game/src/frontier_session.cpp
+
+Hooks:
+FrontierMP-0.2.6-source/game/src/inline_hook.cpp
+FrontierMP-0.2.6-source/game/src/startup_native_tracer.cpp
+
+Thread dispatcher:
+FrontierMP-0.2.6-source/game/src/game_thread_dispatcher.cpp
+
+Asset routing:
+FrontierMP-0.2.6-source/game/src/content_path_redirector.cpp
+
+Bootstrap script:
+FrontierMP-0.2.6-source/resources/game/content/ui/boot.sc.xml
+
+Protocol:
+FrontierMP-0.2.6-source/shared/include/frontier/protocol.hpp
+FrontierMP-0.2.6-source/shared/src/protocol.cpp
+FrontierMP-0.2.6-source/shared/include/frontier/types.hpp
+
+============================================================
+4. ESTADO ACTUAL DE LA BRANCH EN GITHUB
+============================================================
+
+HEAD remoto confirmado al crear este contexto:
+61ee86ba46ad09945789af24178cdaef9b04df42
+
+Commit:
+Keep historical online bootstrap alive through player wait
+
+Parent:
+6c7519ad3f14daefd540e0e9bcca18e28459e036
+
+Commit:
+6c7519ad3f14daefd540e0e9bcca18e28459e036
+
+Cambio:
+- En rdr_bridge.cpp se implementó HistoricalOnlineBootstrapTask::SendStartScreenExit.
+- Ejecuta UI_EXIT con "StartScreen1".
+- Se eliminó la llamada duplicada a UI_EXIT desde FinishLoadOnline.
+- El resultado del native queda en historicalOnlineBootstrapTaskResult_.
+
+Commit:
+61ee86ba46ad09945789af24178cdaef9b04df42
+
+Cambio:
+- El historical online bootstrap ya no exige que el runtime permanezca en Frontend para seguir.
+- Continúa hasta RuntimeQueryFailed/player wait.
+
+Anteriormente existió:
+bf99182500c15fdfec530bcb4c6c01abbce06667
+Restore historical LoadOnline frontend transition sequence
+
+IMPORTANTE:
+La integración local-player que se intentó en el workspace más recientemente NO debe considerarse automáticamente committeada en GitHub. Verificar siempre el HEAD y diff real antes de continuar.
+
+============================================================
+5. PROBLEMA ACTUAL DE RUNTIME
+============================================================
+
+La red y el proceso básico funcionan:
+
+- Frontier DLL carga.
+- Bootstrap IPC funciona.
+- RDR abre.
+- Cliente conecta.
+- Se reciben snapshots.
+- GameThreadDispatcher funciona.
+- Native invoker funciona parcialmente.
+- worldLoaded puede llegar a 1.
+- stableWorldLoaded puede llegar a 1.
+- local player sigue sin existir.
+- GET_PLAYER_ACTOR(-1) devuelve 0.
+- La escena 3D puede regresar al mundo/frontend sin gameplay local.
+
+Ejemplos observados:
+connected as player 1
+serverTick=384
+snapshot players=2 remoteEntities=1
+
+y continúa durante cientos de ticks.
+
+Pero:
+worldLoaded=1
+stableWorldLoaded=1
+localPlayer=0
+GET_PLAYER_ACTOR(-1)=0
+
+Conclusión:
+Networking/snapshots no eran el cuello de botella.
+El cuello de botella es el lifecycle de creación/asociación del local player dentro de RAGE.
+
+NO tratar:
+STREAMING_IS_WORLD_LOADED=1
+como equivalente a gameplay/player-ready.
+
+============================================================
+6. ARQUITECTURA OBJETIVO
+============================================================
+
+Flujo deseado:
+
+RDR
+  ->
+bootstrap/frontend
+  ->
+modo online
+  ->
+GameClient/network
+  ->
+local player id
+  ->
+request model
+  ->
+wait streaming
+  ->
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+  ->
+actor/player válido
+  ->
+GetLocalPlayer()
+  ->
+GetPlayerActor()
+  ->
+camera/control/gameplay
+
+Para remotos mantener:
+
+network snapshot
+  ->
+RemotePlayerManager
+  ->
+spawn_remote_actor()
+  ->
+CREATE_ACTOR_IN_LAYOUT
+  ->
+actor remoto
+  ->
+transform/lifecycle
+
+No sustituir ni romper este camino.
+
+============================================================
+7. RDRMP HISTÓRICO: FRONTEND Y CEF
+============================================================
+
+El cliente histórico contiene:
+client-main.dll
+client-networking.dll
+client-shared.dll
+client-webrenderer.dll
+client-luascripting.dll
+game-core.dll
+client-http.dll
+discord-rpc.dll
+
+Layout histórico:
+RDRMP.exe
+data/
+  cef/
+  client-http.dll
+  client-luascripting.dll
+  client-main.dll
+  client-networking.dll
+  client-shared.dll
+  client-webrenderer.dll
+  game-core.dll
+  game/content/...
+  etc.
+
+Referencia:
+https://github.com/alexfandelcafe/client-rdrmp2
+
+PDB histórico de game-core.dll:
+C:\Users\K3rhos\Documents\Visual Studio 2022\Projects\RDRMP\build\Release\data\game-core.pdb
+
+client-main.dll contiene referencias a:
+- cef/cef_ui/mainmenu/index.html
+- mainmenu
+- OnConnect
+- saveManager
+- Guest
+- LOCAL_PLAYER_GAMERTAG
+- set_loading_screen
+- connect
+- disconnect
+- retry
+- 127.0.0.1
+- [address]:[port]
+- on_connection_succeeded
+- on_disconnect
+- failed_server_retrieving_resources
+- failed_server_invalid_version
+- Joining
+- auto_load_plugins
+
+LoadMainMenu:
+- espera condición de RAGE
+- obtiene CEFManager
+- carga cef/cef_ui/mainmenu/index.html
+- crea browser "mainmenu"
+- obtiene ClientHandler
+- registra "OnConnect"
+- registra funciones CEF adicionales
+- Discord state "Main Menu"
+
+CEF histórico:
+https://github.com/alexfandelcafe/client-rdrmp2/tree/main/data/cef
+
+Mainmenu:
+https://github.com/alexfandelcafe/client-rdrmp2/tree/main/data/cef/cef_ui/mainmenu
+
+HTML:
+https://github.com/alexfandelcafe/client-rdrmp2/blob/main/data/cef/cef_ui/mainmenu/index.html
+
+JS:
+https://github.com/alexfandelcafe/client-rdrmp2/blob/main/data/cef/cef_ui/mainmenu/js/app.js
+
+app.js expone/usa:
+app.connect(ip, port)
+app.get_convar("player_name")
+app.set_convar("player_name", ...)
+app.get_convar("language")
+app.set_convar("language", ...)
+app.get_convar("auto_load_plugins")
+app.set_convar("auto_load_plugins", ...)
+app.quit()
+
+UI default:
+127.0.0.1
+port default:
+4674
+
+CEF es frontend/connection UI.
+CEF NO es el constructor principal del actor local.
+La cadena de gameplay debe permanecer separada.
+
+============================================================
+8. RDRMP HISTÓRICO: LoadOnline / InitSpawn
+============================================================
+
+client-main:
+RVA/FUN relevantes:
+- FUN_180002ca0 = LoadOnline
+- FUN_180002f50 = InitSpawn
+- FUN_180005ad0 = LoadMainMenu
+
+LoadOnline:
+1. FUN_1800541b0()
+2. espera condición de RAGE
+3. StartScreen1
+4. fileSetForMPLoad
+5. fileStartupChecksComplete
+6. UI_Unstreammovie("startscreen")
+7. player_name = Config["player_name"], fallback "Guest"
+8. carga/preparación de recursos
+9. ClientWelcome(...)
+
+Commands/UI relevantes:
+connect [address]:[port]
+disconnect
+retry
+loadsp
+
+InitSpawn:
+- cierra browsers CEF
+- configura chat
+- ResourcesManager::LoadAllResources
+- espera resources
+- espera aproximadamente 1000 ms
+- ClientSend::ClientWelcome(...)
+- espera GET_PLAYER_ACTOR(-1)
+- espera STREAMING_IS_WORLD_LOADED
+- HUD_FADE_IN_NOW
+- continúa configuración player/HUD
+
+Punto crítico:
+InitSpawn espera que actor/player exista.
+No es la evidencia principal de su creación.
+
+============================================================
+9. BOOT.SC.XML
+============================================================
+
+Frontier:
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/FrontierMP-0.2.6-source/resources/game/content/ui/boot.sc.xml
+
+StartScreen1:
+net.EnterOnlineForInvite
+  -> SendEvent('startScreenExit')
+  -> SendEvent('net.EnterOnlineForInvite')
+
+startScreenExit:
+  -> PlaySound('HUD_MENU_SELECT_MASTER')
+  -> SendEvent('fileCheckSignedIn')
+  -> Exit(StartScreen1)
+  -> StackPush(StartScreen2)
+
+StartScreen2:
+net.EnterOnlineForInvite
+  -> SendEvent('fileSetForMPLoad')
+  -> NetMachine.SetMultiplayerModeToLaunch('JoinWish')
+  -> UIGame.ValidateNormalMode()
+  -> SendEvent('mainMenuExit')
+  -> Enter(LoadingScreen)
+  -> Enter(waitforInTransition)
+
+waitforInTransition:
+InTransitionComplete
+  -> Exit(waitforInTransition)
+  -> goto(Startup_Checks)
+
+Startup_Checks:
+- Enter(SaveGame_DoNotInterruptMe)
+- Enter(SaveGameIO)
+- SendEvent('fileStartPlayerChecks')
+- on deactivate:
+  SendEvent('fileStartupChecksComplete')
+- UnstreamMovie('startscreen')
+
+Conclusión:
+boot.sc.xml participa en frontend/startup, pero no hay evidencia de que por sí solo cree el local player.
+
+============================================================
+10. CONTENT REDIRECTOR
+============================================================
+
+Frontier:
+game/src/content_path_redirector.cpp
+
+Objetivo:
+content/ui/boot.sc
+  ->
+archivo Frontier externo en game/content
+
+CMake actual copia:
+resources/game/content
+  ->
+<target>/game/content
+
+Esto sigue la frontera histórica:
+DLL + ./game/content
+
+Históricamente se encontró que:
+"boot.sc.xml existe"
+NO implica:
+"RDR efectivamente lo está leyendo por fullReadPath"
+
+En etapas previas fullReadPath no mostró claramente boot.sc en sus argumentos.
+Por eso también hay que investigar el sistema de creación/start de scripts.
+
+============================================================
+11. GAME-CORE / HOOKS
+============================================================
+
+Investigar especialmente:
+sagCoreScript::RDRStartNewScript
+rage::scrThread::StartNewThreadOverride
+rage::scrThread::Wait
+fiAssetManager::fullReadPath
+
+La hipótesis:
+game-core histórico puede enganchar lifecycle de scripts y/o resolver recursos necesario para runtime multiplayer.
+
+Frontier ya tiene:
+InlineHook
+GameThreadDispatcher
+StartupNativeTracer
+ContentPathRedirector
+
+InlineHook:
+- salto absoluto indirecto:
+FF 25 00 00 00 00 <8-byte address>
+- relocalización de CALL E8 en trampoline
+- mov r11, imm64
+- call r11
+
+Los problemas previos de trampoline/crash fueron corregidos.
+
+RdrBridge contiene referencias:
+historicalWaitHook_
+historicalRdrStartNewScriptTarget_
+historicalStartNewThreadOverrideTarget_
+
+Pero todavía hay que comparar instalación histórica real contra Frontier y confirmar que estos hooks tengan la ABI correcta.
+
+============================================================
+12. PLAYER MANAGER HISTÓRICO
+============================================================
+
+client-networking.dll:
+
+GameClient
+Singleton<GameClient>::Get
+GameClient::GetPlayerManager
+GameClient::GetServerData
+
+PlayerManager:
+FUN_180002ea0
+FUN_180003b10
+FUN_180003a10
+FUN_1800051d0
+FUN_180006b10
+FUN_180002b90
+FUN_180002210
+FUN_1800023b0
+FUN_1800020a0
+
+GameClient::OnStart:
+- crea TextChat
+- crea TimeOfDayManager
+- crea PlayerManager de 0x50 bytes
+- guarda shared_ptr en +0x178 / +0x180
+- registra packet 3 -> FUN_1800012b0
+
+PlayerManager::constructor FUN_180002ea0:
+registra packet:
+6
+8
+9
+7
+
+y eventos:
+core:on_player_joined
+core:on_player_left
+
+Aún falta aislar con absoluta certeza cuál lambda 6/7/8/9 termina llamando CreatePlayer.
+
+============================================================
+13. GameClient + 0x110
+============================================================
+
+Constructor:
+*(ushort *)(this + 0x110) = 0xFFFF
+
+FUN_180003b10:
+uVar5 = *(ushort *)(GameClient + 0x110)
+
+if (uVar5 == param_2)
+    local player branch
+else
+    remote branch
+
+Inferencia fuerte:
+GameClient + 0x110 = local player ID
+0xFFFF = unset
+
+Todavía falta localizar con certeza qué función escribe ese campo.
+
+Frontier tiene:
+ClientRuntime::localPlayerId_
+
+Welcome ya contiene:
+playerId
+spawn position
+spawn yaw
+
+Equivalencia funcional:
+Welcome.playerId
+  ->
+localPlayerId_
+  ->
+equivalente al local ID usado en histórico.
+
+============================================================
+14. FUN_180003B10 / CREATE PLAYER
+============================================================
+
+FUN_180003b10 es candidato fuerte a PlayerManager::CreatePlayer.
+
+Pasos:
+1. busca player ID en unordered_map
+2. si existe -> error duplicate
+3. prepara player
+4. obtiene GameClient
+5. lee +0x110
+6. compara localId vs param_2
+7. local branch o remote branch
+8. valida resultado
+9. post-create initialization
+10. core:on_player_joined
+
+param_2:
+player ID
+
+param_3:
+muy probablemente actor/model enum
+
+param_4:
+muy probablemente player name
+
+param_5 / param_6:
+position/rotation data
+
+local_8a8[0]:
+resultado del helper de creación.
+Probable engine actor/player ref/handle, no necesariamente player ID.
+
+============================================================
+15. LOCAL PLAYER BRANCH
+============================================================
+
+FUN_180003b10 si:
+GameClient+0x110 == param_2
+
+entonces:
+
+FUN_180002210(param_3)
+  ->
+request model
+
+FUN_1800023b0(param_3)
+  ->
+wait
+  ->
+ThisFiber::Wait(0)
+
+Luego:
+FUN_180006b10(...)
+
+FUN_180006b10:
+RAGE command:
+0x6A307D5F
+
+Datos esenciales:
+param1
+"player"
+param3
+param4
+param5
+param6
+param7
+0
+
+Frontier hash:
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+0x6A307D5F
+
+Esta es la pieza histórica más fuerte encontrada hasta ahora para crear al local player.
+
+============================================================
+16. PLAYERLAYOUT HISTÓRICO
+============================================================
+
+FUN_1800028b0:
+referencia string:
+"PlayerLayout"
+
+Hace:
+FUN_1800069b0()
+  ->
+string "PlayerLayout"
+  ->
+rage::scrThread::GetCommand(0x5699DE7E)
+
+Si no existe / resultado vacío:
+crea/obtiene PlayerLayout
+mediante:
+rage::scrThread::GetCommand(0x6CA53214)
+
+Hashes:
+0x5699DE7E
+0x6CA53214
+
+Exacta semántica de ambos todavía no está resuelta al 100%.
+No inventar un generic layout si se puede reproducir PlayerLayout histórico.
+
+============================================================
+17. REMOTE PLAYER BRANCH
+============================================================
+
+FUN_180002b90:
+- request model
+- wait model
+- create via RAGE command
+
+Hash:
+0x8D67F397
+
+Corresponde a:
+CREATE_ACTOR_IN_LAYOUT
+0x8D67F397
+
+Usa datos:
+PlayerLayout
+position
+rotation
+actor/model
+
+Frontier ya usa esto para remote actors.
+
+NO modificar ese flujo salvo un bug comprobado.
+
+============================================================
+18. MODEL STREAMING
+============================================================
+
+FUN_180002210:
+RAGE command:
+0xB0A79FEE
+
+Semántica:
+STREAMING_REQUEST_ACTOR
+
+FUN_1800023b0:
+RAGE command:
+0x7DF72579
+
+Semántica:
+STREAMING_IS_ACTOR_LOADED
+
+Frontier:
+STREAMING_REQUEST_ACTOR
+0xB0A79FEE
+
+STREAMING_IS_ACTOR_LOADED
+0x7DF72579
+
+La secuencia histórica es:
+request
+  ->
+wait
+  ->
+create
+
+No crear antes de que el modelo esté disponible.
+
+============================================================
+19. VALIDACIÓN Y POST-CREATE
+============================================================
+
+FUN_1800020a0:
+RAGE command:
+0xBA6C3E92
+
+Frontier:
+IS_ACTOR_VALID
+0xBA6C3E92
+
+Después del create y validación, FUN_180003b10 usa el resultado nuevamente en commands post-create.
+
+Hashes observados:
+0x17D270E
+0x1F7F405C
+0xE4D418D1
+0x165BD4C5
+0xFA090024
+
+RDR-PC-Natives-DB:
+0x165BD4C5 = SET_ACTOR_MAX_HEALTH
+0xFA090024 = SET_ACTOR_HEALTH
+0xE4D418D1 = AUDIO_TURN_OFF_VOCALS_EFFECTS
+0x1F7F405C = AUDIO_TURN_OFF_PAIN_VOCALS
+
+Otros relevantes:
+0xD17AFCD8 = SET_PLAYER_CONTROL
+0x8EFDFE89 = SET_CAMERA_FOLLOW_ACTOR
+
+Esto demuestra que CREATE_PLAYER_ACTOR_IN_LAYOUT no es necesariamente el último paso.
+
+============================================================
+20. core:on_player_joined
+============================================================
+
+La secuencia es:
+
+create
+  ->
+validate
+  ->
+post-create init
+  ->
+core:on_player_joined
+
+NO:
+core:on_player_joined -> create
+
+Los recursos RDRMP reciben/usan el evento después de que el player ya existe.
+
+============================================================
+21. sagPlayerMgr / GetLocalPlayer
+============================================================
+
+game-core:
+rage::sagPlayerMgr::GetLocalPlayer
+RVA 0x18000BEF0
+
+Evidencia:
+18000bef0:
+48 8B 05 A1 F2 00 00
+48 85 C0
+75 01
+C3
+48 8B 00
+C3
+
+Interpretación:
+hay almacenamiento global/estático del local player.
+GetLocalPlayer devuelve la referencia si existe.
+
+GetPlayerActor:
+RVA 0x18000BE30
+
+Probablemente:
+player -> actor id/index -> actor manager
+
+GetActor:
+RVA 0x18000B690
+
+Probablemente:
+actor-manager table lookup por id/index
+
+No sobreafirmar ubicación exacta del global porque aún no está resuelta al 100%.
+
+============================================================
+22. GameClient::OnTick HISTÓRICO
+============================================================
+
+OnTick:
+sagPlayerMgr::GetLocalPlayer()
+if != null:
+    FUN_180005b30
+
+FUN_180005b30:
+sagPlayer::GetPlayerActor()
+  ->
+sagActor::GetGohObject()
+  ->
+leer transform
+  ->
+ENetClient::Send(...)
+
+Conclusión:
+OnTick no crea el player.
+Presupone player/actor existente.
+
+============================================================
+23. PACKET 3
+============================================================
+
+FUN_1800012b0:
+- recibe event packet
+- deserializa event name
+- FNV-1a hash
+- busca callback
+- deserializa:
+  1 uint64
+  2 double
+  3 bool
+  4 string
+  5 Vector3
+- ejecuta/schedule vía fibers
+
+Packet 3:
+event dispatcher.
+
+No es directamente el CreatePlayer trigger.
+
+============================================================
+24. CLIENTWELCOME
+============================================================
+
+Signature:
+ClientWelcome(
+  e_ActorModel model,
+  string playerName,
+  Vector3 position,
+  Vector3 rotation
+)
+
+Serializa:
+- actor model
+- player name
+- pos x/y/z
+- rot x/y/z
+
+Envía:
+ENetClient::Send(...,0,0,...)
+
+No se encontró caller directo estático.
+Probablemente callback/fiber.
+
+============================================================
+25. FRONTIER NETWORK PROTOCOL
+============================================================
+
+Frontier NO usa wire protocol idéntico a RDRMP.
+
+types.hpp:
+PlayerState:
+playerId
+clientTick
+position
+yaw
+velocity
+gait
+flags
+
+SpawnPoint:
+position
+yaw
+
+Welcome:
+playerId
+connectionId
+serverTick
+spawn
+sessionToken
+
+MessageType:
+Hello 1
+Welcome 2
+PlayerState 3
+Snapshot 4
+Goodbye 5
+Ping 6
+Pong 7
+
+Server:
+- UDP
+- 20 Hz / 50 ms
+- player ID allocation
+- reliable Welcome
+- snapshots
+- player state
+- interest radius
+- movement validation
+
+Frontier puede reproducir el lifecycle histórico sin pretender ser el mismo protocolo wire.
+
+============================================================
+26. FRONTIER REMOTE ACTOR SYSTEM
+============================================================
+
+RemotePlayerManager ya existe.
+
+RdrBridge:
+spawn_remote_actor(...)
+update_remote_actor_transform(...)
+is_remote_actor_valid(...)
+read_remote_actor_position(...)
+prepare_remote_actor_for_locomotion(...)
+task_go_to_remote_coord(...)
+destroy_remote_actor(...)
+
+Remote test:
+request_remote_actor_test(...)
+
+Remote test usa:
+- FrontierRemoteLayout
+- ACTOR_MPPLAYER01
+- STREAMING_REQUEST_ACTOR
+- CREATE_ACTOR_IN_LAYOUT
+- IS_ACTOR_VALID
+- GET_ACTOR_ENUM
+- IS_ACTOR_PLAYER
+- GET_ACTOR_SLOT
+- IS_ACTOR_LOCAL_PLAYER
+- GET_ACTOR_UPDATE_PRIORITY
+
+Este sistema NO debe romperse al implementar local player.
+
+============================================================
+27. FRONTIER LOCAL PLAYER ACTUAL
+============================================================
+
+ClientRuntime:
+localPlayerId_
+
+Welcome proporciona:
+playerId
+spawn position
+spawn yaw
+
+read_local_player_state(...) hace:
+GetLocalPlayer
+  ->
+GetPlayerActor
+  ->
+leer state
+
+Eso es lectura/observación.
+No es creación.
+
+Por eso falta:
+local player create path.
+
+============================================================
+28. NATIVES IMPORTANTES
+============================================================
+
+Bootstrap/UI:
+HUD_FADE_TO_LOADING_SCREEN       0xB0B4296A
+HUD_IS_FADING                    0xE5CC6F08
+UI_EXIT                          0x2DF89C2E
+UI_SEND_EVENT                    0xB58825F5
+NET_AUTHENTICATE_GAMER           0x8E0D7219
+HUD_FADE_IN_NOW                  0x7E4A92CF
+
+Runtime:
+STREAMING_IS_WORLD_LOADED        0x87B74064
+GET_PLAYER_ACTOR                 0xE8CFDD53
+GET_LOCAL_SLOT                   0xAD68A22E
+GET_SLOT_ACTOR                   0xDB9B49D8
+GET_ACTOR_SLOT                   0xAABF3356
+IS_ACTOR_LOCAL_PLAYER            0x6542CF26
+IS_ACTOR_PLAYER                  0xB27E91E7
+GET_POSITION                     0x99BD9D6F
+
+Local create:
+CREATE_PLAYER_ACTOR_IN_LAYOUT    0x6A307D5F
+
+Remote:
+CREATE_ACTOR_IN_LAYOUT            0x8D67F397
+
+Streaming:
+STREAMING_REQUEST_ACTOR           0xB0A79FEE
+STREAMING_IS_ACTOR_LOADED         0x7DF72579
+
+Validation:
+IS_ACTOR_VALID                    0xBA6C3E92
+
+Post-create:
+SET_PLAYER_CONTROL                0xD17AFCD8
+SET_CAMERA_FOLLOW_ACTOR           0x8EFDFE89
+
+Session hashes still not in tracer:
+NET_ENABLE_MULTIPLAYER            0x9180FF1C
+NET_IS_IN_SESSION                 0x8CA54980
+NET_SESSION_QUICK_JOIN_NATIVE    0x8DF05A4F
+NET_SESSION_START_GAMEPLAY       0x86FF3A9B
+NET_SESSION_END_GAMEPLAY         0x81FD9851
+NET_SESSION_IS_GAMEPLAY_STARTED  0xDC88B308
+NET_IS_SESSION_CLIENT             0xFF65A07C
+
+"optional hook unavailable" no implica automáticamente que el hash sea incorrecto.
+
+============================================================
+29. ÚLTIMO ERROR DE BUILD
+============================================================
+
+Error del usuario:
+
+client/include/frontier/client/client_runtime.hpp(37,21):
+C2039:
+"SpawnPoint" no es un miembro de "frontier::game"
+
+Causa:
+se usó:
+frontier::game::SpawnPoint
+
+pero SpawnPoint está en:
+namespace frontier
+
+Archivo:
+shared/include/frontier/types.hpp
+
+Corrección:
+usar:
+frontier::SpawnPoint
+
+Los warnings:
+client/src/frontier_client.cpp
+C4456:
+modulePath oculta declaración local anterior
+aprox. líneas 598/377
+
+son warnings, no el error fatal principal.
+
+Estado:
+la corrección debe hacerse antes de continuar con build.
+
+============================================================
+30. INTENTO RECIENTE DE LOCAL SPAWN
+============================================================
+
+Se intentó agregar a RdrBridge:
+ensure_local_player(...)
+reset_local_player_spawn()
+
+y a ClientRuntime:
+localSpawnPoint_
+localPlayerActorModel_
+lastLocalPlayerSpawnAttemptMs_
+localPlayerSpawnReady_
+
+Intención:
+Welcome
+  ->
+guardar spawn
+  ->
+cuando worldLoadedStable y localPlayerId != 0
+  ->
+ensure_local_player
+  ->
+PlayerLayout
+  ->
+model request
+  ->
+model loaded
+  ->
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+  ->
+post-create camera/control
+  ->
+GetLocalPlayer
+  ->
+GetPlayerActor
+
+IMPORTANTE:
+No asumir que esta implementación tentativa es final.
+Hay que revisar:
+- namespace
+- ABI
+- PlayerLayout handling
+- native args
+- model enum
+- return/ref/handle
+- asociación con sagPlayerMgr
+- post-create initialization
+- logging
+- retry behavior
+
+============================================================
+31. PLAYER MODEL
+============================================================
+
+En Frontier types.hpp se planeó/usa:
+kDefaultPlayerActorModel = 837
+
+Comentario usado:
+ACTOR_MPPLAYER01
+
+No afirmar que 837 sea universal para toda build sin runtime verification.
+En el nuevo chat, validar el enum/model contra la build exacta.
+
+============================================================
+32. CEF EN FRONTIER
+============================================================
+
+Objetivo:
+agregar la frontera CEF histórica sin acoplar CEF al actor lifecycle.
+
+El cliente histórico tiene:
+data/cef/
+cef/cef_ui/mainmenu/index.html
+cef/client-webengine.exe
+CEF/Chromium runtime
+
+El CMake de Frontier actualmente crea:
+<target>/game/content
+
+Para integrar CEF correctamente:
+- staging de resources/cef
+- opcionalmente permitir runtime CEF externo
+- host CEF real debe usar las APIs/ABI del runtime disponible
+- no asumir que copiar HTML basta para crear browser
+- mantener app.connect()/OnConnect separado del gameplay
+
+NO declarar "CEF funcional" hasta verificar:
+- libcef/runtime presence
+- subprocess/runtime setup
+- browser creation
+- callback OnConnect
+- path resolution
+- shutdown
+
+============================================================
+33. POR QUÉ NO SE DEBE ROMPER REMOTE ACTORS
+============================================================
+
+Remote actors ya siguen una ruta separada:
+snapshot
+  ->
+RemotePlayerManager
+  ->
+RdrBridge::spawn_remote_actor
+  ->
+0x8D67F397
+
+Local player debe usar:
+localPlayerId
+  ->
+request/wait model
+  ->
+PlayerLayout
+  ->
+0x6A307D5F
+
+No reutilizar:
+RemotePlayerManager::spawn_remote_actor
+para el local.
+
+No cambiar:
+CREATE_ACTOR_IN_LAYOUT
+a:
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+para remotos.
+
+============================================================
+34. QUÉ FALTA HACER
+============================================================
+
+PRIORIDAD 1:
+Arreglar build:
+- SpawnPoint namespace
+- revisar diff local
+- compilar
+
+PRIORIDAD 2:
+Implementar local spawn con PlayerLayout histórico.
+
+PRIORIDAD 3:
+Probar:
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+y verificar:
+IS_ACTOR_VALID
+GET_PLAYER_ACTOR(-1)
+GetLocalPlayer()
+GetPlayerActor()
+
+PRIORIDAD 4:
+Si actor creado pero GetLocalPlayer sigue null:
+investigar mecanismo que asocia el actor a sagPlayerMgr.
+No inventar otra solución.
+
+PRIORIDAD 5:
+Rastrear packet 6/7/8/9:
+determinar cuál llama CreatePlayer.
+
+PRIORIDAD 6:
+Localizar escritura a:
+GameClient + 0x110
+
+PRIORIDAD 7:
+Comparar hooks:
+RDRStartNewScript
+StartNewThreadOverride
+Wait
+fullReadPath
+
+PRIORIDAD 8:
+CEF:
+- staging
+- browser host
+- OnConnect
+- app.connect
+sin mezclarlo con player lifecycle.
+
+============================================================
+35. LOG DE DIAGNÓSTICO DESEADO
+============================================================
+
+Para local:
+
+[FrontierLocalPlayer] welcome playerId=...
+[FrontierLocalPlayer] PlayerLayout resolve start
+[FrontierLocalPlayer] PlayerLayout id=...
+[FrontierLocalPlayer] model request enum=...
+[FrontierLocalPlayer] model loaded enum=...
+[FrontierLocalPlayer] CREATE_PLAYER_ACTOR_IN_LAYOUT begin
+[FrontierLocalPlayer] CREATE_PLAYER_ACTOR_IN_LAYOUT result=...
+[FrontierLocalPlayer] IS_ACTOR_VALID=...
+[FrontierLocalPlayer] SET_CAMERA_FOLLOW_ACTOR=...
+[FrontierLocalPlayer] SET_PLAYER_CONTROL=...
+[FrontierLocalPlayer] GetLocalPlayer=...
+[FrontierLocalPlayer] GetPlayerActor=...
+[FrontierLocalPlayer] READY
+
+Para remotos:
+[FrontierRemotePlayer] ...
+debe continuar exactamente como antes.
+
+============================================================
+36. DOCUMENTOS DE ANÁLISIS GUARDADOS
+============================================================
+
+En Frontier existen documentos de contexto/análisis previos:
+
+ChatGPT-Analiza Repositorio Continúa Chat-20260923-0430.txt
+ChatGPT-Analiza avance del repo-20260925-1915.txt
+ChatGPT-Análisis De Hooks Históricos-20260926-0008.txt
+ChatGPT-Análisis del repositorio-20260926-0121.txt
+ChatGPT-Arquitectura FrontierMP RDR1-20260922-1901.txt
+ChatGPT-Diagnóstico Native Invoker-20260922-2102.txt
+
+Son útiles para recuperar detalles de investigación anterior.
+
+============================================================
+37. RDRMP RESOURCES
+============================================================
+
+freeroam/client.lua:
+natives.actor.get_player_actor(-1)
+
+mptransport/client.lua:
+natives.object.get_object_position(local_player_actor)
+natives.actor.teleport_actor_with_heading(...)
+natives.actor.set_player_control(...)
+
+nametags:
+usa core:on_player_joined
+y obtiene player.get(_client)
+
+Conclusión:
+los resources esperan player/actor real.
+No son el creador principal del local player.
+
+============================================================
+38. CERTEZA DE LAS CONCLUSIONES
+============================================================
+
+ALTA CONFIANZA:
+- GameClient+0x110 controla local vs remote.
+- FUN_180003b10 = CreatePlayer candidate fuerte.
+- 0x6A307D5F = local player creation command histórico.
+- 0x8D67F397 = remote actor creation.
+- 0xB0A79FEE = request model.
+- 0x7DF72579 = model loaded.
+- 0xBA6C3E92 = validation.
+- GetLocalPlayer y GetPlayerActor son accesores reales.
+- InitSpawn espera actor.
+- core:on_player_joined es post-create.
+
+MEDIA/PENDIENTE:
+- quién escribe GameClient+0x110
+- qué packet 6/7/8/9 llama CreatePlayer
+- semántica de hashes post-create
+- cómo 0x6A307D5F actualiza sagPlayerMgr local player
+- ABI exacta de algunos layout natives/commands.
+
+NO HAY RUNTIME VERIFICATION EN ESTE ENTORNO:
+Todo resultado final debe probarse en la build real de RDR1.
+
+============================================================
+39. LINKS RÁPIDOS
+============================================================
+
+Frontier branch:
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/tree/game-thread/remote-actor-spawn-test-0.2.41
+
+Bridge:
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/FrontierMP-0.2.6-source/game/src/rdr_bridge.cpp
+
+Bridge header:
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/FrontierMP-0.2.6-source/game/include/frontier/game/rdr_bridge.hpp
+
+Client runtime:
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/FrontierMP-0.2.6-source/client/src/client_runtime.cpp
+
+Client runtime header:
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/FrontierMP-0.2.6-source/client/include/frontier/client/client_runtime.hpp
+
+Remote manager:
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/FrontierMP-0.2.6-source/client/src/remote_player_manager.cpp
+
+Session:
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/FrontierMP-0.2.6-source/game/src/frontier_session.cpp
+
+Boot:
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/FrontierMP-0.2.6-source/resources/game/content/ui/boot.sc.xml
+
+Hunter:
+https://github.com/alexfandelcafe/DLL-descomprimidos-/blob/main/hunter.txt
+
+Hunter2:
+https://github.com/alexfandelcafe/DLL-descomprimidos-/blob/main/hunter2
+
+Historical client:
+https://github.com/alexfandelcafe/client-rdrmp2
+
+Historical CEF:
+https://github.com/alexfandelcafe/client-rdrmp2/tree/main/data/cef
+
+Historical mainmenu:
+https://github.com/alexfandelcafe/client-rdrmp2/blob/main/data/cef/cef_ui/mainmenu/index.html
+
+Historical mainmenu JS:
+https://github.com/alexfandelcafe/client-rdrmp2/blob/main/data/cef/cef_ui/mainmenu/js/app.js
+
+Historical server:
+https://github.com/alexfandelcafe/RDRMP-Server-Revival-Test1
+
+Native DB:
+https://github.com/K3rhos/RDR-PC-Natives-DB
+
+============================================================
+40. RESUMEN PARA PEGAR EN UN CHAT NUEVO
+============================================================
+
+Estoy desarrollando Frontier-MP en:
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source
+branch:
+game-thread/remote-actor-spawn-test-0.2.41
+
+Objetivo:
+arrancar RDR1 directamente en un mundo multiplayer/freeroam y crear un local player real, sin save/misión de historia, sin romper el remote actor system.
+
+Remote actor system ya existe:
+RemotePlayerManager -> RdrBridge::spawn_remote_actor -> CREATE_ACTOR_IN_LAYOUT 0x8D67F397.
+NO romperlo.
+
+La red de Frontier funciona:
+connected as player 1
+snapshots players=2 remoteEntities=1
+
+El problema actual:
+worldLoaded=1
+stableWorldLoaded=1
+GET_PLAYER_ACTOR(-1)=0
+GetLocalPlayer sigue vacío.
+
+RDRMP histórico:
+GameClient+0x110 es el local player ID (inicialmente 0xFFFF).
+FUN_180003b10 decide local vs remote comparando:
+GameClient+0x110 == playerId.
+
+LOCAL:
+request model 0xB0A79FEE
+wait 0x7DF72579
+obtener PlayerLayout
+CREATE_PLAYER_ACTOR_IN_LAYOUT 0x6A307D5F
+validate 0xBA6C3E92
+post-create init
+GetLocalPlayer
+GetPlayerActor
+gameplay
+
+REMOTE:
+request model
+wait
+CREATE_ACTOR_IN_LAYOUT 0x8D67F397
+validate
+remote lifecycle
+
+CEF histórico:
+client-rdrmp2/data/cef
+mainmenu index:
+cef/cef_ui/mainmenu/index.html
+app.js usa app.connect()
+
+CEF es frontend, no el creador principal del local player.
+
+Archivos críticos:
+rdr_bridge.cpp/hpp
+client_runtime.cpp/hpp
+remote_player_manager.cpp
+frontier_session.cpp
+boot.sc.xml
+inline_hook.cpp
+startup_native_tracer.cpp
+content_path_redirector.cpp
+game_thread_dispatcher.cpp
+
+HEAD remoto confirmado:
+61ee86ba46ad09945789af24178cdaef9b04df42
+
+Último error de build:
+client_runtime.hpp usa incorrectamente:
+frontier::game::SpawnPoint
+Debe ser:
+frontier::SpawnPoint
+
+Próximo trabajo:
+1. arreglar build
+2. revisar cambios locales
+3. implementar local PlayerLayout -> model request -> wait -> 0x6A307D5F
+4. comprobar GetLocalPlayer/GetPlayerActor
+5. si no aparece local player, rastrear asociación sagPlayerMgr
+6. rastrear packet 6/7/8/9 y escritura GameClient+0x110
+7. comparar RDRStartNewScript/StartNewThreadOverride/Wait/fullReadPath
+8. integrar CEF como frontend separado
+9. no modificar RemotePlayerManager innecesariamente
+
+No inventar una segunda arquitectura.
+La intención es reproducir la cadena histórica de RDRMP con la mínima divergencia necesaria para el protocolo de Frontier.
