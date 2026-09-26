@@ -11,35 +11,32 @@
 [FrontierScript] historical rage::scrThread::StartNewThreadOverride callsite=0x1401E60F7 rva=0x1E60F7 target=0x1401E6550 targetRva=0x1E6550
 [FrontierScript] code-window rage::scrThread::StartNewThreadOverride callsite address=0x1401E60F7 rva=0x1E60F7 bytes=C0 48 8B 09 0F 45 D8 E8 15 1D 00 00 44 8B CB 45 33 C0 33 D2 8B C8 8B F8 E8 54 04 00 00 48 8B D8 85 FF 74 16 8B D7 48 8D 0D 94 36 0F 02 E8 5F 2F 00 00 48 8B C8 E8 57 1B 00 00 48 85 DB 75 23 48 8B 05 93 92 A5 02 48 85 C0 74 7F C7 40 14 01 00 00 00 48 8B 5C 24 30 48
 [FrontierScript] code-window rage::scrThread::StartNewThreadOverride target address=0x1401E6550 rva=0x1E6550 bytes=5F C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC 48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 56 41 57 48 83 EC 20 41 8B F9 41 8B E8 4C 8B F2 8B F1 85 C9 74 7D 44 0F B7 15 69 6C 92 02 45 33 FF 4C 8B 0D 57 6C 92 02 41 8B DF 66 45 3B FA
-[FrontierContent] fullReadPath hook attached target=0x1400C8E60 rva=0xC8E60 root=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game safeMax=240 prologue=FF 25 00 00 00 00 50 AF 81 2E F9 7F 00 00 90
-[FrontierContent] route prepared source=content/ui/boot.sc resolved=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game\content/ui/boot.sc.xml bytes=171
-[FrontierContent] route prepared source=content/ui/pausemenu/pausemenuscene.sc resolved=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game\content/ui/pausemenu/pausemenuscene.sc.xml bytes=191
-[FrontierContent] route prepared source=content/ui/pausemenu/savegame.sc resolved=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game\content/ui/pausemenu/savegame.sc.xml bytes=185
-[FrontierContent] route prepared source=content/ui/net/profileeditor/main.sc resolved=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game\content/ui/net/profileeditor/main.sc.xml bytes=189
+[FrontierContent] fullReadPath hook attached target=0x1400C8E60 rva=0xC8E60 root=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-mass-rdrmp-compatibility-fix\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game safeMax=240 prologue=FF 25 00 00 00 00 E0 B9 BE 2C F9 7F 00 00 90
+[FrontierContent] route prepared source=content/ui/boot.sc resolved=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-mass-rdrmp-compatibility-fix\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game\content/ui/boot.sc.xml bytes=157
+[FrontierContent] route prepared source=content/ui/pausemenu/pausemenuscene.sc resolved=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-mass-rdrmp-compatibility-fix\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game\content/ui/pausemenu/pausemenuscene.sc.xml bytes=177
+[FrontierContent] route prepared source=content/ui/pausemenu/savegame.sc resolved=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-mass-rdrmp-compatibility-fix\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game\content/ui/pausemenu/savegame.sc.xml bytes=171
+[FrontierContent] route prepared source=content/ui/net/profileeditor/main.sc resolved=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-mass-rdrmp-compatibility-fix\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game\content/ui/net/profileeditor/main.sc.xml bytes=175
 [FrontierClient] game bridge initialized; local-player symbol and actor-manager paths resolved
 [FrontierClient] initialized sessionMode=freeroam
 [FrontierClient] worker initialization result=success
 [FrontierDiag] RDR callsite diagnostic disabled
-[FrontierClient] bootstrap event name=Local\FrontierMP_Bootstrap_4036_29016171
+[FrontierClient] bootstrap event name=Local\FrontierMP_Bootstrap_4832_34255937
 [FrontierClient] bootstrap event signaled
 [FrontierLauncher] RDR.exe resumed; waiting for process exit
 [FrontierSession] waiting for native invoker registration table error=native registration table not ready: candidates=1 initialized=0
-[FrontierClient] connected as player 1 serverTick=593
+[FrontierClient] connected as player 1 serverTick=1946
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] locomotion test phase=walk-Z cycleTime=29.7 playerId=65000
-[FrontierClient] snapshot tick=594 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=596 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=597 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=599 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=stop@-Z cycleTime=30 playerId=65000
-[FrontierClient] snapshot tick=600 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=601 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=603 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=604 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=606 players=2 remoteEntities=1
+[FrontierClient] locomotion test phase=walk+X cycleTime=1.35 playerId=65000
+[FrontierClient] snapshot tick=1947 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1948 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1950 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1952 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1954 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1956 players=2 remoteEntities=1
 [FrontierContent] fullReadPath call=0 result=1 path=D:/Red Dead Redemption/game/animationres.rpf
 [FrontierContent] fullReadPath call=1 result=1 path=D:/Red Dead Redemption/game/act.rpf
 [FrontierContent] fullReadPath call=2 result=1 path=D:/Red Dead Redemption/game/fragments.rpf
+[FrontierClient] snapshot tick=1958 players=2 remoteEntities=1
 [FrontierContent] fullReadPath call=3 result=1 path=D:/Red Dead Redemption/game/fragments2.rpf
 [FrontierContent] fullReadPath call=4 result=1 path=D:/Red Dead Redemption/game/treeres.rpf
 [FrontierContent] fullReadPath call=5 result=1 path=D:/Red Dead Redemption/game/grassres.rpf
@@ -69,189 +66,210 @@
 [FrontierContent] fullReadPath call=29 result=0 path=D:/Red Dead Redemption/game/patchversion.txt
 [FrontierContent] fullReadPath call=30 result=1 path=D:/Red Dead Redemption/game/fragments/fragmentTextureList.wtd
 [FrontierContent] fullReadPath call=31 result=1 path=D:/Red Dead Redemption/game/fragments/fragmentTextureList.wtd
-[FrontierClient] snapshot tick=608 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=610 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=612 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=614 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1960 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1962 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1964 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1966 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1967 players=2 remoteEntities=1
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=616 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=618 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=620 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=622 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=624 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=626 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=628 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=629 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=631 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=632 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=633 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=635 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1968 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1969 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1971 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1973 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1975 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1976 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1978 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1980 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1982 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1984 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1986 players=2 remoteEntities=1
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=637 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=638 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=walk+X cycleTime=0 playerId=65000
-[FrontierClient] snapshot tick=640 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=642 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=644 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=646 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=648 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=649 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=650 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=652 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=653 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=654 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=655 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1988 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1990 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1992 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1994 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1996 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1998 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2000 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2001 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2003 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2005 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2007 players=2 remoteEntities=1
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=657 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=658 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=660 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=662 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=664 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=666 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=668 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=670 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=671 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=673 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=675 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=676 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2009 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2011 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2013 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2015 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2016 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2017 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2019 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2020 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2021 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2022 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2024 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2025 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2026 players=2 remoteEntities=1
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=677 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=679 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=681 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=683 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=685 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=686 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=688 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=690 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=693 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=694 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=696 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=697 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=699 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=701 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=703 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=704 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=706 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=708 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=710 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=711 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=713 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=715 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=716 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=718 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=719 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=721 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=723 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=725 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=726 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=727 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=729 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=730 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=731 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=734 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=739 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=741 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=743 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=745 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=750 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=754 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=756 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=757 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2028 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2029 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2031 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2032 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2033 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2035 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2037 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2039 players=2 remoteEntities=1
 [FrontierClient] locomotion test phase=stop@+X cycleTime=6.05 playerId=65000
-[FrontierClient] snapshot tick=761 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=764 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=766 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=768 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=770 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=772 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=775 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=777 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=778 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2041 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2043 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2045 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2047 players=2 remoteEntities=1
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=779 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=780 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=782 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=783 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=785 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=787 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=788 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=790 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=791 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=793 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=795 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=797 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2048 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2050 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2052 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2054 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2055 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2056 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2057 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2058 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2060 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2061 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2062 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2063 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2065 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2067 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2068 players=2 remoteEntities=1
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=798 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2069 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2071 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2073 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2075 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2077 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2078 players=2 remoteEntities=1
 [FrontierClient] locomotion test phase=walk-X cycleTime=8 playerId=65000
-[FrontierClient] snapshot tick=800 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=802 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=803 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=804 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=806 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=807 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=809 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=811 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=813 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=815 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=817 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2080 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2081 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2083 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2084 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2085 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2087 players=2 remoteEntities=1
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=819 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=821 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=823 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=825 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=827 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=828 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=832 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=836 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2089 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2091 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2092 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2094 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2096 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2097 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2099 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2101 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2103 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2105 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2107 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2108 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2109 players=2 remoteEntities=1
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=838 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=843 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=846 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=848 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=852 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=856 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=858 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2111 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2112 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2114 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2116 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2118 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2120 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2122 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2124 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2126 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2127 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2129 players=2 remoteEntities=1
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=860 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=862 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=866 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=868 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=870 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=871 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=873 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=875 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=876 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=878 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=880 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2131 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2133 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2135 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2136 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2138 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2140 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2142 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2143 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2144 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2146 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2147 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2149 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2150 players=2 remoteEntities=1
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=881 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=882 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=883 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=885 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=888 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=893 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=897 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=898 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2151 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2152 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2154 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2156 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2158 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2159 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2160 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2162 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2164 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2166 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2168 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2170 players=2 remoteEntities=1
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=900 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=905 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=908 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=912 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=915 players=2 remoteEntities=1
-[FrontierScript] historical scrThread::Wait trace=0 thread=2472 infoBase=0xFFFFFFFF script=<native-not-ready> pressstart=0 mainScript=0 return=0x7FF92E8160B4
+[FrontierClient] snapshot tick=2172 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2174 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2176 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2178 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2179 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2181 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2183 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2184 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2186 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2188 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2190 players=2 remoteEntities=1
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=919 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=stop@-X cycleTime=14.2 playerId=65000
-[FrontierClient] snapshot tick=924 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=927 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=932 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2192 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2194 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2196 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2198 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2199 players=2 remoteEntities=1
+[FrontierClient] locomotion test phase=stop@-X cycleTime=14.05 playerId=65000
+[FrontierClient] snapshot tick=2201 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2203 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2204 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2206 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2208 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2210 players=2 remoteEntities=1
+[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
+[FrontierClient] snapshot tick=2212 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2214 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2215 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2217 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2219 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2221 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2223 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2225 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2227 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2229 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2231 players=2 remoteEntities=1
+[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
+[FrontierClient] snapshot tick=2232 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2234 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2235 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2237 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2239 players=2 remoteEntities=1
+[FrontierClient] locomotion test phase=walk+Z cycleTime=16.05 playerId=65000
+[FrontierClient] snapshot tick=2241 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2243 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2245 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2247 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2248 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2250 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2251 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2253 players=2 remoteEntities=1
+[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
+[FrontierClient] snapshot tick=2255 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2257 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2259 players=2 remoteEntities=1
+[FrontierScript] historical scrThread::Wait trace=0 thread=7688 infoBase=0xFFFFFFFF script=<native-not-ready> pressstart=0 mainScript=0 return=0x7FF92CBE62C4
+[FrontierClient] snapshot tick=2261 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2263 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2265 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2267 players=2 remoteEntities=1
 [FrontierSession] native invoker initialized
-[FrontierClient] snapshot tick=934 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=936 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2269 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2271 players=2 remoteEntities=1
 [FrontierNativeTrace] optional hook unavailable NET_ENABLE_MULTIPLAYER hash=0x9180FF1C
 [FrontierNativeTrace] optional hook unavailable NET_IS_IN_SESSION hash=0x8CA54980
 [FrontierNativeTrace] optional hook unavailable NET_IS_SESSION_CLIENT hash=0xFF65A07C
@@ -261,1029 +279,131 @@
 [FrontierNativeTrace] optional hook unavailable NET_SESSION_IS_GAMEPLAY_STARTED hash=0xDC88B308
 [FrontierNativeTrace] startup native tracer attached
 [FrontierSession] game-thread dispatcher attached
-[FrontierClient] snapshot tick=939 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierSession] state=runtime-query-failed gameState=-1 worldLoaded=0 stableWorldLoaded=0 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0 nativeError=runtime snapshot pending
-[FrontierClient] snapshot tick=942 players=2 remoteEntities=1
-[FrontierSession] native diagnostics: runtime snapshot pending
-[FrontierClient] snapshot tick=947 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=952 players=2 remoteEntities=1
-[FrontierSession] native diagnostics: runtime snapshot pending
-[FrontierNativeTrace] CREATE_LAYOUT name=?<unreadable> result=0x000000F6 tid=2472 ctx=0x14F320 ret=0x1401E4355
-[FrontierNativeTrace] IS_SIMULATE_START_PRESS=0
-[FrontierNative] scrThread::Wait trace=0 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=1 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=2 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=3 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=4 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=5 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=6 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=7 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=8 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=9 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=10 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=11 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=12 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=13 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=14 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=15 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=16 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=17 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=18 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=19 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=20 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=21 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=22 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=23 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=24 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=25 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=26 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=27 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=28 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=29 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=30 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=31 context=0x14F320 thread=2472 ret=0x1401E4355
-[FrontierSession] state=frontend gameState=5 worldLoaded=0 stableWorldLoaded=0 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0
 [FrontierSession] historical boot.sc startScreenExit queued
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierSession] state=frontend gameState=3 worldLoaded=0 stableWorldLoaded=0 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0
-[FrontierSession] historical boot.sc net.EnterOnlineForInvite queued after StartScreen1 exit
-[FrontierClient] snapshot tick=956 players=2 remoteEntities=1
-[FrontierSession] historical boot.sc StartScreen2 online transition complete; HUD_FADE_TO_LOADING_SCREEN queued
-[FrontierClient] snapshot tick=957 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=walk+Z cycleTime=16.05 playerId=65000
-[FrontierClient] snapshot tick=961 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=964 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=965 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=966 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=967 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=968 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=969 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierSession] historical LoadOnline waiting-for-fade HUD_IS_FADING=1 attempt=8
-[FrontierClient] snapshot tick=970 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=971 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=975 players=2 remoteEntities=1
-[FrontierSession] state=frontend gameState=3 worldLoaded=1 stableWorldLoaded=0 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierSession] state=waiting-local-player gameState=3 worldLoaded=1 stableWorldLoaded=1 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0
-[FrontierClient] snapshot tick=976 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=977 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=978 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=979 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=980 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=981 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=982 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=983 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=988 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=993 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=995 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=997 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1002 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1007 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1009 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1011 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1012 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1016 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1021 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1023 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1027 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1032 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1037 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1042 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1047 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1050 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1051 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1054 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1057 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1059 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1062 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1064 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1067 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1070 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1072 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1075 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1077 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1079 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=stop@+Z cycleTime=22 playerId=65000
-[FrontierClient] snapshot tick=1080 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1082 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1085 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1087 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1090 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1092 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1095 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1097 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1100 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1103 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1105 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1107 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1109 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1112 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1114 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1116 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1118 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1119 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=walk-Z cycleTime=24.05 playerId=65000
-[FrontierClient] snapshot tick=1121 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1122 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1124 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1126 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1128 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1130 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1131 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1133 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1134 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1136 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1138 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1140 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1142 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1144 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1145 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1146 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1147 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1149 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1150 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1151 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1153 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1155 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1157 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1158 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1160 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1162 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1163 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1164 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1166 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1168 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1169 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1171 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1173 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1174 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1176 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1178 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1179 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1181 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1182 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1184 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1185 players=2 remoteEntities=1
-[FrontierSession] state=waiting-local-player gameState=3 worldLoaded=0 stableWorldLoaded=1 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0
-[FrontierClient] snapshot tick=1187 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1188 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1190 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1192 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1193 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1195 players=2 remoteEntities=1
-[FrontierSession] state=waiting-local-player gameState=3 worldLoaded=1 stableWorldLoaded=1 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0
-[FrontierClient] snapshot tick=1197 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1198 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1200 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1201 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1203 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1205 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1207 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1209 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1210 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1212 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1213 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1215 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1217 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1219 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1221 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1223 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1225 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1227 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1228 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1229 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1231 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1233 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1235 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1237 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1239 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=stop@-Z cycleTime=30.15 playerId=65000
-[FrontierClient] snapshot tick=1243 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1246 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1251 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1253 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1255 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1256 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1257 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1259 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1260 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1261 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1263 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1265 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1266 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1268 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1269 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1271 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1273 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1275 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1277 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1279 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=walk+X cycleTime=0 playerId=65000
-[FrontierClient] snapshot tick=1280 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1281 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1282 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1284 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1285 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1286 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1288 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1290 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1292 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1293 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1295 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1297 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1299 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1301 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1302 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1304 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1306 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1308 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1310 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1312 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1314 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1316 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1318 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1319 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1320 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1321 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1322 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1324 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1326 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1328 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1330 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1332 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1334 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1335 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1336 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1337 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1338 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1340 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1341 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1343 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1344 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1346 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1347 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1348 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1350 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1352 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1354 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1356 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1358 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1359 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1360 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1362 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1363 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1364 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1366 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1368 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1370 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1372 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1374 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1376 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1378 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1380 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1382 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1383 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1384 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1385 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1386 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1388 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1390 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1391 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1393 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1394 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1396 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1398 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=stop@+X cycleTime=6 playerId=65000
-[FrontierClient] snapshot tick=1400 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1402 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1403 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1404 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1405 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1407 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1409 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1410 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1411 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1413 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1415 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1416 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1418 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1419 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1420 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1422 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1424 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1425 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1426 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1428 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1429 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1431 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1432 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1433 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1435 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1437 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1439 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=walk-X cycleTime=8.05 playerId=65000
-[FrontierClient] snapshot tick=1441 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1443 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1445 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1447 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1449 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1450 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1452 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1454 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1455 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1457 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1459 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1461 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1463 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1464 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1466 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1468 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1470 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1472 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1473 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1474 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1476 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1478 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1479 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1481 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1483 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1485 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1486 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1488 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1490 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1492 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1494 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1496 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1498 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1500 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1502 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1504 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1505 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1507 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1509 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1511 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1513 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1515 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1517 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1519 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1521 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1523 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1524 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1526 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1528 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1530 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1531 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1533 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1535 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1537 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1539 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1541 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1543 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1544 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1546 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1548 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1550 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1551 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1553 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1555 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1557 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1558 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=stop@-X cycleTime=14 playerId=65000
-[FrontierClient] snapshot tick=1560 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1562 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1564 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1565 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1567 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1569 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1571 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1573 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1575 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1577 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1579 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1581 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1583 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1584 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1586 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1588 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1590 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1591 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1593 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8F2BA0 manager=0x14DAA3AF0 guid=0x00000000
-[FrontierClient] snapshot tick=1595 players=2 remoteEntities=1
-[FrontierSession] state=waiting-local-player gameState=4 worldLoaded=1 stableWorldLoaded=1 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0
-[FrontierClient] snapshot tick=1597 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1599 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=walk+Z cycleTime=16.05 playerId=65000
-[FrontierClient] snapshot tick=1601 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1603 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1605 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1607 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1609 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1610 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1612 players=2 remoteEntities=1
-[FrontierLauncher] RDR.exe exitCode=0x0
-[FrontierClient] worker starting
-[FrontierClient] solo remote-player test enabled
-[FrontierScript] historical scrThread::Wait candidate=0 callsite=0x1401F11A2 rva=0x1F11A2 target=0x1401E6A60 targetRva=0x1E6A60 plausible=1
-[FrontierScript] code-window scrThread::Wait candidate callsite address=0x1401F11A2 rva=0x1F11A2 bytes=06 00 00 8D 4E 20 E8 4B 4D FF FF BA 00 04 00 00 8D 4E 20 E8 3E 4D FF FF E8 B9 58 FF FF 8D 56 10 8D 4A 70 E8 5E E5 E8 FF 48 85 C0 74 2A 48 8D 0D DA A1 A8 01 40 88 78 50
-[FrontierScript] code-window scrThread::Wait candidate target address=0x1401E6A60 rva=0x1E6A60 bytes=CC CC CC CC CC CC CC CC 48 83 EC 28 4C 8D 05 25 F5 FF FF BA 3B C0 15 77 E8 CB 06 00 00 84 C0 75 01 CC 4C 8D 05 6F F5 FF
-[FrontierScript] historical scrThread::Wait callsite=0x1401F11A2 rva=0x1F11A2 target=0x1401E6A60 targetRva=0x1E6A60
-[FrontierScript] historical scrThread::Wait target hook attached target=0x1401E6A60 targetRva=0x1E6A60
-[FrontierScript] historical sagCoreScript::RDRStartNewScript callsite=0x14020523B rva=0x20523B target=0x1402003D0 targetRva=0x2003D0
-[FrontierScript] code-window sagCoreScript::RDRStartNewScript callsite address=0x14020523B rva=0x20523B bytes=83 EC 30 48 8B 41 10 48 8B D9 45 33 C9 48 8D 4C 24 40 45 33 C0 48 8B 10 E8 90 B1 FF FF 48 8B 0B 8B 44 24 40 89 01 48 83 C4 30 5B C3 CC 40 53 48 83 EC 30 48 8B 41 10 48 8B D9 48 8D 4C 24 40 44 8B 48 10 4C 8B 40 08 48 8B 10 46 8D 0C 8D 00 00 00 00 E8 56 B1 FF FF 48
-[FrontierScript] code-window sagCoreScript::RDRStartNewScript target address=0x1402003D0 rva=0x2003D0 bytes=49 8B 73 18 49 8B 7B 20 49 8B E3 5D C3 CC CC CC 48 89 5C 24 08 48 89 6C 24 10 48 89 7C 24 18 4C 89 74 24 20 41 57 48 81 EC 30 01 00 00 48 8B 05 C4 EF A3 02 41 8B E9 4D 8B F8 4C 8B D2 48 8B D9 4C 8B 70 38 48 85 D2 0F 84 AF 00 00 00 80 3A 00
-[FrontierScript] historical rage::scrThread::StartNewThreadOverride callsite=0x1401E60F7 rva=0x1E60F7 target=0x1401E6550 targetRva=0x1E6550
-[FrontierScript] code-window rage::scrThread::StartNewThreadOverride callsite address=0x1401E60F7 rva=0x1E60F7 bytes=C0 48 8B 09 0F 45 D8 E8 15 1D 00 00 44 8B CB 45 33 C0 33 D2 8B C8 8B F8 E8 54 04 00 00 48 8B D8 85 FF 74 16 8B D7 48 8D 0D 94 36 0F 02 E8 5F 2F 00 00 48 8B C8 E8 57 1B 00 00 48 85 DB 75 23 48 8B 05 93 92 A5 02 48 85 C0 74 7F C7 40 14 01 00 00 00 48 8B 5C 24 30 48
-[FrontierScript] code-window rage::scrThread::StartNewThreadOverride target address=0x1401E6550 rva=0x1E6550 bytes=5F C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC 48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 56 41 57 48 83 EC 20 41 8B F9 41 8B E8 4C 8B F2 8B F1 85 C9 74 7D 44 0F B7 15 69 6C 92 02 45 33 FF 4C 8B 0D 57 6C 92 02 41 8B DF 66 45 3B FA
-[FrontierContent] fullReadPath hook attached target=0x1400C8E60 rva=0xC8E60 root=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game safeMax=240 prologue=FF 25 00 00 00 00 60 AF 89 2D F9 7F 00 00 90
-[FrontierContent] route prepared source=content/ui/boot.sc resolved=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game\content/ui/boot.sc.xml bytes=171
-[FrontierContent] route prepared source=content/ui/pausemenu/pausemenuscene.sc resolved=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game\content/ui/pausemenu/pausemenuscene.sc.xml bytes=191
-[FrontierContent] route prepared source=content/ui/pausemenu/savegame.sc resolved=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game\content/ui/pausemenu/savegame.sc.xml bytes=185
-[FrontierContent] route prepared source=content/ui/net/profileeditor/main.sc resolved=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game\content/ui/net/profileeditor/main.sc.xml bytes=189
-[FrontierClient] game bridge initialized; local-player symbol and actor-manager paths resolved
-[FrontierClient] initialized sessionMode=freeroam
-[FrontierClient] worker initialization result=success
-[FrontierDiag] RDR callsite diagnostic disabled
-[FrontierClient] bootstrap event name=Local\FrontierMP_Bootstrap_10220_30875156
-[FrontierClient] bootstrap event signaled
-[FrontierLauncher] RDR.exe resumed; waiting for process exit
-[FrontierSession] waiting for native invoker registration table error=native registration table not ready: candidates=1 initialized=0
-[FrontierClient] connected as player 1 serverTick=841
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] locomotion test phase=walk-X cycleTime=10.1 playerId=65000
-[FrontierClient] snapshot tick=842 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=844 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=846 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=848 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=850 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=852 players=2 remoteEntities=1
-[FrontierContent] fullReadPath call=0 result=1 path=D:/Red Dead Redemption/game/animationres.rpf
-[FrontierContent] fullReadPath call=1 result=1 path=D:/Red Dead Redemption/game/act.rpf
-[FrontierContent] fullReadPath call=2 result=1 path=D:/Red Dead Redemption/game/fragments.rpf
-[FrontierContent] fullReadPath call=3 result=1 path=D:/Red Dead Redemption/game/fragments2.rpf
-[FrontierContent] fullReadPath call=4 result=1 path=D:/Red Dead Redemption/game/treeres.rpf
-[FrontierContent] fullReadPath call=5 result=1 path=D:/Red Dead Redemption/game/grassres.rpf
-[FrontierContent] fullReadPath call=6 result=1 path=D:/Red Dead Redemption/game/vfx.rpf
-[FrontierContent] fullReadPath call=7 result=1 path=D:/Red Dead Redemption/game/textures.rpf
-[FrontierContent] fullReadPath call=8 result=1 path=D:/Red Dead Redemption/game/shaders.rpf
-[FrontierContent] fullReadPath call=9 result=1 path=D:/Red Dead Redemption/game/psocache.rpf
-[FrontierContent] fullReadPath call=10 result=1 path=D:/Red Dead Redemption/game/fonts.rpf
-[FrontierContent] fullReadPath call=11 result=1 path=D:/Red Dead Redemption/game/mapres.rpf
-[FrontierContent] fullReadPath call=12 result=1 path=D:/Red Dead Redemption/game/naturalmotion.rpf
-[FrontierClient] snapshot tick=853 players=2 remoteEntities=1
-[FrontierContent] fullReadPath call=13 result=1 path=D:/Red Dead Redemption/game/navres.rpf
-[FrontierContent] fullReadPath call=14 result=1 path=D:/Red Dead Redemption/game/content.rpf
-[FrontierContent] fullReadPath call=15 result=1 path=D:/Red Dead Redemption/game/gringores.rpf
-[FrontierContent] fullReadPath call=16 result=1 path=D:/Red Dead Redemption/game/audio_d11generic.rpf
-[FrontierContent] fullReadPath call=17 result=1 path=D:/Red Dead Redemption/game/tune_d11generic.rpf
-[FrontierContent] fullReadPath call=18 result=1 path=D:/Red Dead Redemption/game/camera.rpf
-[FrontierContent] fullReadPath call=19 result=1 path=D:/Red Dead Redemption/game/terrainlodres.rpf
-[FrontierContent] fullReadPath call=20 result=1 path=D:/Red Dead Redemption/game/terrainboundres.rpf
-[FrontierContent] fullReadPath call=21 result=1 path=D:/Red Dead Redemption/game/cutscene.rpf
-[FrontierContent] fullReadPath call=22 result=1 path=D:/Red Dead Redemption/game/strings_d11generic.rpf
-[FrontierContent] fullReadPath call=23 result=1 path=D:/Red Dead Redemption/game/base/fragments.rpf
-[FrontierContent] fullReadPath call=24 result=1 path=D:/Red Dead Redemption/game/base/mapres.rpf
-[FrontierContent] fullReadPath call=25 result=1 path=D:/Red Dead Redemption/game/base/cutscene.rpf
-[FrontierContent] fullReadPath call=26 result=1 path=D:/Red Dead Redemption/game/base/content.rpf
-[FrontierContent] fullReadPath call=27 result=1 path=D:/Red Dead Redemption/game/flash.rpf
-[FrontierContent] fullReadPath call=28 result=0 path=D:/Red Dead Redemption/game/patch0
-[FrontierContent] fullReadPath call=29 result=0 path=D:/Red Dead Redemption/game/patchversion.txt
-[FrontierContent] fullReadPath call=30 result=1 path=D:/Red Dead Redemption/game/fragments/fragmentTextureList.wtd
-[FrontierContent] fullReadPath call=31 result=1 path=D:/Red Dead Redemption/game/fragments/fragmentTextureList.wtd
-[FrontierClient] snapshot tick=855 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=857 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=858 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=860 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=861 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=863 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=864 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=865 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=866 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=868 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=869 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=870 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=871 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=873 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=874 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=876 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=877 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=879 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=881 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=883 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=885 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=887 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=888 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=890 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=892 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=894 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=896 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=898 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=900 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=902 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=904 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=906 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=908 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=909 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=910 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=912 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=914 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=915 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=917 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=919 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=stop@-X cycleTime=14.05 playerId=65000
-[FrontierClient] snapshot tick=921 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=922 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=924 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=925 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=926 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=927 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=929 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=930 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=932 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=933 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=935 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=936 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=937 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=939 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=941 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=942 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=944 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=945 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=947 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=948 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=950 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=951 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=953 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=955 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=956 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=957 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=958 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=walk+Z cycleTime=16 playerId=65000
-[FrontierClient] snapshot tick=960 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=961 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=963 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=964 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=965 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=967 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=969 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=971 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=972 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=974 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=976 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=978 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=979 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=981 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=982 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=984 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=985 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=987 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=989 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=991 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=992 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=994 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=995 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=996 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=998 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=999 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1001 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1003 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1004 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=1006 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1007 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1008 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1009 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1011 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1013 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1015 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1017 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1019 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1020 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1022 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1023 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=1025 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1027 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1028 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1029 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1031 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1032 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1034 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1035 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1036 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1038 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1039 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1040 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1042 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1044 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=1046 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1048 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1049 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1050 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1052 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1053 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1055 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1057 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1059 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1060 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1062 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1064 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=1066 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1068 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1070 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1072 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1074 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1075 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1077 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1079 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=stop@+Z cycleTime=22 playerId=65000
-[FrontierClient] snapshot tick=1080 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1082 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1084 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=1086 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1088 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1090 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1092 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1094 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1096 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1098 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1100 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1102 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1104 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1106 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=1108 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1110 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1112 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1114 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1116 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1118 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=walk-Z cycleTime=24 playerId=65000
-[FrontierClient] snapshot tick=1120 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1122 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1124 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1126 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=1128 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1130 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1132 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1134 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1135 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1137 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1139 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1141 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1143 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1145 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1147 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=1149 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1151 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1153 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1155 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1157 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1159 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1161 players=2 remoteEntities=1
-[FrontierScript] historical scrThread::Wait trace=0 thread=13952 infoBase=0xFFFFFFFF script=<native-not-ready> pressstart=0 mainScript=0 return=0x7FF92D8960C4
-[FrontierClient] snapshot tick=1163 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1165 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1167 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=1169 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1171 players=2 remoteEntities=1
-[FrontierSession] native invoker initialized
-[FrontierClient] snapshot tick=1173 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1175 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1177 players=2 remoteEntities=1
-[FrontierNativeTrace] optional hook unavailable NET_ENABLE_MULTIPLAYER hash=0x9180FF1C
-[FrontierNativeTrace] optional hook unavailable NET_IS_IN_SESSION hash=0x8CA54980
-[FrontierNativeTrace] optional hook unavailable NET_IS_SESSION_CLIENT hash=0xFF65A07C
-[FrontierNativeTrace] optional hook unavailable NET_SESSION_QUICK_JOIN_NATIVE hash=0x8DF05A4F
-[FrontierNativeTrace] optional hook unavailable NET_SESSION_START_GAMEPLAY hash=0x86FF3A9B
-[FrontierNativeTrace] optional hook unavailable NET_SESSION_END_GAMEPLAY hash=0x81FD9851
-[FrontierNativeTrace] optional hook unavailable NET_SESSION_IS_GAMEPLAY_STARTED hash=0xDC88B308
-[FrontierNativeTrace] startup native tracer attached
-[FrontierSession] game-thread dispatcher attached
-[FrontierClient] snapshot tick=1179 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1181 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1183 players=2 remoteEntities=1
-[FrontierSession] state=runtime-query-failed gameState=-1 worldLoaded=0 stableWorldLoaded=0 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0 nativeError=runtime snapshot pending
-[FrontierNativeTrace] CREATE_LAYOUT name=?<unreadable> result=0x000000F6 tid=13952 ctx=0x14F320 ret=0x1401E4355
+[FrontierClient] snapshot tick=2273 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2275 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2277 players=2 remoteEntities=1
+[FrontierNativeTrace] CREATE_LAYOUT name=?<unreadable> result=0x000000F6 tid=7688 ctx=0x14F320 ret=0x1401E4355
 [FrontierNativeTrace] IS_SIMULATE_START_PRESS=0
-[FrontierNative] scrThread::Wait trace=0 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=1 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=2 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=3 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=4 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierClient] snapshot tick=1184 players=2 remoteEntities=1
-[FrontierNative] scrThread::Wait trace=5 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=6 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=7 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=8 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=9 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=10 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=11 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=12 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=13 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=14 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=15 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=16 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=17 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=18 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=19 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=20 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=21 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=22 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=23 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=24 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=25 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=26 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=27 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=28 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=29 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=30 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=31 context=0x14F320 thread=13952 ret=0x1401E4355
-[FrontierClient] snapshot tick=1186 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1187 players=2 remoteEntities=1
-[FrontierSession] state=frontend gameState=5 worldLoaded=0 stableWorldLoaded=0 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0
-[FrontierSession] historical boot.sc startScreenExit queued
-[FrontierClient] local-player read pending: local player identity pending local=0x14FA997F0 manager=0x14DAA28C0 guid=0x00000000
-[FrontierClient] snapshot tick=1189 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1191 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1193 players=2 remoteEntities=1
-[FrontierSession] state=frontend gameState=3 worldLoaded=0 stableWorldLoaded=0 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0
+[FrontierNative] scrThread::Wait trace=0 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=0 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierSession] state=runtime-query-failed gameState=-1 worldLoaded=0 stableWorldLoaded=0 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0 nativeError=runtime snapshot pending
 [FrontierSession] historical boot.sc net.EnterOnlineForInvite queued after StartScreen1 exit
-[FrontierClient] snapshot tick=1194 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1195 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1197 players=2 remoteEntities=1
+[FrontierNative] scrThread::Wait trace=1 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=1 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNative] scrThread::Wait trace=2 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierClient] local-player read pending: local-player contract pending sm_LocalPlayer=1 actor=0x00000000 actorValid=0
+[FrontierNative] scrThread::Wait trace=3 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=4 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=5 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=6 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=7 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=8 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=9 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=10 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=11 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=12 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierClient] snapshot tick=2279 players=2 remoteEntities=1
+[FrontierNative] scrThread::Wait trace=13 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=2 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNative] scrThread::Wait trace=14 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=15 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=16 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=17 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=18 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierClient] snapshot tick=2281 players=2 remoteEntities=1
+[FrontierNative] scrThread::Wait trace=19 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=3 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNative] scrThread::Wait trace=20 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=21 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=22 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=23 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=24 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=25 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=26 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=27 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=28 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=29 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=30 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=31 context=0x14F320 thread=7688 ret=0x1401E4355
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=4 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=5 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=6 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=7 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=8 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=9 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=10 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierClient] snapshot tick=2283 players=2 remoteEntities=1
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=11 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierSession] state=waiting-local-player gameState=5 worldLoaded=0 stableWorldLoaded=0 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0 nativeError=local-player contract pending sm_LocalPlayer=1 actor=0x00000000 actorValid=0
 [FrontierSession] historical boot.sc StartScreen2 online transition complete; HUD_FADE_TO_LOADING_SCREEN queued
-[FrontierClient] snapshot tick=1199 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1201 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1203 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1205 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1207 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1209 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14FA997F0 manager=0x14DAA28C0 guid=0x00000000
-[FrontierClient] snapshot tick=1211 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1213 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1215 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1216 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1218 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1219 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1221 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1223 players=2 remoteEntities=1
-[FrontierSession] historical LoadOnline stage=2 complete StartScreen2 transition active, file events sent, NET_AUTHENTICATE_GAMER result=0x0
-[FrontierClient] snapshot tick=1225 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1227 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1229 players=2 remoteEntities=1
-[FrontierSession] state=frontend gameState=3 worldLoaded=1 stableWorldLoaded=0 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0
-[FrontierClient] local-player read pending: local player identity pending local=0x14FA997F0 manager=0x14DAA28C0 guid=0x00000000
-[FrontierNativeTrace] GET_PLAYER_ACTOR trace=0 playerPre=-1 playerPost=0 result=0x0 tid=13952 ctx=0x14EF00 ret=0x7FF92D89E576
-[FrontierClient] snapshot tick=1231 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1233 players=2 remoteEntities=1
-[FrontierSession] state=waiting-local-player gameState=3 worldLoaded=1 stableWorldLoaded=1 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0
-[FrontierClient] snapshot tick=1235 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1237 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1239 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=stop@-Z cycleTime=30.05 playerId=65000
-[FrontierClient] snapshot tick=1241 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1243 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1245 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1247 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1249 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14FA997F0 manager=0x14DAA28C0 guid=0x00000000
-[FrontierClient] snapshot tick=1250 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1252 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1254 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1255 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1257 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1259 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1261 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1262 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1264 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1266 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1268 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14FA997F0 manager=0x14DAA28C0 guid=0x00000000
-[FrontierClient] snapshot tick=1270 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1272 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1274 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1275 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1277 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1278 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=walk+X cycleTime=0 playerId=65000
-[FrontierClient] snapshot tick=1280 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1282 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1284 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1286 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1288 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14FA997F0 manager=0x14DAA28C0 guid=0x00000000
-[FrontierClient] snapshot tick=1290 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1292 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1294 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1296 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1298 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1300 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1302 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1304 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1306 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1308 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14FA997F0 manager=0x14DAA28C0 guid=0x00000000
-[FrontierClient] snapshot tick=1310 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1312 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1314 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1316 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1318 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1320 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1322 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1324 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1326 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1328 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14FA997F0 manager=0x14DAA28C0 guid=0x00000000
-[FrontierClient] snapshot tick=1330 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1332 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1334 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1336 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1338 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1340 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1342 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1344 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1346 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1348 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14FA997F0 manager=0x14DAA28C0 guid=0x00000000
-[FrontierClient] snapshot tick=1350 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1352 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1354 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1356 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1358 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1360 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1362 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1364 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1366 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1368 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14FA997F0 manager=0x14DAA28C0 guid=0x00000000
-[FrontierClient] snapshot tick=1370 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1372 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1374 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1376 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1378 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1380 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1382 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1384 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1386 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1388 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14FA997F0 manager=0x14DAA28C0 guid=0x00000000
-[FrontierClient] snapshot tick=1390 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1392 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1393 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1395 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1397 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1398 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=stop@+X cycleTime=6 playerId=65000
-[FrontierClient] snapshot tick=1400 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1401 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1403 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1405 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1406 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1408 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1410 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14FA997F0 manager=0x14DAA28C0 guid=0x00000000
-[FrontierClient] snapshot tick=1412 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1414 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1416 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1417 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1419 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1421 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1423 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1425 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1427 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1429 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14FA997F0 manager=0x14DAA28C0 guid=0x00000000
-[FrontierClient] snapshot tick=1431 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1433 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1435 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1437 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1439 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=walk-X cycleTime=8.05 playerId=65000
-[FrontierClient] snapshot tick=1441 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1443 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1445 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1447 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1449 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14FA997F0 manager=0x14DAA28C0 guid=0x00000000
-[FrontierClient] snapshot tick=1451 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1453 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1455 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1457 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1459 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1461 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1462 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1464 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1466 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1468 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1470 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14FA997F0 manager=0x14DAA28C0 guid=0x00000000
-[FrontierClient] snapshot tick=1472 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1474 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1476 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1478 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1480 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1482 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1484 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1486 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1488 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1490 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14FA997F0 manager=0x14DAA28C0 guid=0x00000000
-[FrontierClient] snapshot tick=1491 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1493 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1495 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1497 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1499 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1501 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1503 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1505 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1507 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1509 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14FA997F0 manager=0x14DAA28C0 guid=0x00000000
-[FrontierClient] snapshot tick=1511 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1513 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1514 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1516 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1518 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1520 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1522 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1524 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1526 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1528 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1530 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14FA997F0 manager=0x14DAA28C0 guid=0x00000000
-[FrontierClient] snapshot tick=1532 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1533 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1535 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1537 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1539 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1541 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1543 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1544 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1546 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1548 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1550 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14FA997F0 manager=0x14DAA28C0 guid=0x00000000
-[FrontierClient] snapshot tick=1552 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1554 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1555 players=2 remoteEntities=1
-[FrontierSession] state=waiting-local-player gameState=4 worldLoaded=1 stableWorldLoaded=1 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0
-[FrontierClient] snapshot tick=1557 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1559 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=stop@-X cycleTime=14.05 playerId=65000
-[FrontierClient] snapshot tick=1561 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1562 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1564 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1566 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1568 players=2 remoteEntities=1
-[FrontierLauncher] RDR.exe exitCode=0x0
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=12 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=13 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=14 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=15 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=16 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=17 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=18 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierClient] snapshot tick=2285 players=2 remoteEntities=1
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=19 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=20 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=21 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=22 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=23 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=24 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=25 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=26 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=27 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierClient] snapshot tick=2287 players=2 remoteEntities=1
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=28 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=29 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=30 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=31 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=32 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=33 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierSession] state=waiting-local-player gameState=3 worldLoaded=0 stableWorldLoaded=0 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0 nativeError=local-player contract pending sm_LocalPlayer=1 actor=0x00000000 actorValid=0
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=34 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=35 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=36 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierClient] snapshot tick=2289 players=2 remoteEntities=1
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=37 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=38 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=39 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=40 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=41 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=42 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=43 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=44 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=45 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierClient] snapshot tick=2291 players=2 remoteEntities=1
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=46 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=47 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=48 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=49 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=50 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=51 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=52 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=53 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierClient] snapshot tick=2293 players=2 remoteEntities=1
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=54 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=55 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=56 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierSession] native diagnostics: local-player contract pending sm_LocalPlayer=1 actor=0x00000000 actorValid=0
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=57 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=58 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=59 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=60 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=61 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=62 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=63 playerPre=-1 playerPost=0 result=0x0 tid=7688 ctx=0x14EF00 ret=0x7FF92CBEEFF6
+[FrontierClient] snapshot tick=2295 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2297 players=2 remoteEntities=1
+[FrontierClient] local-player read pending: local-player contract pending sm_LocalPlayer=1 actor=0x00000000 actorValid=0
+[FrontierSession] native diagnostics: local-player contract pending sm_LocalPlayer=1 actor=0x00000000 actorValid=0
+[FrontierClient] snapshot tick=2299 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_LOCAL_PLAYER_VALID actor=0x00000000 result=0 tid=7688 ctx=0x14F320 ret=0x7FF92CBF4744
+[FrontierClient] snapshot tick=2301 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=2303 players=2 remoteEntities=1
+[FrontierSession] native diagnostics: local-player contract pending sm_LocalPlayer=1 actor=0x00000000 actorValid=0
+[FrontierFirstChance] exception=0xC0000005 accessOp=8 fault=0x142C8B028 rip=0x142C8B028 ripRva=0x2C8B028 thread=7688 module=D:\Red Dead Redemption\RDR.exe before=00 00 00 00 00 00 00 00 4E D1 11 3C A5 00 00 00 bytes=00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 28 B0 C8 42 01 00 00 00 20 C2 F0 47 01 00 00 00 callTarget=0x0 callTargetRva=0x0 stackArg5=0x1674B82B0 stackArg6=0x140181C2C regs=RAX:14FACFF80 RBX:147B89398 RCX:14FACFC60 RDX:10 RSI:151411E08 RDI:9 R8:0 R9:142F2E934 R10:141C446C0 R11:14EB00 R12:0 R13:7FF92CC10DE8 R14:167634E30 R15:0 RSP:14EB08 RBP:1676350B0 EFLAGS:10206 unwind=0:rip=0x142C8B028:rva=0x2C8B028:module=D:\Red Dead Redemption\RDR.exe | 1:rip=0x14011A463:rva=0x11A463:module=D:\Red Dead Redemption\RDR.exe | 2:rip=0x1406379CB:rva=0x6379CB:module=D:\Red Dead Redemption\RDR.exe | 3:rip=0x1401EC599:rva=0x1EC599:module=D:\Red Dead Redemption\RDR.exe | 4:rip=0x1400F1B92:rva=0xF1B92:module=D:\Red Dead Redemption\RDR.exe | 5:rip=0x1400EF00A:rva=0xEF00A:module=D:\Red Dead Redemption\RDR.exe | 6:rip=0x1400EEF51:rva=0xEEF51:module=D:\Red Dead Redemption\RDR.exe | 7:rip=0x1400F5451:rva=0xF5451:module=D:\Red Dead Redemption\RDR.exe | 8:rip=0x7FF92CBEEFF6:rva=0x1EFF6:module=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-mass-rdrmp-compatibility-fix\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\FrontierClient.dll | 9:rip=0x7FF92CBEF0EB:rva=0x1F0EB:module=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-mass-rdrmp-compatibility-fix\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\FrontierClient.dll | 10:rip=0x7FF92CBE354D:rva=0x1354D:module=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-mass-rdrmp-compatibility-fix\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\FrontierClient.dll | 11:rip=0x7FF92CB\n[FrontierClient] snapshot tick=2305 players=2 remoteEntities=1
+[FrontierLauncher] RDR.exe exitCode=0xC0000005
