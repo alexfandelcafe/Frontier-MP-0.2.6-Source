@@ -25,3 +25,9 @@ Dedicated Server
     +-- player manager
     +-- replication
     +-- interest management
+
+## Frontend ownership
+
+The RDR Title Screen 3D scene remains the visual base. FrontierClient does not drive the native Title Screen menu by default. The historical native UI bootstrap is opt-in via FRONTIER_NATIVE_UI_BOOTSTRAP=1.
+
+When built with a CEF SDK, the client can host the Frontier HTML frontend as a child window over the RDR window. The current CEF milestone only establishes browser hosting and page loading; JavaScript-to-native commands and CEF-owned frontend-to-gameplay transition remain subsequent work.
