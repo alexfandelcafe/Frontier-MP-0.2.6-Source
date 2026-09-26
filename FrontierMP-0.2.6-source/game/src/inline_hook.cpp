@@ -178,6 +178,55 @@ bool InlineHook::install(std::uintptr_t target,
     while (sourceOffset < patchSize) {
         const auto opcode = originalBytes_[sourceOffset];
 
+        // Relocate the RIP-relative LEA used by the historical Wait
+        // target prologue (for example: 4C 8D 05 disp32). A copied RIP-relative
+        // displacement is relative to the trampoline, not the original target,
+        // so leaving it unchanged makes the original function dereference/read
+        // the wrong address after the detour.
+        if (sourceOffset + 7 <= patchSize &&
+            originalBytes_[sourceOffset + 1] == 0x8D &&
+            originalBytes_[sourceOffset + 2] == 0x05 &&
+            (originalBytes_[sourceOffset] & 0xF8u) == 0x48u &&
+            originalBytes_[sourceOffset] != 0x4Bu) {
+            const auto rex = originalBytes_[sourceOffset];
+            std::int32_t displacement = 0;
+            std::memcpy(
+                &displacement,
+                originalBytes_.data() + sourceOffset + 3,
+                sizeof(displacement));
+
+            const auto sourceInstruction = target + sourceOffset;
+            const auto absoluteAddress =
+                sourceInstruction + 7 + static_cast<std::intptr_t>(displacement);
+
+            // mov r11, imm64
+            trampoline[trampolineOffset++] = 0x49;
+            trampoline[trampolineOffset++] = 0xBB;
+            std::memcpy(
+                trampoline + trampolineOffset,
+                &absoluteAddress,
+                sizeof(absoluteAddress));
+            trampolineOffset += sizeof(absoluteAddress);
+
+            // mov <LEA-destination>, r11
+            // The LEA destination is encoded in ModRM.reg plus REX.R.
+            const auto destinationRegister =
+                static_cast<std::uint8_t>(
+                    ((rex >> 2u) & 1u) * 8u);
+            trampoline[trampolineOffset++] =
+                static_cast<std::uint8_t>(
+                    0x49u | ((destinationRegister >= 8u) ? 0x04u : 0x00u));
+            trampoline[trampolineOffset++] = 0x8B;
+            trampoline[trampolineOffset++] =
+                static_cast<std::uint8_t>(
+                    0xC0u |
+                    static_cast<std::uint8_t>((destinationRegister & 7u) << 3u) |
+                    0x03u);
+
+            sourceOffset += 7;
+            continue;
+        }
+
         if (opcode == 0xE8 && sourceOffset == 4 && sourceOffset + 5 <= patchSize) {
             std::int32_t displacement = 0;
             std::memcpy(&displacement,
