@@ -2,7 +2,7 @@
 
 The build stages this directory at cef/ next to FrontierClient.dll, matching the historical RDRMP package boundary.
 
-The repository contains only FrontierMP's HTML frontend. Chromium/CEF binaries are not vendored. The build expects a CEF Windows distribution with the CEF SDK headers, libcef_dll_wrapper, and Release/libcef.lib.
+The repository contains only FrontierMP's HTML frontend. Chromium/CEF binaries are not vendored. The build expects a CEF Windows distribution with the CEF SDK headers, libcef_dll, and Release/libcef.lib.
 
 Configure with:
 
