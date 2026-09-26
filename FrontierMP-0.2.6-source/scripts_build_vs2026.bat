@@ -105,8 +105,8 @@ if defined FRONTIER_CEF_PACKAGE_DIR (
         exit /b %STAGE_RC%
     )
 
-    echo Staging CEF Resources...
-    robocopy "%FRONTIER_CEF_PACKAGE_DIR%\Resources" "%TARGET_DIR%\cef\Resources" /E /NFL /NDL /NJH /NJS /NP
+    echo Staging CEF Resources beside FrontierClient.dll...
+    robocopy "%FRONTIER_CEF_PACKAGE_DIR%\Resources" "%TARGET_DIR%" /E /NFL /NDL /NJH /NJS /NP
     set "STAGE_RC=%ERRORLEVEL%"
     if %STAGE_RC% GEQ 8 (
         echo ERROR: CEF Resources staging failed with robocopy code %STAGE_RC%.
@@ -114,7 +114,7 @@ if defined FRONTIER_CEF_PACKAGE_DIR (
     )
 
     echo Staging CEF locales...
-    robocopy "%FRONTIER_CEF_PACKAGE_DIR%\Release\locales" "%TARGET_DIR%\cef\locales" /E /NFL /NDL /NJH /NJS /NP
+    robocopy "%FRONTIER_CEF_PACKAGE_DIR%\Release\locales" "%TARGET_DIR%\locales" /E /NFL /NDL /NJH /NJS /NP
     set "STAGE_RC=%ERRORLEVEL%"
     if %STAGE_RC% GEQ 8 (
         echo ERROR: CEF locales staging failed with robocopy code %STAGE_RC%.
