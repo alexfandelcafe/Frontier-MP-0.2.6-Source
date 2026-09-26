@@ -926,6 +926,7 @@ DWORD WINAPI FrontierClientWorker(LPVOID) {
     }
 
 #ifdef FRONTIER_ENABLE_CEF
+    log_line("[FrontierCEF] compile support enabled");
     if (g_cefOverlay.start()) {
         log_line("[FrontierCEF] overlay startup requested");
     } else {
@@ -938,6 +939,8 @@ DWORD WINAPI FrontierClientWorker(LPVOID) {
 
 #ifdef FRONTIER_ENABLE_CEF
     g_cefOverlay.stop();
+#else
+    log_line("[FrontierCEF] compile support disabled");
 #endif
 
     return 0;
