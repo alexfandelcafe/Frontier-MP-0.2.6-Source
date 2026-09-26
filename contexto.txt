@@ -1598,3 +1598,78 @@ actor válido
 asociación al local player
 
 según corresponda al test concreto.
+
+
+============================================================
+46. OBSERVACIÓN VISUAL — EL RUNTIME SIGUE MOSTRANDO TITLE SCREEN
+============================================================
+
+La última ejecución no debe interpretarse como entrada efectiva a freeroam
+solo porque exista:
+- worldLoaded=1
+- stableWorldLoaded=1
+- localPlayer=1
+
+La observación visual del usuario muestra que la imagen renderizada sigue siendo
+el mundo/fondo del Title Screen. El fondo cambia su posición de cámara entre
+arranques, por lo que ese escenario visible no constituye evidencia de que se
+haya entrado al mundo de gameplay.
+
+Esto implica una separación importante:
+
+1. El actor local puede existir en memoria y GET_PLAYER_ACTOR(-1) puede devolverlo.
+2. La cámara puede seguir controlada por la escena del Title Screen.
+3. La máquina de UI puede no haber completado la transición real hacia el
+   gameplay world.
+4. Por tanto, "local player ready" actualmente significa "actor/player
+   lifecycle resuelto", no necesariamente "jugador visible y controlable en
+   freeroam".
+
+Evidencia adicional:
+- El ContentPathRedirector registra que la ruta de content/ui/boot.sc fue
+  preparada.
+- En el client.log no aparece ninguna llamada de fullReadPath para boot.sc.
+- Los mensajes:
+  "historical boot.sc startScreenExit queued"
+  "historical boot.sc net.EnterOnlineForInvite queued..."
+  "historical boot.sc StartScreen2 online transition complete..."
+  son mensajes emitidos por Frontier después de encolar/invocar acciones; no
+  demuestran por sí solos que la máquina SCXML visible haya ejecutado todas esas
+  transiciones.
+
+Conclusión de investigación:
+el próximo cuello de botella es demostrar y completar la transición efectiva:
+
+Title Screen
+  ->
+Loading / transition
+  ->
+multiplayer gameplay world
+  ->
+camera gameplay
+  ->
+local player control
+
+No usar solamente GET_GAME_STATE/STREAMING_IS_WORLD_LOADED/localPlayer como
+prueba de esa transición.
+
+============================================================
+47. NUEVA PRIORIDAD DE INVESTIGACIÓN
+============================================================
+
+Antes de seguir ajustando cámara/control del actor local:
+
+1. determinar qué script/máquina UI controla realmente el Title Screen en runtime;
+2. demostrar si boot.sc externo está siendo leído/ejecutado;
+3. rastrear RDRStartNewScript / StartNewThreadOverride / Wait con identificación
+   del script real;
+4. reproducir la transición histórica que elimina el control de Title Screen;
+5. solo después considerar un fallback explícito de session/gameplay natives.
+
+No asumir todavía que NET_SESSION_START_GAMEPLAY por sí solo sea la solución:
+el hash está documentado en el contexto como candidato histórico, pero no se ha
+verificado todavía contra la build exacta.
+
+La instrumentación del commit 55a3350c sigue siendo útil, pero ahora es una
+prueba secundaria: primero hay que sacar el render/control del Title Screen.
+
