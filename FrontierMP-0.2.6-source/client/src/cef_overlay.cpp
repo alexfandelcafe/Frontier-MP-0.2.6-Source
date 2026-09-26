@@ -283,6 +283,37 @@ struct PresentHookState final {
         D3D_FEATURE_LEVEL*,
         ID3D11DeviceContext**);
 
+    using CreateDXGIFactoryProc = HRESULT(WINAPI*)(
+        REFIID,
+        void**);
+
+    using CreateDXGIFactory2Proc = HRESULT(WINAPI*)(
+        UINT,
+        REFIID,
+        void**);
+
+    using CreateSwapChainProc = HRESULT(STDMETHODCALLTYPE*)(
+        IDXGIFactory*,
+        IUnknown*,
+        const DXGI_SWAP_CHAIN_DESC*,
+        IDXGISwapChain**);
+
+    using CreateSwapChainForHwndProc = HRESULT(STDMETHODCALLTYPE*)(
+        IDXGIFactory2*,
+        IUnknown*,
+        HWND,
+        const DXGI_SWAP_CHAIN_DESC1*,
+        const DXGI_SWAP_CHAIN_FULLSCREEN_DESC*,
+        IDXGIOutput*,
+        IDXGISwapChain1**);
+
+    using CreateSwapChainForCompositionProc = HRESULT(STDMETHODCALLTYPE*)(
+        IDXGIFactory2*,
+        IUnknown*,
+        const DXGI_SWAP_CHAIN_DESC1*,
+        IDXGIOutput*,
+        IDXGISwapChain1**);
+
     using PresentProc = HRESULT(STDMETHODCALLTYPE*)(
         IDXGISwapChain*,
         UINT,
@@ -291,8 +322,30 @@ struct PresentHookState final {
     std::mutex mutex;
     std::atomic<CefOverlay*> overlay{nullptr};
     HMODULE rdrModule{};
+
     ImportPatch createImport{};
     CreateDeviceAndSwapChainProc createOriginal{};
+
+    std::array<ImportPatch, 3> factoryImports{};
+    CreateDXGIFactoryProc createFactoryOriginal{};
+    CreateDXGIFactoryProc createFactory1Original{};
+    CreateDXGIFactory2Proc createFactory2Original{};
+    std::size_t factoryImportCount{};
+
+    ComPtr<IDXGIFactory> hookedFactory{};
+    ComPtr<IDXGIFactory2> hookedFactory2{};
+    std::array<void*, 12> hookedFactoryVtable{};
+    std::array<void*, 12> originalFactoryVtable{};
+    std::array<void*, 25> hookedFactory2Vtable{};
+    std::array<void*, 25> originalFactory2Vtable{};
+    void** originalFactoryVtableAddress{};
+    void** originalFactory2VtableAddress{};
+    CreateSwapChainProc createSwapChainOriginal{};
+    CreateSwapChainForHwndProc createSwapChainForHwndOriginal{};
+    CreateSwapChainForCompositionProc createSwapChainForCompositionOriginal{};
+    bool factoryHooked{};
+    bool factory2Hooked{};
+
     PresentProc presentOriginal{};
     IDXGISwapChain* hookedSwapChain{};
     std::array<void*, 18> hookedVtable{};
@@ -449,10 +502,108 @@ void restore_import(ImportPatch& patch) {
     patch = {};
 }
 
+HRESULT STDMETHODCALLTYPE frontier_factory_create_swap_chain(
+    IDXGIFactory* factory,
+    IUnknown* device,
+    const DXGI_SWAP_CHAIN_DESC* desc,
+    IDXGISwapChain** swapChain);
+
+HRESULT STDMETHODCALLTYPE frontier_factory_create_swap_chain_for_hwnd(
+    IDXGIFactory2* factory,
+    IUnknown* device,
+    HWND window,
+    const DXGI_SWAP_CHAIN_DESC1* desc,
+    const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* fullscreenDesc,
+    IDXGIOutput* restrictToOutput,
+    IDXGISwapChain1** swapChain);
+
+HRESULT STDMETHODCALLTYPE frontier_factory_create_swap_chain_for_composition(
+    IDXGIFactory2* factory,
+    IUnknown* device,
+    const DXGI_SWAP_CHAIN_DESC1* desc,
+    IDXGIOutput* restrictToOutput,
+    IDXGISwapChain1** swapChain);
+
 HRESULT STDMETHODCALLTYPE frontier_present(
     IDXGISwapChain* swapChain,
     UINT syncInterval,
     UINT flags);
+
+void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain);
+
+void hook_factory(PresentHookState& state, IDXGIFactory* factory) {
+    if (factory == nullptr) return;
+
+    if (!state.factoryHooked) {
+        void*** vtable = reinterpret_cast<void***>(factory);
+        if (vtable != nullptr && *vtable != nullptr) {
+            for (std::size_t i = 0; i < state.originalFactoryVtable.size(); ++i) {
+                state.originalFactoryVtable[i] = (*vtable)[i];
+                state.hookedFactoryVtable[i] = (*vtable)[i];
+            }
+
+            state.createSwapChainOriginal =
+                reinterpret_cast<PresentHookState::CreateSwapChainProc>(
+                    state.originalFactoryVtable[10]);
+
+            if (state.createSwapChainOriginal != nullptr) {
+                state.hookedFactoryVtable[10] =
+                    reinterpret_cast<void*>(&frontier_factory_create_swap_chain);
+                state.originalFactoryVtableAddress = *vtable;
+                factory->AddRef();
+                state.hookedFactory = factory;
+                *vtable = state.hookedFactoryVtable.data();
+                state.factoryHooked = true;
+                log_line("[FrontierD3D] IDXGIFactory::CreateSwapChain hook installed");
+            }
+        }
+    }
+
+    ComPtr<IDXGIFactory2> factory2;
+    if (FAILED(factory->QueryInterface(IID_PPV_ARGS(&factory2))) ||
+        factory2 == nullptr ||
+        state.factory2Hooked) {
+        return;
+    }
+
+    void*** vtable2 = reinterpret_cast<void***>(factory2.Get());
+    if (vtable2 == nullptr || *vtable2 == nullptr) return;
+
+    for (std::size_t i = 0; i < state.originalFactory2Vtable.size(); ++i) {
+        state.originalFactory2Vtable[i] = (*vtable2)[i];
+        state.hookedFactory2Vtable[i] = (*vtable2)[i];
+    }
+
+    state.createSwapChainForHwndOriginal =
+        reinterpret_cast<PresentHookState::CreateSwapChainForHwndProc>(
+            state.originalFactory2Vtable[15]);
+    state.createSwapChainForCompositionOriginal =
+        reinterpret_cast<PresentHookState::CreateSwapChainForCompositionProc>(
+            state.originalFactory2Vtable[24]);
+
+    if (state.createSwapChainForHwndOriginal == nullptr &&
+        state.createSwapChainForCompositionOriginal == nullptr) {
+        state.originalFactory2Vtable.fill(nullptr);
+        state.hookedFactory2Vtable.fill(nullptr);
+        return;
+    }
+
+    if (state.createSwapChainForHwndOriginal != nullptr) {
+        state.hookedFactory2Vtable[15] =
+            reinterpret_cast<void*>(&frontier_factory_create_swap_chain_for_hwnd);
+    }
+    if (state.createSwapChainForCompositionOriginal != nullptr) {
+        state.hookedFactory2Vtable[24] =
+            reinterpret_cast<void*>(&frontier_factory_create_swap_chain_for_composition);
+    }
+
+    state.originalFactory2VtableAddress = *vtable2;
+    factory2->AddRef();
+    state.hookedFactory2 = factory2.Get();
+    *vtable2 = state.hookedFactory2Vtable.data();
+    state.factory2Hooked = true;
+    log_line("[FrontierD3D] IDXGIFactory2 swapchain hooks installed");
+}
 
 void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
     if (swapChain == nullptr || state.swapchainHooked) return;
@@ -496,6 +647,144 @@ void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
     } else {
         log_line("[FrontierD3D] hooked swapchain (GetDesc failed)");
     }
+}
+
+HRESULT WINAPI frontier_create_dxgi_factory(
+    REFIID riid,
+    void** factory) {
+    PresentHookState::CreateDXGIFactoryProc original = nullptr;
+    {
+        std::lock_guard lock(g_presentHook.mutex);
+        original = g_presentHook.createFactoryOriginal;
+    }
+    if (original == nullptr) return E_FAIL;
+
+    const HRESULT result = original(riid, factory);
+    if (SUCCEEDED(result) && factory != nullptr && *factory != nullptr) {
+        hook_factory(
+            g_presentHook,
+            reinterpret_cast<IDXGIFactory*>(*factory));
+    }
+    return result;
+}
+
+HRESULT WINAPI frontier_create_dxgi_factory1(
+    REFIID riid,
+    void** factory) {
+    PresentHookState::CreateDXGIFactoryProc original = nullptr;
+    {
+        std::lock_guard lock(g_presentHook.mutex);
+        original = g_presentHook.createFactory1Original;
+    }
+    if (original == nullptr) return E_FAIL;
+
+    const HRESULT result = original(riid, factory);
+    if (SUCCEEDED(result) && factory != nullptr && *factory != nullptr) {
+        hook_factory(
+            g_presentHook,
+            reinterpret_cast<IDXGIFactory*>(*factory));
+    }
+    return result;
+}
+
+HRESULT WINAPI frontier_create_dxgi_factory2(
+    UINT flags,
+    REFIID riid,
+    void** factory) {
+    PresentHookState::CreateDXGIFactory2Proc original = nullptr;
+    {
+        std::lock_guard lock(g_presentHook.mutex);
+        original = g_presentHook.createFactory2Original;
+    }
+    if (original == nullptr) return E_FAIL;
+
+    const HRESULT result = original(flags, riid, factory);
+    if (SUCCEEDED(result) && factory != nullptr && *factory != nullptr) {
+        hook_factory(
+            g_presentHook,
+            reinterpret_cast<IDXGIFactory*>(*factory));
+    }
+    return result;
+}
+
+HRESULT STDMETHODCALLTYPE frontier_factory_create_swap_chain(
+    IDXGIFactory* factory,
+    IUnknown* device,
+    const DXGI_SWAP_CHAIN_DESC* desc,
+    IDXGISwapChain** swapChain) {
+    PresentHookState::CreateSwapChainProc original = nullptr;
+    {
+        std::lock_guard lock(g_presentHook.mutex);
+        original = g_presentHook.createSwapChainOriginal;
+    }
+    if (original == nullptr) return E_FAIL;
+
+    const HRESULT result = original(factory, device, desc, swapChain);
+    if (SUCCEEDED(result) && swapChain != nullptr && *swapChain != nullptr) {
+        log_line("[FrontierD3D] DXGI CreateSwapChain produced swapchain");
+        hook_swapchain(g_presentHook, *swapChain);
+    }
+    return result;
+}
+
+HRESULT STDMETHODCALLTYPE frontier_factory_create_swap_chain_for_hwnd(
+    IDXGIFactory2* factory,
+    IUnknown* device,
+    HWND window,
+    const DXGI_SWAP_CHAIN_DESC1* desc,
+    const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* fullscreenDesc,
+    IDXGIOutput* restrictToOutput,
+    IDXGISwapChain1** swapChain) {
+    PresentHookState::CreateSwapChainForHwndProc original = nullptr;
+    {
+        std::lock_guard lock(g_presentHook.mutex);
+        original = g_presentHook.createSwapChainForHwndOriginal;
+    }
+    if (original == nullptr) return E_FAIL;
+
+    const HRESULT result = original(
+        factory,
+        device,
+        window,
+        desc,
+        fullscreenDesc,
+        restrictToOutput,
+        swapChain);
+    if (SUCCEEDED(result) && swapChain != nullptr && *swapChain != nullptr) {
+        log_line("[FrontierD3D] DXGI CreateSwapChainForHwnd produced swapchain");
+        hook_swapchain(
+            g_presentHook,
+            reinterpret_cast<IDXGISwapChain*>(*swapChain));
+    }
+    return result;
+}
+
+HRESULT STDMETHODCALLTYPE frontier_factory_create_swap_chain_for_composition(
+    IDXGIFactory2* factory,
+    IUnknown* device,
+    const DXGI_SWAP_CHAIN_DESC1* desc,
+    IDXGIOutput* restrictToOutput,
+    IDXGISwapChain1** swapChain) {
+    PresentHookState::CreateSwapChainForCompositionProc original = nullptr;
+    {
+        std::lock_guard lock(g_presentHook.mutex);
+        original = g_presentHook.createSwapChainForCompositionOriginal;
+    }
+    if (original == nullptr) return E_FAIL;
+
+    const HRESULT result = original(
+        factory,
+        device,
+        desc,
+        restrictToOutput,
+        swapChain);
+    if (SUCCEEDED(result) && swapChain != nullptr && *swapChain != nullptr) {
+        log_line("[FrontierD3D] DXGI CreateSwapChainForComposition produced swapchain");
+        hook_swapchain(
+            g_presentHook,
+            reinterpret_cast<IDXGISwapChain*>(*swapChain));
+    }
+    return result;
 }
 
 HRESULT WINAPI frontier_create_device_and_swapchain(
@@ -569,6 +858,48 @@ void unhook_render_path() {
     g_presentHook.presentOriginal = nullptr;
     g_presentHook.swapchainHooked = false;
 
+    if (g_presentHook.factory2Hooked &&
+        g_presentHook.hookedFactory2 != nullptr &&
+        g_presentHook.originalFactory2VtableAddress != nullptr) {
+        void*** vtable2 =
+            reinterpret_cast<void***>(g_presentHook.hookedFactory2.Get());
+        if (vtable2 != nullptr) {
+            *vtable2 = g_presentHook.originalFactory2VtableAddress;
+        }
+    }
+
+    if (g_presentHook.factoryHooked &&
+        g_presentHook.hookedFactory != nullptr &&
+        g_presentHook.originalFactoryVtableAddress != nullptr) {
+        void*** vtable =
+            reinterpret_cast<void***>(g_presentHook.hookedFactory.Get());
+        if (vtable != nullptr) {
+            *vtable = g_presentHook.originalFactoryVtableAddress;
+        }
+    }
+
+    g_presentHook.hookedFactory2.Reset();
+    g_presentHook.hookedFactory.Reset();
+    g_presentHook.hookedFactoryVtable.fill(nullptr);
+    g_presentHook.originalFactoryVtable.fill(nullptr);
+    g_presentHook.hookedFactory2Vtable.fill(nullptr);
+    g_presentHook.originalFactory2Vtable.fill(nullptr);
+    g_presentHook.originalFactoryVtableAddress = nullptr;
+    g_presentHook.originalFactory2VtableAddress = nullptr;
+    g_presentHook.createSwapChainOriginal = nullptr;
+    g_presentHook.createSwapChainForHwndOriginal = nullptr;
+    g_presentHook.createSwapChainForCompositionOriginal = nullptr;
+    g_presentHook.factoryHooked = false;
+    g_presentHook.factory2Hooked = false;
+
+    for (auto& patch : g_presentHook.factoryImports) {
+        restore_import(patch);
+    }
+    g_presentHook.createFactoryOriginal = nullptr;
+    g_presentHook.createFactory1Original = nullptr;
+    g_presentHook.createFactory2Original = nullptr;
+    g_presentHook.factoryImportCount = 0;
+
     restore_import(g_presentHook.createImport);
     g_presentHook.createOriginal = nullptr;
     g_presentHook.rdrModule = nullptr;
@@ -592,27 +923,79 @@ bool install_render_path(CefOverlay* overlay) {
     }
 
     std::string error;
-    void* original = nullptr;
-    if (!find_and_patch_import(
+    bool anyHookInstalled = false;
+
+    if (find_and_patch_import(
             g_presentHook.rdrModule,
             "d3d11.dll",
             "D3D11CreateDeviceAndSwapChain",
             reinterpret_cast<void*>(&frontier_create_device_and_swapchain),
             g_presentHook.createImport,
             error)) {
+        g_presentHook.createOriginal =
+            reinterpret_cast<PresentHookState::CreateDeviceAndSwapChainProc>(
+                d3dOriginal = g_presentHook.createImport.original);
+        anyHookInstalled = true;
+        log_line("[FrontierD3D] D3D11CreateDeviceAndSwapChain IAT hook installed");
+    } else {
         log_line(
             "[FrontierD3D] D3D11CreateDeviceAndSwapChain IAT hook unavailable: " +
             error);
+    }
+
+    const char* factoryNames[] = {
+        "CreateDXGIFactory",
+        "CreateDXGIFactory1",
+        "CreateDXGIFactory2"
+    };
+    void* factoryReplacements[] = {
+        reinterpret_cast<void*>(&frontier_create_dxgi_factory),
+        reinterpret_cast<void*>(&frontier_create_dxgi_factory1),
+        reinterpret_cast<void*>(&frontier_create_dxgi_factory2)
+    };
+
+    for (std::size_t i = 0; i < std::size(factoryNames); ++i) {
+        ImportPatch patch{};
+        std::string factoryError;
+        if (!find_and_patch_import(
+                g_presentHook.rdrModule,
+                "dxgi.dll",
+                factoryNames[i],
+                factoryReplacements[i],
+                patch,
+                factoryError)) {
+            continue;
+        }
+
+        g_presentHook.factoryImports[g_presentHook.factoryImportCount++] = patch;
+        if (i == 0) {
+            g_presentHook.createFactoryOriginal =
+                reinterpret_cast<PresentHookState::CreateDXGIFactoryProc>(
+                    patch.original);
+        } else if (i == 1) {
+            g_presentHook.createFactory1Original =
+                reinterpret_cast<PresentHookState::CreateDXGIFactoryProc>(
+                    patch.original);
+        } else {
+            g_presentHook.createFactory2Original =
+                reinterpret_cast<PresentHookState::CreateDXGIFactory2Proc>(
+                    patch.original);
+        }
+
+        anyHookInstalled = true;
+        log_line(
+            std::string("[FrontierD3D] ") +
+            factoryNames[i] +
+            " IAT hook installed");
+    }
+
+    if (!anyHookInstalled) {
+        log_line("[FrontierD3D] no D3D11/DXGI render-creation import could be hooked");
         return false;
     }
 
-    g_presentHook.createOriginal =
-        reinterpret_cast<PresentHookState::CreateDeviceAndSwapChainProc>(
-            original);
     g_presentHook.overlay.store(overlay, std::memory_order_release);
     g_presentHook.installed = true;
-
-    log_line("[FrontierD3D] D3D11CreateDeviceAndSwapChain IAT hook installed");
     return true;
 }
 
@@ -1642,6 +2025,15 @@ bool CefOverlay::handle_window_message(
     case WM_SYSKEYDOWN:
     case WM_KEYUP:
     case WM_SYSKEYUP: {
+        // Never swallow the native Windows close accelerator. The historical
+        // CEF menu also exposed an explicit Quit action; this preserves Alt+F4
+        // even while the CEF browser owns keyboard input.
+        if ((message == WM_SYSKEYDOWN || message == WM_SYSKEYUP) &&
+            wParam == VK_F4 &&
+            (GetKeyState(VK_MENU) & 0x8000) != 0) {
+            return false;
+        }
+
         CefKeyEvent event{};
         event.windows_key_code = static_cast<int>(wParam);
         event.native_key_code =
