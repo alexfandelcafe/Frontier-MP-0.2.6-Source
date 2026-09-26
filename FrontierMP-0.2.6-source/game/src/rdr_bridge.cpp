@@ -252,6 +252,18 @@ void log_historical_script_resolution(
         static_cast<unsigned long long>(target - moduleBase));
     write_bridge_log_line(line);
 }
+#ifdef _WIN32
+bool guarded_read_code_byte(std::uintptr_t address, std::uint8_t& out) {
+    __try {
+        out = *reinterpret_cast<const std::uint8_t*>(address);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        out = 0;
+        return false;
+    }
+}
+#endif
+
 void log_code_window(
     const char* label,
     std::uintptr_t address,
@@ -273,13 +285,7 @@ void log_code_window(
     for (std::size_t i = 0; i < count; ++i) {
         std::uint8_t byte = 0;
         const auto current = start + i;
-        bool ok = false;
-        __try {
-            byte = *reinterpret_cast<const std::uint8_t*>(current);
-            ok = true;
-        } __except (EXCEPTION_EXECUTE_HANDLER) {
-            ok = false;
-        }
+        const bool ok = guarded_read_code_byte(current, byte);
 
         if (!ok) {
             stream << "??";
@@ -400,7 +406,8 @@ void RdrBridge::on_historical_wait(
             reinterpret_cast<std::uintptr_t>(r8)),
         static_cast<unsigned long long>(
             reinterpret_cast<std::uintptr_t>(r9)),
-        static_cast<unsigned long long>(_ReturnAddress()));
+        static_cast<unsigned long long>(
+            reinterpret_cast<std::uintptr_t>(_ReturnAddress())));
     write_bridge_log_line(line);
 #else
     (void)rcx;
