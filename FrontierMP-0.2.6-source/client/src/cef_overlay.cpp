@@ -735,6 +735,7 @@ struct CefOverlay::State final {
     int frameHeight{};
     std::uint64_t frameGeneration{};
     bool firstPaintLogged{};
+    bool firstCompositeLogged{};
 
     ComPtr<ID3D11Device> d3dDevice{};
     ComPtr<ID3D11DeviceContext> d3dContext{};
