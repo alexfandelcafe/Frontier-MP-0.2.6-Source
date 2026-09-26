@@ -321,9 +321,14 @@ void CefOverlay::thread_main() {
     }
 
     const RECT rect = overlay_rect(gameWindow);
+    const CefRect cefRect(
+        rect.left,
+        rect.top,
+        rect.right - rect.left,
+        rect.bottom - rect.top);
 
     CefWindowInfo windowInfo;
-    windowInfo.SetAsChild(gameWindow, rect);
+    windowInfo.SetAsChild(gameWindow, cefRect);
 
     CefBrowserSettings browserSettings;
     CefRefPtr<FrontierCefClient> client = new FrontierCefClient();
