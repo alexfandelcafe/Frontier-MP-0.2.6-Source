@@ -1,5 +1,6 @@
 FRONTIER-MP — CONTEXTO COMPLETO PARA CONTINUAR EN UN CHAT NUEVO
 Actualizado: 2026-09-26
+HEAD de código verificado para esta actualización: 549122029d1610076b8b1d7774a91872c3499197
 Branch de trabajo: game-thread/remote-actor-spawn-test-0.2.41
 
 ============================================================
@@ -2031,3 +2032,266 @@ Title Screen para el modo CEF/frontend-owned.
 
 Commit de esta protección:
 5a47ff9d92a06632fbf971044c021d036b305cc5
+
+============================================================
+54. PRUEBA REAL POST-BUILD — CEF SOBRE TITLE SCREEN / BOOTSTRAP NATIVO DESACTIVADO
+============================================================
+
+El usuario confirmó que esta versión COMPILA correctamente después de corregir
+el error C2297 de CEF (SendProcessMessage devolvía void en este SDK).
+
+Correcciones de compilación aplicadas:
+- tools/cef_subprocess/main.cpp:
+  no se evalúa frame->SendProcessMessage(...) dentro de un &&.
+- client/src/cef_overlay.cpp:
+  se corrigió el mismo patrón preventivamente.
+Commits:
+- 76d039218defdb8a8fe7a340d858ff50f3b468d2
+- 549122029d1610076b8b1d7774a91872c3499197
+
+La prueba de runtime inmediatamente posterior al build produjo estos hechos.
+
+ARRANQUE:
+- [FrontierClient] worker starting
+- [FrontierClient] solo remote-player test enabled
+- [FrontierClient] native UI bootstrap disabled (CEF/frontend-owned mode)
+- bootstrap IPC:
+  [FrontierClient] bootstrap event signaled
+- RDR continúa hasta:
+  [FrontierLauncher] RDR.exe resumed; waiting for process exit
+
+NETWORK:
+- [FrontierClient] connected as player 1 serverTick=744
+- snapshots continuos:
+  players=2
+  remoteEntities=1
+- el networking NO es el cuello de botella de esta prueba.
+
+NATIVE INVOKER / SESSION:
+- inicialmente:
+  waiting for native invoker registration table
+- luego:
+  [FrontierSession] native invoker initialized
+- posteriormente:
+  [FrontierSession] game-thread dispatcher attached
+- luego runtime snapshot pending:
+  gameState=-1
+  worldLoaded=0
+  stableWorldLoaded=0
+  bootstrapComplete=0
+  localPlayer=0
+- después RDR llega a:
+  gameState=5
+  worldLoaded=0
+  stableWorldLoaded=0
+  bootstrapComplete=0
+  localPlayer=0
+- más tarde:
+  gameState=3
+  worldLoaded=1
+  stableWorldLoaded=1
+  bootstrapComplete=0
+  localPlayer=0
+- finalmente se observa también:
+  gameState=4
+  worldLoaded=1
+  stableWorldLoaded=1
+  bootstrapComplete=0
+  localPlayer=0
+
+Interpretación:
+NO se debe inferir gameplay real de worldLoaded=1/stableWorldLoaded=1.
+La condición bootstrapComplete=0 impide la transición a Active.
+En esta prueba concreta, el nuevo gating está funcionando como fue diseñado.
+
+CEF:
+- [FrontierCEF] coordinator thread started; waiting for game-thread dispatcher
+- [FrontierCEF] overlay startup requested
+- [FrontierCEF] CefInitialize thread=3008
+- [FrontierCEF] using historical OSR/D3D11 composition path
+- [FrontierCEF] initializing on RDR game thread
+- command line:
+  do-not-de-elevate
+  disable-gpu
+  disable-gpu-compositing
+- [FrontierCEF] browser created (OSR)
+- [FrontierCEF] browser created without a native window
+- [FrontierCEF] RDR window procedure hooked for CEF input
+- [FrontierCEF] game-thread initialization result=success
+- [FrontierCEF] page loaded browser=1 httpStatus=200
+- [FrontierCEF] first OnPaint frame=1600x900 bytes=5760000
+
+Esto prueba que:
+1. CEF arranca.
+2. El browser OSR se crea correctamente.
+3. La página HTML carga con HTTP 200.
+4. CEF produce frames de 1600x900.
+5. El overlay recibe input por el WNDPROC del RDR.
+
+PERO:
+NO aparece:
+  [FrontierD3D] first CEF frame composited into RDR backbuffer
+
+Conclusión:
+CEF rendering está funcionando hasta OnPaint, pero la composición final sobre
+el backbuffer de RDR sigue sin quedar demostrada en esta ejecución.
+
+D3D/DXGI:
+- [FrontierD3D] D3D11CreateDeviceAndSwapChain IAT hook unavailable: import not found
+- [FrontierD3D] CreateDXGIFactory2 IAT hook installed
+- más tarde:
+  [FrontierD3D] shared IDXGIFactory/IDXGIFactory2 shadow-vtable hooks installed
+
+Interpretación:
+El fallback de DXGI sí alcanza a instalar los shadow vtables.
+No existe evidencia en este log de que el hook de CreateSwapChain haya producido
+o conectado el swapchain principal de RDR ni de que se haya ejecutado la rutina
+de composición.
+
+TITLE SCREEN:
+La ejecución se mantuvo en modo:
+native UI bootstrap disabled (CEF/frontend-owned mode)
+
+No hay en esta prueba evidencia de que Frontier haya enviado:
+- UI_EXIT("StartScreen1")
+- UI_SEND_EVENT("net.EnterOnlineForInvite")
+- HUD_FADE_TO_LOADING_SCREEN
+- fileSetForMPLoad
+- fileStartupChecksComplete
+- NET_AUTHENTICATE_GAMER
+
+Esto es consistente con el objetivo de producto:
+la UI nativa NO debe ser navegada por Frontier.
+El Title Screen debe quedar como escena visual/base y CEF debe ser el frontend.
+
+LOCAL PLAYER:
+En esta ejecución:
+- localPlayer=0 durante todo el periodo observado por FrontierSession.
+- No aparece la secuencia histórica:
+  CREATE_PLAYER_ACTOR_IN_LAYOUT -> actor 0x...
+- Tampoco aparece GET_PLAYER_ACTOR(-1)=actor.
+- Esto es esperado bajo el diseño actual porque bootstrapComplete permanece 0.
+
+Por tanto:
+La ausencia del actor local en esta prueba NO constituye una regresión del
+local-player creation path previamente validado con bootstrap histórico.
+Es consecuencia del nuevo requisito de completar primero el online bootstrap.
+
+NATIVES OPCIONALES:
+Después de native invoker initialized:
+- NET_ENABLE_MULTIPLAYER unavailable
+- NET_IS_IN_SESSION unavailable
+- NET_IS_SESSION_CLIENT unavailable
+- NET_SESSION_QUICK_JOIN_NATIVE unavailable
+- NET_SESSION_START_GAMEPLAY unavailable
+- NET_SESSION_END_GAMEPLAY unavailable
+- NET_SESSION_IS_GAMEPLAY_STARTED unavailable
+
+Esto significa que para esta build esos hashes no están disponibles mediante
+el registro de natives observado.
+No asumir que puedan usarse como fallback sin resolver primero su disponibilidad.
+
+SCRIPT TRACING:
+Se observa:
+- scrThread::Wait trace
+- posteriormente UI_EXIT object=LoadingScreen
+
+El log no demuestra por sí mismo qué script es el propietario real de la cámara
+del Title Screen. El tracer todavía no ha producido una identificación completa
+del script/máquina de UI que controla esa escena.
+
+CIERRE DEL PROCESO:
+La ejecución termina con:
+  [FrontierCEF] RDR window procedure restored
+  [FrontierCEF] browser closing
+  [FrontierLauncher] RDR.exe exitCode=0x1
+
+No hay en el log suministrado una excepción C0000005.
+Por tanto, esta prueba no reprodujo el crash de access violation observado en la
+prueba anterior.
+
+============================================================
+55. ESTADO ACTUAL Y PRÓXIMO CUELLO DE BOTELLA
+============================================================
+
+Estado comprobado:
+1. Build de Visual Studio: OK.
+2. Frontier DLL: carga.
+3. Bootstrap IPC: OK.
+4. Network handshake/snapshots: OK.
+5. Native invoker: termina inicializando.
+6. GameThreadDispatcher: adjunto.
+7. CEF OSR: OK.
+8. Página CEF: HTTP 200.
+9. OnPaint CEF: OK a 1600x900.
+10. DXGI factory shadow-vtable hook: OK.
+11. Composición CEF -> backbuffer RDR: NO DEMOSTRADA.
+12. native UI bootstrap: correctamente DESACTIVADO.
+13. historical online bootstrap: NO completado en esta ejecución.
+14. local player: deliberadamente no creado porque bootstrapComplete=0.
+15. no crash C0000005 en esta prueba.
+
+PRIORIDAD:
+El siguiente trabajo debe centrarse primero en hacer que el CEF sea visible
+encima del Title Screen.
+
+Objetivo de diagnóstico:
+  CEF OnPaint
+    ->
+  frame BGRA almacenado
+    ->
+  acceso al swapchain/backbuffer real de RDR
+    ->
+  draw/copy/Present-safe composition
+    ->
+  log:
+  [FrontierD3D] first CEF frame composited into RDR backbuffer
+
+El hook:
+  CreateDXGIFactory2
+    ->
+  shared IDXGIFactory/IDXGIFactory2 shadow vtables
+ya se instala, pero todavía falta confirmar qué CreateSwapChain de RDR se ejecuta,
+qué objeto IDXGISwapChain se obtiene y si su Present o equivalente está realmente
+interceptado para componer el frame CEF.
+
+NO mezclar en este punto:
+- creación de local player;
+- RemotePlayerManager;
+- START_GAMEPLAY;
+- manipulación de StartScreen1/StartScreen2.
+
+La prueba actual indica que la arquitectura frontend-owned evita las transiciones
+nativas, que es precisamente lo buscado.
+
+============================================================
+56. NOTA PARA EL PRÓXIMO CHAT
+============================================================
+
+Usar este contexto como estado de continuidad.
+
+Pregunta técnica inmediata:
+"¿Por qué tenemos OnPaint CEF 1600x900 + shadow-vtable DXGI instalado, pero no
+tenemos first CEF frame composited into RDR backbuffer?"
+
+Archivos prioritarios:
+- FrontierMP-0.2.6-source/client/src/cef_overlay.cpp
+- FrontierMP-0.2.6-source/client/include/frontier/client/cef_overlay.hpp
+
+Verificar:
+- hook real de IDXGIFactory::CreateSwapChain slot 10;
+- hook real de IDXGIFactory2::CreateSwapChainForHwnd slot 15;
+- hook real de IDXGIFactory2::CreateSwapChainForComposition slot 24;
+- si RDR usa CreateSwapChain o CreateSwapChainForHwnd;
+- si el swapchain queda retenido en hookedSwapChainRef;
+- si Present/Present1 o una ruta equivalente está interceptada;
+- si el backbuffer está en formato compatible con el upload/copy del BGRA;
+- si la composición ocurre en la misma secuencia de frame que Present;
+- por qué no aparece el log first CEF frame composited.
+
+Importante:
+No declarar todavía que la solución DXGI está completa. El log demuestra la
+instalación del hook de factory, no la composición.
+
+HEAD de continuidad de código después de las correcciones CEF:
+549122029d1610076b8b1d7774a91872c3499197
