@@ -32,9 +32,16 @@ public:
     // CEF frame; it never calls into CEF.
     void on_present(::IDXGISwapChain* swapChain);
 
-private:
+public:
     struct State;
 
+    bool handle_window_message(
+        unsigned int message,
+        std::uintptr_t wParam,
+        std::intptr_t lParam,
+        std::intptr_t& result);
+
+private:
     void thread_main();
     bool initialize_on_game_thread();
     void pump_on_game_thread();
@@ -42,12 +49,6 @@ private:
 
     void attach_window_input_on_game_thread();
     void detach_window_input_on_game_thread();
-
-    bool handle_window_message(
-        unsigned int message,
-        std::uintptr_t wParam,
-        std::intptr_t lParam,
-        std::intptr_t& result);
 
     std::atomic<bool> stopRequested_{false};
     std::thread thread_{};
