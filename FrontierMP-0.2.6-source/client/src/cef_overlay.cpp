@@ -224,6 +224,8 @@ struct CefOverlay::State final {
     bool initialized{};
 };
 
+CefOverlay::CefOverlay() = default;
+
 CefOverlay::~CefOverlay() {
     stop();
 }
