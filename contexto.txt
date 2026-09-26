@@ -2295,3 +2295,57 @@ instalación del hook de factory, no la composición.
 
 HEAD de continuidad de código después de las correcciones CEF:
 549122029d1610076b8b1d7774a91872c3499197
+
+
+============================================================
+57. SIGUIENTE PASO APLICADO — DXGI PRESENT1 + TRAZAS DE SWAPCHAIN
+============================================================
+
+Commit de código:
+251f9a58175712cf2d1d243296139239d8414360
+
+Cambio aplicado en:
+FrontierMP-0.2.6-source/client/src/cef_overlay.cpp
+
+Motivo:
+La implementación anterior solo interceptaba IDXGISwapChain::Present (slot 8).
+La interfaz IDXGISwapChain1 agrega Present1 en el slot 22 y puede ser la ruta
+real de presentación. Microsoft documenta Present1 como la variante de
+presentación de DXGI 1.2.
+
+Cambios:
+- se añadió Present1Proc;
+- se consulta IID_IDXGISwapChain1 al capturar un swapchain;
+- se instala una shadow vtable de 23 entradas para IDXGISwapChain1;
+- se intercepta Present1 en slot 22;
+- se mantiene la interceptación de Present en slot 8;
+- se retienen referencias separadas al swapchain base y al swapchain1;
+- shutdown restaura ambas vtables cuando fueron instaladas;
+- los primeros Present/Present1 registran trazas con swapchain, flags y ruta;
+- la captura de swapchain registra HWND, resolución y formato;
+- si se detecta un swapchain para otra ventana visible de RDR, se registra como
+  non-RDR y se deja disponible la captura para un swapchain posterior.
+
+Nuevas líneas esperables en client.log:
+[FrontierD3D] hooked IDXGISwapChain ... presentSlot=8
+[FrontierD3D] hooked IDXGISwapChain1 ... present1Slot=22
+[FrontierD3D] Present trace=...
+[FrontierD3D] Present1 trace=...
+
+Importante:
+- Esta modificación es estática; no se ejecutó RDR1 en este entorno.
+- No se afirma build/runtime verification de este commit.
+- No se modificó RemotePlayerManager, el bootstrap nativo, ni la creación del
+  local player.
+- CI no reporta workflow para este commit, por lo que la verificación pendiente
+  sigue siendo build + runtime en el entorno Windows/RDR1.
+
+PRÓXIMO DIAGNÓSTICO:
+Si después de este commit siguen sin aparecer "hooked IDXGISwapChain" y tampoco
+"DXGI CreateSwapChain... produced swapchain", el siguiente punto a investigar es
+la procedencia de CreateDXGIFactory2: el hook actual se instala sobre las imports
+de RDR.exe, y todavía no está demostrado que el factory usado para el swapchain
+principal pertenezca a esa tabla de imports ni que sea el único factory creado.
+
+HEAD DE CONTINUIDAD:
+251f9a58175712cf2d1d243296139239d8414360
