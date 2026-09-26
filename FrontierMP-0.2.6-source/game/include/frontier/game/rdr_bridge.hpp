@@ -92,6 +92,7 @@ private:
 
     enum class HistoricalOnlineBootstrapTask : std::uint8_t {
         None,
+        SendStartScreenExit,
         SendEnterOnlineForInvite,
         FadeToLoadingScreen,
         QueryFade,
