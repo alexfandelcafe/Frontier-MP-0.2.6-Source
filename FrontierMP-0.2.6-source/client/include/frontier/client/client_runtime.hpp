@@ -31,6 +31,7 @@ private:
     std::uint64_t lastSessionUpdateMs_{};
     std::uint64_t lastFrontendBootstrapAttemptMs_{};
     bool historicalOnlineBootstrapLogged_{};
+    bool nativeUiBootstrapEnabled_{};
     std::string sessionMode_{"freeroam"};
     RemotePlayerManager remotePlayers_{};
     std::uint16_t localPlayerId_{};
