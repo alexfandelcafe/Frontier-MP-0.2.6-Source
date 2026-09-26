@@ -501,21 +501,127 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
         ++historicalOnlineBootstrapAttempts_;
         std::string error;
         if (!submitTask(
-                HistoricalOnlineBootstrapTask::FadeToLoadingScreen,
+                HistoricalOnlineBootstrapTask::SendStartScreenExit,
                 error)) {
             historicalOnlineBootstrapStage_ =
                 HistoricalOnlineBootstrapStage::Failed;
             logLine =
-                "[FrontierSession] historical LoadOnline stage=1 "
-                "HUD_FADE_TO_LOADING_SCREEN queue failed: " + error;
+                "[FrontierSession] historical boot.sc "
+                "startScreenExit queue failed: " + error;
             return false;
         }
 
         historicalOnlineBootstrapStage_ =
-            HistoricalOnlineBootstrapStage::WaitingForFade;
+            HistoricalOnlineBootstrapStage::WaitingForStartScreenExit;
         logLine =
-            "[FrontierSession] historical LoadOnline stage=1 "
-            "HUD_FADE_TO_LOADING_SCREEN queued";
+            "[FrontierSession] historical boot.sc "
+            "startScreenExit queued";
+        return false;
+    }
+
+    case HistoricalOnlineBootstrapStage::WaitingForStartScreenExit: {
+        if (historicalOnlineBootstrapTaskPending_.load(
+                std::memory_order_acquire)) {
+            return false;
+        }
+
+        if (historicalOnlineBootstrapTaskDone_.exchange(
+                false, std::memory_order_acq_rel)) {
+            if (historicalOnlineBootstrapTaskFailed_.load(
+                    std::memory_order_acquire)) {
+                ++historicalOnlineBootstrapAttempts_;
+                if (historicalOnlineBootstrapAttempts_ == 1 ||
+                    (historicalOnlineBootstrapAttempts_ % 8u) == 0u) {
+                    logLine =
+                        "[FrontierSession] historical boot.sc "
+                        "startScreenExit invoke failed; retrying";
+                }
+                std::string retryError;
+                if (!submitTask(
+                        HistoricalOnlineBootstrapTask::SendStartScreenExit,
+                        retryError) &&
+                    logLine.empty()) {
+                    logLine =
+                        "[FrontierSession] historical boot.sc "
+                        "startScreenExit retry queue failed: " + retryError;
+                }
+                return false;
+            }
+
+            std::string error;
+            if (!submitTask(
+                    HistoricalOnlineBootstrapTask::SendEnterOnlineForInvite,
+                    error)) {
+                historicalOnlineBootstrapStage_ =
+                    HistoricalOnlineBootstrapStage::Failed;
+                logLine =
+                    "[FrontierSession] historical boot.sc "
+                    "net.EnterOnlineForInvite queue failed: " + error;
+                return false;
+            }
+
+            historicalOnlineBootstrapStage_ =
+                HistoricalOnlineBootstrapStage::WaitingForEnterOnlineForInvite;
+            logLine =
+                "[FrontierSession] historical boot.sc "
+                "net.EnterOnlineForInvite queued after StartScreen1 exit";
+            return false;
+        }
+
+        return false;
+    }
+
+    case HistoricalOnlineBootstrapStage::WaitingForEnterOnlineForInvite: {
+        if (historicalOnlineBootstrapTaskPending_.load(
+                std::memory_order_acquire)) {
+            return false;
+        }
+
+        if (historicalOnlineBootstrapTaskDone_.exchange(
+                false, std::memory_order_acq_rel)) {
+            if (historicalOnlineBootstrapTaskFailed_.load(
+                    std::memory_order_acquire)) {
+                ++historicalOnlineBootstrapAttempts_;
+                if (historicalOnlineBootstrapAttempts_ == 1 ||
+                    (historicalOnlineBootstrapAttempts_ % 8u) == 0u) {
+                    logLine =
+                        "[FrontierSession] historical boot.sc "
+                        "net.EnterOnlineForInvite invoke failed; retrying";
+                }
+                std::string retryError;
+                if (!submitTask(
+                        HistoricalOnlineBootstrapTask::SendEnterOnlineForInvite,
+                        retryError) &&
+                    logLine.empty()) {
+                    logLine =
+                        "[FrontierSession] historical boot.sc "
+                        "net.EnterOnlineForInvite retry queue failed: " +
+                        retryError;
+                }
+                return false;
+            }
+
+            std::string error;
+            if (!submitTask(
+                    HistoricalOnlineBootstrapTask::FadeToLoadingScreen,
+                    error)) {
+                historicalOnlineBootstrapStage_ =
+                    HistoricalOnlineBootstrapStage::Failed;
+                logLine =
+                    "[FrontierSession] historical LoadOnline stage=1 "
+                    "HUD_FADE_TO_LOADING_SCREEN queue failed: " + error;
+                return false;
+            }
+
+            historicalOnlineBootstrapStage_ =
+                HistoricalOnlineBootstrapStage::WaitingForFade;
+            logLine =
+                "[FrontierSession] historical boot.sc "
+                "StartScreen2 online transition complete; "
+                "HUD_FADE_TO_LOADING_SCREEN queued";
+            return false;
+        }
+
         return false;
     }
 
@@ -573,7 +679,7 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
                     message,
                     sizeof(message),
                     "[FrontierSession] historical LoadOnline stage=2 complete "
-                    "StartScreen1 exited, file events sent, "
+                    "StartScreen2 transition active, file events sent, "
                     "NET_AUTHENTICATE_GAMER result=0x%llX",
                     static_cast<unsigned long long>(
                         historicalOnlineBootstrapAuthResult_.load(
