@@ -3,7 +3,6 @@
 #include <windows.h>
 
 #include <algorithm>
-#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -14,8 +13,6 @@
 #include "include/cef_app.h"
 #include "include/cef_browser.h"
 #include "include/cef_client.h"
-#include "include/cef_parser.h"
-#include "include/cef_render_handler.h"
 
 namespace frontier::client {
 
@@ -128,6 +125,7 @@ public:
 
     void OnBeforeClose(CefRefPtr<CefBrowser> browser) override {
         if (browser_ != nullptr &&
+            browser != nullptr &&
             browser_->GetIdentifier() == browser->GetIdentifier()) {
             browser_ = nullptr;
         }
@@ -348,9 +346,13 @@ void CefOverlay::thread_main() {
     }
 
     ShowWindow(browser->GetHost()->GetWindowHandle(), SW_SHOW);
-    SetFocus(browser->GetHost()->GetWindowHandle());
 
     while (!stopRequested_.load(std::memory_order_acquire)) {
+        if (!IsWindow(gameWindow)) {
+            log_line("[FrontierCEF] RDR window was destroyed");
+            break;
+        }
+
         CefDoMessageLoopWork();
         position_browser_window(gameWindow, browser);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
