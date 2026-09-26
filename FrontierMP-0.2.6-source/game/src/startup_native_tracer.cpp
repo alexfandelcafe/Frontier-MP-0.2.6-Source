@@ -29,6 +29,9 @@ bool g_scriptHandleValidKnown[kObservedScriptCapacity]{};
 std::size_t g_scriptHandleCount = 0;
 std::uint32_t gCreatePlayerActorTraceCount = 0;
 std::uint32_t gGetPlayerActorTraceCount = 0;
+std::atomic<std::uint32_t> gObservedLocalPlayerActor{0u};
+std::atomic<bool> gObservedLocalPlayerActorKnown{false};
+
 std::uint32_t gCreateActorInLayoutTraceCount = 0;
 std::uint32_t gIsActorInitedTraceCount = 0;
 std::uint32_t gIsActorValidTraceCount = 0;
@@ -358,8 +361,17 @@ void write_log_line(const char* message) {
 
 } // namespace
 
+bool StartupNativeTracer::observed_local_player_actor(
+    std::uint32_t& outActor) const {
+    outActor = gObservedLocalPlayerActor.load(std::memory_order_acquire);
+    return gObservedLocalPlayerActorKnown.load(std::memory_order_acquire);
+}
+
 bool StartupNativeTracer::attach(NativeInvoker& invoker, GameThreadDispatcher& dispatcher, std::string& error) {
     if (attached_) return true;
+
+    gObservedLocalPlayerActor.store(0u, std::memory_order_release);
+    gObservedLocalPlayerActorKnown.store(false, std::memory_order_release);
     if (g_tracer != nullptr) {
         error = "another startup native tracer is already attached";
         return false;
@@ -768,109 +780,32 @@ bool StartupNativeTracer::retry_network_optional_hooks() {
 bool StartupNativeTracer::retry_actor_optional_hooks() {
     if (!attached_ || !invoker_) return false;
 
-    bool attachedAny = false;
-    const auto retry = [&](std::uint32_t hash,
-                            NativeInvoker::NativeHandler replacement,
-                            NativeInvoker::NativeHandler& original,
-                            const char* label) {
-        if (original != nullptr || !invoker_->has_handler(hash)) return;
+    // Keep this hook intentionally narrow. Calling or hooking the wider actor /
+    // slot surface during startup was not necessary for the readiness barrier
+    // and increases ABI/registration risk. GET_PLAYER_ACTOR is the one signal
+    // required by InitSpawn and is already observed from the game's own script.
+    if (originalGetPlayerActor_ != nullptr ||
+        !invoker_->has_handler(kGetPlayerActor)) {
+        return false;
+    }
 
-        std::string hookError;
-        if (!invoker_->hook_native(hash, replacement, original, &hookError)) {
-            return;
-        }
+    std::string hookError;
+    if (!invoker_->hook_native(
+            kGetPlayerActor,
+            &StartupNativeTracer::get_player_actor_hook,
+            originalGetPlayerActor_,
+            &hookError)) {
+        return false;
+    }
 
-        char buffer[224]{};
-        std::snprintf(
-            buffer,
-            sizeof(buffer),
-            "[FrontierNativeTrace] deferred optional hook attached %s hash=0x%08X",
-            label,
-            hash);
-        log(buffer);
-        attachedAny = true;
-    };
-
-    retry(kCreatePlayerActorInLayout,
-          &StartupNativeTracer::create_player_actor_in_layout_hook,
-          originalCreatePlayerActorInLayout_,
-          "CREATE_PLAYER_ACTOR_IN_LAYOUT");
-    retry(kGetPlayerActor,
-          &StartupNativeTracer::get_player_actor_hook,
-          originalGetPlayerActor_,
-          "GET_PLAYER_ACTOR");
-    retry(kCreateActorInLayout,
-          &StartupNativeTracer::create_actor_in_layout_hook,
-          originalCreateActorInLayout_,
-          "CREATE_ACTOR_IN_LAYOUT");
-    retry(kGetActorEnum,
-          &StartupNativeTracer::get_actor_enum_hook,
-          originalGetActorEnum_,
-          "GET_ACTOR_ENUM");
-    retry(kIsActorInited,
-          &StartupNativeTracer::is_actor_inited_hook,
-          originalIsActorInited_,
-          "IS_ACTOR_INITED");
-    retry(kIsActorValid,
-          &StartupNativeTracer::is_actor_valid_hook,
-          originalIsActorValid_,
-          "IS_ACTOR_VALID");
-    retry(kIsActorPlayer,
-          &StartupNativeTracer::is_actor_player_hook,
-          originalIsActorPlayer_,
-          "IS_ACTOR_PLAYER");
-    retry(kIsActorLocalPlayer,
-          &StartupNativeTracer::is_actor_local_player_hook,
-          originalIsActorLocalPlayer_,
-          "IS_ACTOR_LOCAL_PLAYER");
-    retry(kIsLocalPlayerValid,
-          &StartupNativeTracer::is_local_player_valid_hook,
-          originalIsLocalPlayerValid_,
-          "IS_LOCAL_PLAYER_VALID");
-    retry(kRespawnPlayerActorInLayout,
-          &StartupNativeTracer::respawn_player_actor_in_layout_hook,
-          originalRespawnPlayerActorInLayout_,
-          "RESPAWN_PLAYER_ACTOR_IN_LAYOUT");
-    retry(kSwitchPlayerToEnum,
-          &StartupNativeTracer::switch_player_to_enum_hook,
-          originalSwitchPlayerToEnum_,
-          "SWITCH_PLAYER_TO_ENUM");
-    retry(kInitNativeActorenumPlayer,
-          &StartupNativeTracer::init_native_actorenum_player_hook,
-          originalInitNativeActorenumPlayer_,
-          "INIT_NATIVE_ACTORENUM_PLAYER");
-    retry(kGetActorSlot,
-          &StartupNativeTracer::get_actor_slot_hook,
-          originalGetActorSlot_,
-          "GET_ACTOR_SLOT");
-    retry(kGetSlotActor,
-          &StartupNativeTracer::get_slot_actor_hook,
-          originalGetSlotActor_,
-          "GET_SLOT_ACTOR");
-    retry(kGetLocalSlot,
-          &StartupNativeTracer::get_local_slot_hook,
-          originalGetLocalSlot_,
-          "GET_LOCAL_SLOT");
-    retry(kIsSlotValid,
-          &StartupNativeTracer::is_slot_valid_hook,
-          originalIsSlotValid_,
-          "IS_SLOT_VALID");
-    retry(kCreateLayout,
-          &StartupNativeTracer::create_layout_hook,
-          originalCreateLayout_,
-          "CREATE_LAYOUT");
-    retry(kFindNamedLayout,
-          &StartupNativeTracer::find_named_layout_hook,
-          originalFindNamedLayout_,
-          "FIND_NAMED_LAYOUT");
-    retry(kIsLayoutrefValid,
-          &StartupNativeTracer::is_layoutref_valid_hook,
-          originalIsLayoutrefValid_,
-          "IS_LAYOUTREF_VALID");
-    // STREAMING_IS_ACTOR_LOADED already has no dedicated callback in the
-    // historical tracer surface, so leave it observational until its exact
-    // signature is established.
-    return attachedAny;
+    char buffer[224]{};
+    std::snprintf(
+        buffer,
+        sizeof(buffer),
+        "[FrontierNativeTrace] deferred optional hook attached GET_PLAYER_ACTOR hash=0x%08X",
+        kGetPlayerActor);
+    log(buffer);
+    return true;
 }
 
 void StartupNativeTracer::log(const char* message) {
@@ -1779,7 +1714,17 @@ void StartupNativeTracer::get_player_actor_hook(void* context) {
     append_execution_identity(buffer, sizeof(buffer), used, context);
     log(buffer);
 
-
+    // Record the result of the game's real GET_PLAYER_ACTOR(-1) call. The
+    // historical InitSpawn path is itself the producer of this signal, so
+    // consumers can wait on it without issuing synthetic native calls.
+    if (prePlayer == -1 && resultOk) {
+        gObservedLocalPlayerActor.store(
+            static_cast<std::uint32_t>(result),
+            std::memory_order_release);
+        gObservedLocalPlayerActorKnown.store(
+            true,
+            std::memory_order_release);
+    }
 }
 
 void StartupNativeTracer::get_actor_enum_hook(void* context) {
