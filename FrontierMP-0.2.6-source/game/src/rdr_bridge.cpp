@@ -922,6 +922,20 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
                 std::uintptr_t result = 0u;
 
                 switch (task) {
+                case HistoricalOnlineBootstrapTask::SendStartScreenExit: {
+                    // The historical flow exits StartScreen1 before posting
+                    // net.EnterOnlineForInvite. This task used to have no switch
+                    // case, so the state machine advanced without doing anything.
+                    std::uintptr_t args[1]{};
+                    args[0] = reinterpret_cast<std::uintptr_t>("StartScreen1");
+                    ok = nativeInvoker_.invoke_raw(
+                        kNativeUiExit, args, 1u, result);
+                    historicalOnlineBootstrapTaskResult_.store(
+                        static_cast<std::uint32_t>(result),
+                        std::memory_order_release);
+                    break;
+                }
+
                 case HistoricalOnlineBootstrapTask::SendEnterOnlineForInvite: {
                     std::uintptr_t args[1]{};
                     args[0] = reinterpret_cast<std::uintptr_t>(
