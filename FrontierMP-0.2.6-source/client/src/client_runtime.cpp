@@ -343,6 +343,7 @@ void ClientRuntime::update() {
         if (g_network->state() == ConnectionState::Connected &&
             gameBridge_.initialized() &&
             session_.runtime_state().worldLoadedStable &&
+            session_.runtime_state().gameState != 5 &&
             localPlayerId_ != 0 &&
             !localPlayerSpawnReady_ &&
             (lastLocalPlayerSpawnAttemptMs_ == 0 ||
