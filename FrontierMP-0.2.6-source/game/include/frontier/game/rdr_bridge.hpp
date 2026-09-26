@@ -33,6 +33,8 @@ public:
     bool request_remote_actor_test(const PlayerState& origin, std::string& error) const;
     bool send_ui_event(const std::string& eventName, std::string& error) const;
     bool advance_historical_online_bootstrap(std::string& logLine);
+    void reset_historical_online_bootstrap();
+    bool historical_online_bootstrap_complete() const;
     bool spawn_remote_actor(std::uint16_t playerId, const PlayerState& state,
                             RemoteActorHandle& outActor, std::string& error) const;
     bool update_remote_actor_transform(std::uint32_t actorHandle, const PlayerState& state,
@@ -129,6 +131,7 @@ private:
     std::atomic<bool> historicalOnlineBootstrapTaskFailed_{false};
     std::atomic<std::uint32_t> historicalOnlineBootstrapTaskResult_{};
     std::atomic<std::uintptr_t> historicalOnlineBootstrapAuthResult_{};
+    mutable std::mutex historicalOnlineBootstrapMutex_;
     mutable std::mutex runtimeSnapshotMutex_;
     mutable RuntimeSnapshot runtimeSnapshot_{};
     mutable bool runtimeRefreshPending_{};
