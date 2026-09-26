@@ -17,6 +17,7 @@ public:
     void shutdown();
     void update();
     bool connected() const { return connected_; }
+    frontier::game::RdrBridge& game_bridge() { return gameBridge_; }
 
 private:
     bool connected_{};
