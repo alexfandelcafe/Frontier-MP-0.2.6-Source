@@ -927,7 +927,7 @@ DWORD WINAPI FrontierClientWorker(LPVOID) {
 
 #ifdef FRONTIER_ENABLE_CEF
     log_line("[FrontierCEF] compile support enabled");
-    if (g_cefOverlay.start()) {
+    if (g_cefOverlay.start(g_runtime.game_bridge())) {
         log_line("[FrontierCEF] overlay startup requested");
     } else {
         log_line("[FrontierCEF] overlay startup failed");
