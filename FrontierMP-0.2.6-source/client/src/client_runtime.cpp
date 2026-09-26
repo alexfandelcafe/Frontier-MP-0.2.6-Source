@@ -291,14 +291,13 @@ void ClientRuntime::update() {
             if (!sessionLog.empty()) log_line(sessionLog);
             lastSessionUpdateMs_ = now;
 
-            // The custom historical boot.sc flow is driven from StartScreen1.
-            // Do not emit net.EnterOnlineForInvite while the native frontend is
-            // still being constructed; the stock event dispatcher can otherwise
-            // consume the event before the UI state machine exists.
+            // Drive the historical boot.sc / InitSpawn sequence independently
+            // of Frontier's session state. RDRMP's InitSpawn is itself a waiter:
+            // it can only finish after the native player actor exists, so gating
+            // the bootstrap on Frontend creates a deadlock once the state machine
+            // moves to WaitingForLocalPlayer.
             if (sessionMode_ == "freeroam" &&
-                !historicalOnlineBootstrapLogged_ &&
-                session_.runtime_state().state ==
-                    frontier::game::FrontierSessionState::Frontend) {
+                !historicalOnlineBootstrapLogged_) {
                 std::string bootstrapLog;
                 const bool bootstrapComplete =
                     gameBridge_.advance_historical_online_bootstrap(bootstrapLog);
