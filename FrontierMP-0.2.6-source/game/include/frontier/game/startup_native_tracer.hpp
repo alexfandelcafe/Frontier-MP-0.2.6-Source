@@ -32,6 +32,11 @@ private:
     static void is_script_valid_hook(void* context);
     static void terminate_script_hook(void* context);
     static void terminate_this_script_hook(void* context);
+    static void ui_send_event_hook(void* context);
+    static void ui_exit_hook(void* context);
+    static void hud_fade_to_loading_screen_hook(void* context);
+    static void hud_is_fading_hook(void* context);
+    static void net_authenticate_gamer_hook(void* context);
     static void net_enable_multiplayer_hook(void* context);
     static void net_is_in_session_hook(void* context);
     static void net_is_session_client_hook(void* context);
@@ -75,6 +80,11 @@ private:
     NativeInvoker::NativeHandler originalIsScriptValid_{};
     NativeInvoker::NativeHandler originalTerminateScript_{};
     NativeInvoker::NativeHandler originalTerminateThisScript_{};
+    NativeInvoker::NativeHandler originalUiSendEvent_{};
+    NativeInvoker::NativeHandler originalUiExit_{};
+    NativeInvoker::NativeHandler originalHudFadeToLoadingScreen_{};
+    NativeInvoker::NativeHandler originalHudIsFading_{};
+    NativeInvoker::NativeHandler originalNetAuthenticateGamer_{};
     NativeInvoker::NativeHandler originalNetEnableMultiplayer_{};
     NativeInvoker::NativeHandler originalNetIsInSession_{};
     NativeInvoker::NativeHandler originalNetIsSessionClient_{};
