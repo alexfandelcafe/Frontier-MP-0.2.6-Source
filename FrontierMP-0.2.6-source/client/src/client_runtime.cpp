@@ -234,6 +234,7 @@ bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, cons
         gameBridge_.reset_local_player_spawn();
         gameBridge_.reset_historical_online_bootstrap();
         session_.reset();
+        connected_ = false;
         log_line("[FrontierClient] " + reason);
     });
 
@@ -316,6 +317,13 @@ void ClientRuntime::shutdown() {
     session_.reset();
     lastSessionUpdateMs_ = 0;
     lastFrontendBootstrapAttemptMs_ = 0;
+    {
+        std::lock_guard lock(connectionRequestMutex_);
+        pendingServerHost_.clear();
+        pendingServerPort_ = 0;
+        connectionRequestPending_ = false;
+    }
+    gameBridge_.reset_historical_online_bootstrap();
 }
 
 void ClientRuntime::update() {
