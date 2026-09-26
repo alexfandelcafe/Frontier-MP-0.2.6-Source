@@ -2360,12 +2360,158 @@ bool RdrBridge::send_ui_event(const std::string& eventName, std::string& error) 
     return error.empty();
 }
 
+bool RdrBridge::read_local_player_runtime(
+    bool& outReady,
+    std::uint32_t& outActor,
+    bool& outLocalPlayerObject,
+    std::string& error) const {
+    outReady = false;
+    outActor = 0u;
+    outLocalPlayerObject = false;
+    error.clear();
+
+    if (!initialized_) {
+        error = "bridge not initialized";
+        return false;
+    }
+    if (!nativeInvoker_.ready()) {
+        error = "native invoker not ready";
+        return false;
+    }
+    if (!gameThreadDispatcher_.attached()) {
+        error = gameThreadDispatcherError_.empty()
+            ? "game-thread dispatcher not attached"
+            : gameThreadDispatcherError_;
+        return false;
+    }
+
+    std::uint32_t actor = 0u;
+    bool actorValid = false;
+    bool localPlayerObject = false;
+    std::string dispatchError;
+    const bool completed = gameThreadDispatcher_.submit_and_wait(
+        [this, &actor, &actorValid, &localPlayerObject]() {
+            std::uintptr_t localPlayerPointer = 0u;
+            localPlayerObject = read_pointer(localPlayerStorage_, localPlayerPointer);
+
+            std::uintptr_t actorArgs[1]{};
+            // -1 is the historical GET_PLAYER_ACTOR local-player selector used
+            // by client-main.dll's InitSpawn loop.
+            actorArgs[0] = static_cast<std::uintptr_t>(0xFFFFFFFFu);
+            std::uintptr_t actorResult = 0u;
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeGetPlayerActor, actorArgs, 1u, actorResult)) {
+                actor = 0u;
+                actorValid = false;
+                return;
+            }
+
+            actor = static_cast<std::uint32_t>(actorResult);
+            if (actor == 0u) {
+                actorValid = false;
+                return;
+            }
+
+            std::uintptr_t validArgs[1]{
+                static_cast<std::uintptr_t>(actor)};
+            std::uintptr_t validResult = 0u;
+            actorValid =
+                nativeInvoker_.invoke_raw(
+                    kNativeIsActorValid, validArgs, 1u, validResult) &&
+                validResult != 0u;
+        },
+        250u,
+        dispatchError);
+
+    if (!completed) {
+        error = dispatchError.empty()
+            ? "local-player runtime query did not complete"
+            : dispatchError;
+        return false;
+    }
+
+    outActor = actor;
+    outLocalPlayerObject = localPlayerObject;
+    outReady = actor != 0u && actorValid;
+
+    if (!outReady) {
+        char buffer[384]{};
+        std::snprintf(
+            buffer, sizeof(buffer),
+            "local-player contract pending sm_LocalPlayer=%u actor=0x%08X actorValid=%u",
+            localPlayerObject ? 1u : 0u,
+            actor,
+            actorValid ? 1u : 0u);
+        error = buffer;
+    }
+
+    return true;
+}
+
 bool RdrBridge::read_local_player_state(PlayerState& outState, std::string& error) const {
     outState = {};
     error.clear();
     if (!initialized_) {
         error = "bridge not initialized";
         return false;
+    }
+
+    // Once the native contract is available, use the same actor returned by
+    // GET_PLAYER_ACTOR(-1) for local-state readiness and position sampling.
+    // The legacy direct-memory chain remains only as a compatibility fallback
+    // when the native player query itself cannot be executed.
+    bool actorReady = false;
+    std::uint32_t actorHandle = 0u;
+    bool localPlayerObject = false;
+    std::string nativePlayerError;
+    const bool nativePlayerQueryOk =
+        read_local_player_runtime(
+            actorReady,
+            actorHandle,
+            localPlayerObject,
+            nativePlayerError);
+    (void)localPlayerObject;
+
+    if (nativePlayerQueryOk) {
+        if (!actorReady) {
+            error = nativePlayerError.empty()
+                ? "local player actor pending"
+                : nativePlayerError;
+            return false;
+        }
+
+        Vec3 nativePosition{};
+        std::string dispatchError;
+        const bool completed = gameThreadDispatcher_.submit_and_wait(
+            [this, actorHandle, &nativePosition]() {
+                std::uintptr_t args[4]{};
+                args[0] = static_cast<std::uintptr_t>(actorHandle);
+                args[1] = reinterpret_cast<std::uintptr_t>(&nativePosition.x);
+                args[2] = reinterpret_cast<std::uintptr_t>(&nativePosition.y);
+                args[3] = reinterpret_cast<std::uintptr_t>(&nativePosition.z);
+                std::uintptr_t result = 0u;
+                return nativeInvoker_.invoke_raw(
+                    kNativeGetPosition, args, 4u, result);
+            },
+            250u,
+            dispatchError);
+
+        if (!completed) {
+            error = dispatchError.empty()
+                ? "local player GET_POSITION task did not complete"
+                : dispatchError;
+            return false;
+        }
+
+        if (!std::isfinite(nativePosition.x) ||
+            !std::isfinite(nativePosition.y) ||
+            !std::isfinite(nativePosition.z)) {
+            error = "local player GET_POSITION returned non-finite coordinates";
+            return false;
+        }
+
+        outState.position = nativePosition;
+        return true;
     }
 
 #ifdef _WIN32
