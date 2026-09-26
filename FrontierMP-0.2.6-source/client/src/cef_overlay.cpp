@@ -336,9 +336,7 @@ struct PresentHookState final {
     ComPtr<IDXGIFactory> hookedFactory{};
     ComPtr<IDXGIFactory2> hookedFactory2{};
     std::array<void*, 12> hookedFactoryVtable{};
-    std::array<void*, 12> originalFactoryVtable{};
     std::array<void*, 25> hookedFactory2Vtable{};
-    std::array<void*, 25> originalFactory2Vtable{};
     void** originalFactoryVtableAddress{};
     void** originalFactory2VtableAddress{};
     CreateSwapChainProc createSwapChainOriginal{};
@@ -558,26 +556,21 @@ void hook_factory(PresentHookState& state, IDXGIFactory* factory) {
         void*** vtable = reinterpret_cast<void***>(factory);
         if (vtable != nullptr && *vtable != nullptr) {
             state.originalFactoryVtableAddress = *vtable;
-
-            std::string error;
-            void* original = nullptr;
-            if (patch_vtable_slot(
-                    *vtable,
-                    10,
-                    reinterpret_cast<void*>(&frontier_factory_create_swap_chain),
-                    original,
-                    error)) {
-                state.createSwapChainOriginal =
-                    reinterpret_cast<PresentHookState::CreateSwapChainProc>(original);
-                factory->AddRef();
-                state.hookedFactory = factory;
-                state.factoryHooked = true;
-                log_line("[FrontierD3D] IDXGIFactory::CreateSwapChain hook installed");
-            } else {
-                log_line(
-                    "[FrontierD3D] IDXGIFactory::CreateSwapChain hook failed: " +
-                    error);
+            for (std::size_t i = 0; i < state.hookedFactoryVtable.size(); ++i) {
+                state.hookedFactoryVtable[i] = (*vtable)[i];
             }
+
+            void* original = state.hookedFactoryVtable[10];
+            state.hookedFactoryVtable[10] =
+                reinterpret_cast<void*>(&frontier_factory_create_swap_chain);
+
+            factory->AddRef();
+            state.hookedFactory = factory;
+            *vtable = state.hookedFactoryVtable.data();
+            state.createSwapChainOriginal =
+                reinterpret_cast<PresentHookState::CreateSwapChainProc>(original);
+            state.factoryHooked = true;
+            log_line("[FrontierD3D] IDXGIFactory::CreateSwapChain shadow-vtable hook installed");
         }
     }
 
@@ -595,49 +588,28 @@ void hook_factory(PresentHookState& state, IDXGIFactory* factory) {
     if (vtable2 == nullptr || *vtable2 == nullptr) return;
 
     state.originalFactory2VtableAddress = *vtable2;
-
-    std::string hwndError;
-    std::string compositionError;
-    void* originalHwnd = nullptr;
-    void* originalComposition = nullptr;
-
-    const bool hwndHooked = patch_vtable_slot(
-        *vtable2,
-        15,
-        reinterpret_cast<void*>(&frontier_factory_create_swap_chain_for_hwnd),
-        originalHwnd,
-        hwndError);
-
-    const bool compositionHooked = patch_vtable_slot(
-        *vtable2,
-        24,
-        reinterpret_cast<void*>(&frontier_factory_create_swap_chain_for_composition),
-        originalComposition,
-        compositionError);
-
-    if (hwndHooked) {
-        state.createSwapChainForHwndOriginal =
-            reinterpret_cast<PresentHookState::CreateSwapChainForHwndProc>(originalHwnd);
+    for (std::size_t i = 0; i < state.hookedFactory2Vtable.size(); ++i) {
+        state.hookedFactory2Vtable[i] = (*vtable2)[i];
     }
 
-    if (compositionHooked) {
-        state.createSwapChainForCompositionOriginal =
-            reinterpret_cast<PresentHookState::CreateSwapChainForCompositionProc>(
-                originalComposition);
-    }
+    void* originalHwnd = state.hookedFactory2Vtable[15];
+    void* originalComposition = state.hookedFactory2Vtable[24];
+    state.hookedFactory2Vtable[15] =
+        reinterpret_cast<void*>(&frontier_factory_create_swap_chain_for_hwnd);
+    state.hookedFactory2Vtable[24] =
+        reinterpret_cast<void*>(&frontier_factory_create_swap_chain_for_composition);
 
-    if (hwndHooked || compositionHooked) {
-        factory2->AddRef();
-        state.hookedFactory2 = factory2.Get();
-        state.factory2Hooked = true;
-        log_line("[FrontierD3D] IDXGIFactory2 swapchain hooks installed");
-    } else {
-        log_line(
-            "[FrontierD3D] IDXGIFactory2 swapchain hooks failed hwnd=" +
-            hwndError +
-            " composition=" +
-            compositionError);
-    }
+    factory2->AddRef();
+    state.hookedFactory2 = factory2.Get();
+    *vtable2 = state.hookedFactory2Vtable.data();
+
+    state.createSwapChainForHwndOriginal =
+        reinterpret_cast<PresentHookState::CreateSwapChainForHwndProc>(originalHwnd);
+    state.createSwapChainForCompositionOriginal =
+        reinterpret_cast<PresentHookState::CreateSwapChainForCompositionProc>(
+            originalComposition);
+    state.factory2Hooked = true;
+    log_line("[FrontierD3D] IDXGIFactory2 shadow-vtable hooks installed");
 }
 
 void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
@@ -897,61 +869,6 @@ void unhook_render_path() {
     g_presentHook.originalVtableAddress = nullptr;
     g_presentHook.presentOriginal = nullptr;
     g_presentHook.swapchainHooked = false;
-
-    if (g_presentHook.factory2Hooked &&
-        g_presentHook.hookedFactory2 != nullptr) {
-        void*** vtable2 =
-            reinterpret_cast<void***>(g_presentHook.hookedFactory2.Get());
-        if (vtable2 != nullptr && *vtable2 != nullptr) {
-            if ((*vtable2)[15] ==
-                    reinterpret_cast<void*>(&frontier_factory_create_swap_chain_for_hwnd) &&
-                g_presentHook.createSwapChainForHwndOriginal != nullptr) {
-                void* original =
-                    reinterpret_cast<void*>(g_presentHook.createSwapChainForHwndOriginal);
-                std::string ignored;
-                replace_pointer(&(*vtable2)[15], original, original, ignored);
-            }
-            if ((*vtable2)[24] ==
-                    reinterpret_cast<void*>(&frontier_factory_create_swap_chain_for_composition) &&
-                g_presentHook.createSwapChainForCompositionOriginal != nullptr) {
-                void* replacement =
-                    reinterpret_cast<void*>(
-                        g_presentHook.createSwapChainForCompositionOriginal);
-                void* previous = nullptr;
-                std::string ignored;
-                replace_pointer(&(*vtable2)[24], replacement, previous, ignored);
-            }
-        }
-    }
-
-    if (g_presentHook.factoryHooked &&
-        g_presentHook.hookedFactory != nullptr) {
-        void*** vtable =
-            reinterpret_cast<void***>(g_presentHook.hookedFactory.Get());
-        if (vtable != nullptr && *vtable != nullptr &&
-            (*vtable)[10] == reinterpret_cast<void*>(&frontier_factory_create_swap_chain) &&
-            g_presentHook.createSwapChainOriginal != nullptr) {
-            void* replacement =
-                reinterpret_cast<void*>(g_presentHook.createSwapChainOriginal);
-            void* previous = nullptr;
-            std::string ignored;
-            replace_pointer(&(*vtable)[10], replacement, previous, ignored);
-        }
-    }
-
-    g_presentHook.hookedFactory2.Reset();
-    g_presentHook.hookedFactory.Reset();
-    g_presentHook.hookedFactoryVtable.fill(nullptr);
-    g_presentHook.originalFactoryVtable.fill(nullptr);
-    g_presentHook.hookedFactory2Vtable.fill(nullptr);
-    g_presentHook.originalFactory2Vtable.fill(nullptr);
-    g_presentHook.originalFactoryVtableAddress = nullptr;
-    g_presentHook.originalFactory2VtableAddress = nullptr;
-    g_presentHook.createSwapChainOriginal = nullptr;
-    g_presentHook.createSwapChainForHwndOriginal = nullptr;
-    g_presentHook.createSwapChainForCompositionOriginal = nullptr;
-    g_presentHook.factoryHooked = false;
-    g_presentHook.factory2Hooked = false;
 
     for (auto& patch : g_presentHook.factoryImports) {
         restore_import(patch);
