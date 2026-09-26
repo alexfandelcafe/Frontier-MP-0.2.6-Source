@@ -248,9 +248,7 @@ bool CefOverlay::start(frontier::game::RdrBridge& bridge) {
 void CefOverlay::stop() {
     stopRequested_.store(true, std::memory_order_release);
 
-    if (state_ != nullptr &&
-        state_->initialized &&
-        bridge_ != nullptr &&
+    if (bridge_ != nullptr &&
         bridge_->game_thread_dispatcher_attached()) {
         std::string error;
         if (!bridge_->submit_game_thread_and_wait(
