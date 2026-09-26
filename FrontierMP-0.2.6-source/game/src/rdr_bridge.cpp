@@ -17,6 +17,7 @@
 #include <fstream>
 #include <cmath>
 #include <utility>
+#include <vector>
 
 #ifdef _WIN32
 #include <intrin.h>
