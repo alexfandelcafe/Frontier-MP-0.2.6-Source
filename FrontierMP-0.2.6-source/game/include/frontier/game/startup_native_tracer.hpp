@@ -2,6 +2,7 @@
 
 #include "frontier/game/native_invoker.hpp"
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 
@@ -18,6 +19,10 @@ public:
     // Retry actor/player/layout/streaming hooks whose native handlers can appear after startup.
     bool retry_actor_optional_hooks();
     bool attached() const { return attached_; }
+    // Observes the game's own GET_PLAYER_ACTOR(-1) calls. This is the safe
+    // synchronization point for the historical InitSpawn barrier; Frontier
+    // does not synthesize that native call from a worker thread.
+    bool observed_local_player_actor(std::uint32_t& outActor) const;
 
 private:
     static void set_start_pos_hook(void* context);
