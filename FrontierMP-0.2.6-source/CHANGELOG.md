@@ -1,3 +1,10 @@
+## 0.2.71
+- Stop synthesizing GET_PLAYER_ACTOR(-1) through NativeInvoker during startup.
+- Consume the game's own GET_PLAYER_ACTOR(-1) result from the native tracer so InitSpawn remains the producer of the local-player readiness signal.
+- Narrow deferred actor tracing to GET_PLAYER_ACTOR only while the player lifecycle ABI is still being established.
+- Remove startup dependence on the broader actor/slot native hook surface after the mass compatibility test exposed a 0xC0000005 process exit immediately after actor lifecycle probes.
+- Treat the observed process crash as a runtime safety regression in the tracing/bootstrap path, not as evidence that the local player actor was successfully created.
+
 ## 0.2.70
 - Align the local-player readiness barrier with historical RDRMP: wait for GET_PLAYER_ACTOR(-1) before treating STREAMING_IS_WORLD_LOADED as the next gate.
 - Keep the historical online bootstrap running while the Frontier session is in WaitingForLocalPlayer instead of stopping at the Frontend state.
