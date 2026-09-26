@@ -72,31 +72,15 @@ if(WIN32 AND FRONTIER_BUILD_TOOLS)
 endif()
 
 if(WIN32 AND FRONTIER_CEF_PACKAGE_DIR)
-    if(NOT EXISTS "${FRONTIER_CEF_PACKAGE_DIR}/include/cef_api_hash.h")
-        message(FATAL_ERROR
-            "FRONTIER_CEF_PACKAGE_DIR must point to a CEF distribution containing include/")
-    endif()
-
-    if(NOT EXISTS "${FRONTIER_CEF_PACKAGE_DIR}/libcef_dll/CMakeLists.txt")
-        message(FATAL_ERROR
-            "FRONTIER_CEF_PACKAGE_DIR must include libcef_dll/ from the CEF binary distribution")
-    endif()
-
-    find_library(FRONTIER_CEF_LIBRARY
-        NAMES libcef
-        PATHS
-            "${FRONTIER_CEF_PACKAGE_DIR}/Release"
-            "${FRONTIER_CEF_PACKAGE_DIR}/Debug"
-        NO_DEFAULT_PATH
-    )
-
-    if(NOT FRONTIER_CEF_LIBRARY)
-        message(FATAL_ERROR
-            "Unable to find libcef.lib under FRONTIER_CEF_PACKAGE_DIR/Release or /Debug")
-    endif()
+    # Use the CEF binary distribution's own CMake configuration. This sets
+    # CEF_ROOT, CEF_* paths and compiler definitions consistently with the
+    # distribution's libcef_dll wrapper.
+    set(CEF_ROOT "${FRONTIER_CEF_PACKAGE_DIR}")
+    set(CMAKE_MODULE_PATH "${CEF_ROOT}/cmake" ${CMAKE_MODULE_PATH})
+    find_package(CEF REQUIRED)
 
     add_subdirectory(
-        "${FRONTIER_CEF_PACKAGE_DIR}/libcef_dll"
+        "${CEF_LIBCEF_DLL_WRAPPER_PATH}"
         "${CMAKE_CURRENT_BINARY_DIR}/frontier_cef_dll_wrapper"
         EXCLUDE_FROM_ALL
     )
@@ -105,11 +89,12 @@ if(WIN32 AND FRONTIER_CEF_PACKAGE_DIR)
         tools/cef_subprocess/main.cpp
     )
     target_include_directories(frontier_cef_subprocess PRIVATE
-        "${FRONTIER_CEF_PACKAGE_DIR}"
+        "${CEF_ROOT}"
     )
     target_link_libraries(frontier_cef_subprocess PRIVATE
         libcef_dll_wrapper
-        "${FRONTIER_CEF_LIBRARY}"
+        "${CEF_LIB_RELEASE}"
+        ${CEF_STANDARD_LIBS}
     )
     frontier_enable_warnings(frontier_cef_subprocess)
     set_target_properties(frontier_cef_subprocess PROPERTIES
@@ -158,11 +143,12 @@ if(WIN32 AND FRONTIER_BUILD_CLIENT)
 
     if(FRONTIER_CEF_OVERLAY_AVAILABLE)
         target_include_directories(frontier_client PRIVATE
-            "${FRONTIER_CEF_PACKAGE_DIR}"
+            "${CEF_ROOT}"
         )
         target_link_libraries(frontier_client PRIVATE
             libcef_dll_wrapper
-            "${FRONTIER_CEF_LIBRARY}"
+            "${CEF_LIB_RELEASE}"
+            ${CEF_STANDARD_LIBS}
         )
         target_compile_definitions(frontier_client PRIVATE
             FRONTIER_ENABLE_CEF=1
