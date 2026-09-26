@@ -19,20 +19,27 @@ These calls are used for diagnostics and readiness decisions. They do not, by th
 
 The public native database exposes `GET_GAME_STATE`, but not a corresponding public setter. There are also `SET_START_POS` and `CLEAR_MISSION_INFO`, but their intended internal sequencing is not documented well enough to treat them as a complete multiplayer bootstrap. A simple “skip menu” would therefore be an unsafe shortcut: it could leave story scripts, save state, mission state, or the frontend active underneath the multiplayer runtime.
 
-## Target state
+## Runtime state contract
+
+The actual runtime sequence is:
 
 ```text
 Frontier Launcher
-    -> RDR.exe
+    -> RDR.exe suspended
     -> FrontierClient.dll
-    -> Game Compatibility Layer
+    -> CEF frontend ready
+    -> RDR.exe resumed
+    -> native invoker + game-thread dispatcher
+    -> CEF app.connect(host, port)
+       -> Frontier server connection request
+       -> historical StartScreen1/StartScreen2 online transition
+       -> LoadingScreen / startup checks
     -> FrontierSession
-       -> suppress single-player frontend
-       -> start/load multiplayer world
-       -> prevent story session ownership
-       -> prevent single-player save/load ownership
-       -> wait for Frontier server spawn
+       -> explicit bootstrap complete
+       -> stable world
+       -> local player readable
+       -> Active
     -> Entity/Player runtime
 ```
 
-The next implementation stage is to identify the exact build-specific transition that exits the frontend into a world session, then guard it behind a feature capability.
+`worldLoaded`, `gameState` or a readable local Actor are not sufficient to enter `Active`. The session state is gated on the explicit historical multiplayer bootstrap.
