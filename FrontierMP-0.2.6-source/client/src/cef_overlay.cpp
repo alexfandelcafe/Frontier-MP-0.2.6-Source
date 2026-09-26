@@ -985,13 +985,9 @@ void unhook_render_path() {
         void*** vtable =
             reinterpret_cast<void***>(g_presentHook.hookedSwapChain);
         if (vtable != nullptr &&
-            *vtable != nullptr &&
-            (*vtable)[8] == reinterpret_cast<void*>(&frontier_present) &&
-            g_presentHook.presentOriginal != nullptr) {
-            std::string ignored;
-            void* replacement = reinterpret_cast<void*>(g_presentHook.presentOriginal);
-            void* previous = nullptr;
-            replace_pointer(&(*vtable)[8], replacement, previous, ignored);
+            *vtable == g_presentHook.hookedVtable.data() &&
+            g_presentHook.originalVtableAddress != nullptr) {
+            *vtable = g_presentHook.originalVtableAddress;
         }
     }
 
@@ -1001,6 +997,40 @@ void unhook_render_path() {
     g_presentHook.originalVtableAddress = nullptr;
     g_presentHook.presentOriginal = nullptr;
     g_presentHook.swapchainHooked = false;
+
+    if (g_presentHook.factory2Hooked &&
+        g_presentHook.hookedFactory2 != nullptr &&
+        g_presentHook.originalFactory2VtableAddress != nullptr) {
+        void*** vtable2 =
+            reinterpret_cast<void***>(g_presentHook.hookedFactory2.Get());
+        if (vtable2 != nullptr &&
+            *vtable2 == g_presentHook.hookedFactory2Vtable.data()) {
+            *vtable2 = g_presentHook.originalFactory2VtableAddress;
+        }
+    }
+
+    if (g_presentHook.factoryHooked &&
+        g_presentHook.hookedFactory != nullptr &&
+        g_presentHook.originalFactoryVtableAddress != nullptr) {
+        void*** vtable =
+            reinterpret_cast<void***>(g_presentHook.hookedFactory.Get());
+        if (vtable != nullptr &&
+            *vtable == g_presentHook.hookedFactoryVtable.data()) {
+            *vtable = g_presentHook.originalFactoryVtableAddress;
+        }
+    }
+
+    g_presentHook.hookedFactory2.Reset();
+    g_presentHook.hookedFactory.Reset();
+    g_presentHook.hookedFactoryVtable.fill(nullptr);
+    g_presentHook.hookedFactory2Vtable.fill(nullptr);
+    g_presentHook.originalFactoryVtableAddress = nullptr;
+    g_presentHook.originalFactory2VtableAddress = nullptr;
+    g_presentHook.createSwapChainOriginal = nullptr;
+    g_presentHook.createSwapChainForHwndOriginal = nullptr;
+    g_presentHook.createSwapChainForCompositionOriginal = nullptr;
+    g_presentHook.factoryHooked = false;
+    g_presentHook.factory2Hooked = false;
 
     for (auto& patch : g_presentHook.factoryImports) {
         restore_import(patch);
