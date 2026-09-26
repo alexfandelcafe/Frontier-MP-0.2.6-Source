@@ -685,10 +685,14 @@ bool patch_vtable_slot(
 void hook_factory(PresentHookState& state, IDXGIFactory* factory) {
     if (factory == nullptr) return;
 
+    void*** baseVtable = reinterpret_cast<void***>(factory);
+    if (baseVtable == nullptr || *baseVtable == nullptr) return;
+
+    // Capture the original base vtable before any interface in this COM object
+    // is replaced. IDXGIFactory2 can legally be the same object pointer.
+    void** originalBaseVtable = *baseVtable;
+
     // Query the derived interface before replacing the base factory vtable.
-    // IDXGIFactory2 may be the same COM object pointer; once the 12-entry
-    // IDXGIFactory shadow is installed, treating that pointer as IDXGIFactory2
-    // would over-read the shorter shadow table.
     ComPtr<IDXGIFactory2> factory2;
     if (!state.factory2Hooked &&
         FAILED(factory->QueryInterface(IID_PPV_ARGS(&factory2)))) {
@@ -698,9 +702,10 @@ void hook_factory(PresentHookState& state, IDXGIFactory* factory) {
     if (!state.factory2Hooked && factory2 != nullptr) {
         void*** vtable2 = reinterpret_cast<void***>(factory2.Get());
         if (vtable2 != nullptr && *vtable2 != nullptr) {
-            state.originalFactory2VtableAddress = *vtable2;
+            void** originalFactory2Vtable = *vtable2;
+            state.originalFactory2VtableAddress = originalFactory2Vtable;
             for (std::size_t i = 0; i < state.hookedFactory2Vtable.size(); ++i) {
-                state.hookedFactory2Vtable[i] = (*vtable2)[i];
+                state.hookedFactory2Vtable[i] = originalFactory2Vtable[i];
             }
 
             void* originalHwnd = state.hookedFactory2Vtable[15];
@@ -725,12 +730,9 @@ void hook_factory(PresentHookState& state, IDXGIFactory* factory) {
 
     if (state.factoryHooked) return;
 
-    void*** vtable = reinterpret_cast<void***>(factory);
-    if (vtable == nullptr || *vtable == nullptr) return;
-
-    state.originalFactoryVtableAddress = *vtable;
+    state.originalFactoryVtableAddress = originalBaseVtable;
     for (std::size_t i = 0; i < state.hookedFactoryVtable.size(); ++i) {
-        state.hookedFactoryVtable[i] = (*vtable)[i];
+        state.hookedFactoryVtable[i] = originalBaseVtable[i];
     }
 
     void* original = state.hookedFactoryVtable[10];
@@ -738,7 +740,7 @@ void hook_factory(PresentHookState& state, IDXGIFactory* factory) {
         reinterpret_cast<void*>(&frontier_factory_create_swap_chain);
 
     state.hookedFactory = factory;
-    *vtable = state.hookedFactoryVtable.data();
+    *baseVtable = state.hookedFactoryVtable.data();
     state.createSwapChainOriginal =
         reinterpret_cast<PresentHookState::CreateSwapChainProc>(original);
     state.factoryHooked = true;
