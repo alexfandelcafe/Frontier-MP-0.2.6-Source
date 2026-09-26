@@ -15,6 +15,8 @@ public:
     // Retry the network/session hooks whose native handlers can appear after
     // the initial registration table becomes available.
     bool retry_network_optional_hooks();
+    // Retry actor/player/layout/streaming hooks whose native handlers can appear after startup.
+    bool retry_actor_optional_hooks();
     bool attached() const { return attached_; }
 
 private:

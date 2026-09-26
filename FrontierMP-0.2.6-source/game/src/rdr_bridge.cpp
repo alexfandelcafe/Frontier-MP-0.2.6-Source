@@ -900,6 +900,7 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
     // table during the initial attach. Retry their hooks on each bootstrap
     // pass so we observe the exact runtime point at which they become active.
     (void)startupNativeTracer_.retry_network_optional_hooks();
+    (void)startupNativeTracer_.retry_actor_optional_hooks();
 
     auto submitTask = [this](HistoricalOnlineBootstrapTask task,
                              std::string& error) {
