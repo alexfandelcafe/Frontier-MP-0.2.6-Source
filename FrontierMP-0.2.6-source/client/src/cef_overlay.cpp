@@ -26,7 +26,9 @@
 #include "include/cef_app.h"
 #include "include/cef_browser.h"
 #include "include/cef_client.h"
+#include "include/cef_process_message.h"
 #include "include/cef_render_handler.h"
+#include "include/cef_v8.h"
 
 #include <windowsx.h>
 
@@ -1281,6 +1283,7 @@ bool CefOverlay::handle_frontend_command(
             return false;
         }
 
+        std::string queueError;
         const bool queued = bridge_->submit_game_thread(
             [this] {
                 if (state_ != nullptr &&
@@ -1289,10 +1292,12 @@ bool CefOverlay::handle_frontend_command(
                     PostMessageA(state_->gameWindow, WM_CLOSE, 0, 0);
                 }
             },
-            *new std::string());
+            queueError);
 
         if (!queued) {
-            log_line("[FrontierCEF] frontend quit command queue failed");
+            log_line(
+                "[FrontierCEF] frontend quit command queue failed: " +
+                (queueError.empty() ? "unknown error" : queueError));
         } else {
             log_line("[FrontierCEF] frontend quit command queued");
         }
