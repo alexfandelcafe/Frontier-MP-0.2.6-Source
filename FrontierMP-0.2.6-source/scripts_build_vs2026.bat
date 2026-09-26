@@ -23,23 +23,52 @@ if defined FRONTIER_CEF_PACKAGE_DIR (
     if not exist "%FRONTIER_CEF_PACKAGE_DIR%\include\cef_api_hash.h" (
         echo ERROR: FRONTIER_CEF_PACKAGE_DIR does not contain a CEF SDK.
         echo Expected: include\cef_api_hash.h
+        pause
         exit /b 4
     )
     if not exist "%FRONTIER_CEF_PACKAGE_DIR%\libcef_dll\CMakeLists.txt" (
         echo ERROR: FRONTIER_CEF_PACKAGE_DIR is missing libcef_dll\CMakeLists.txt.
+        pause
         exit /b 4
     )
-    cmake --preset windows-vs2026-x64 -DFRONTIER_CEF_PACKAGE_DIR="%FRONTIER_CEF_PACKAGE_DIR%"
+    echo.
+    echo Configuring CMake with CEF...
+    cmake --preset windows-vs2026-x64 -DFRONTIER_CEF_PACKAGE_DIR="%FRONTIER_CEF_PACKAGE_DIR%" > "build\vs2026-x64\cef_configure.log" 2>&1
 ) else (
     echo CEF SDK: disabled
     echo Set FRONTIER_CEF_PACKAGE_DIR to a full CEF Windows distribution to build the CEF overlay.
-    cmake --preset windows-vs2026-x64 -DFRONTIER_CEF_PACKAGE_DIR=""
+    echo.
+    echo Configuring CMake without CEF...
+    cmake --preset windows-vs2026-x64 -DFRONTIER_CEF_PACKAGE_DIR="" > "build\vs2026-x64\cef_configure.log" 2>&1
 )
-if errorlevel 1 exit /b %errorlevel%
-cmake --build --preset windows-vs2026-x64-release
-if errorlevel 1 exit /b %errorlevel%
-
+set "CMAKE_RC=%ERRORLEVEL%"
 echo.
+echo ===== CMake configure output =====
+if exist "build\vs2026-x64\cef_configure.log" type "build\vs2026-x64\cef_configure.log"
+echo ===== End CMake configure output =====
+if not "%CMAKE_RC%"=="0" (
+    echo.
+    echo CMake configure failed with exit code %CMAKE_RC%.
+    echo Full log: %CD%\build\vs2026-x64\cef_configure.log
+    pause
+    exit /b %CMAKE_RC%
+)
+echo Building Release...
+cmake --build --preset windows-vs2026-x64-release > "build\vs2026-x64\cef_build.log" 2>&1
+set "BUILD_RC=%ERRORLEVEL%"
+echo.
+echo ===== CMake build output =====
+if exist "build\vs2026-x64\cef_build.log" type "build\vs2026-x64\cef_build.log"
+echo ===== End CMake build output =====
+if not "%BUILD_RC%"=="0" (
+    echo.
+    echo CMake build failed with exit code %BUILD_RC%.
+    echo Full log: %CD%\build\vs2026-x64\cef_build.log
+    pause
+    exit /b %BUILD_RC%
+)
+
+echo.echo.
 echo Checking generated FrontierMP binaries...
 if exist "build\vs2026-x64\bin\Release\FrontierMP.exe" (
     echo   OK: FrontierMP.exe
