@@ -12,6 +12,12 @@ The historical main-menu URL is:
 
 cef/cef_ui/mainmenu/index.html
 
-When the package is configured, FrontierClient.dll starts a small CEF host thread using an external message pump, creates a child browser window over the RDR top-level window, and loads the URL above. FrontierCefSubprocess.exe handles CEF renderer/GPU subprocesses.
+When the package is configured, FrontierClient.dll initializes CEF on the RDR game thread, creates a windowless/off-screen browser and loads the URL above. FrontierCefSubprocess.exe owns renderer-process startup and installs the window.app bridge.
+
+CEF is not responsible for rendering its own opaque window. The page is painted off-screen and the latest BGRA frame is composited into the RDR D3D11 swapchain so the native RDR 3D scene remains visible outside the HTML controls.
+
+The renderer bridge currently exposes:
+- app.connect(host, port)
+- app.quit()
 
 When FRONTIER_CEF_PACKAGE_DIR is empty, no CEF code is compiled and the client remains usable without the SDK.
