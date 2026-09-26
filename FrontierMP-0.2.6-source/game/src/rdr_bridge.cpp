@@ -866,6 +866,26 @@ bool RdrBridge::try_initialize_native_invoker() {
 #endif
 }
 
+bool RdrBridge::submit_game_thread(std::function<void()> task, std::string& error) {
+    if (!gameThreadDispatcher_.attached()) {
+        error = "game-thread dispatcher not attached";
+        return false;
+    }
+    return gameThreadDispatcher_.submit(std::move(task), error);
+}
+
+bool RdrBridge::submit_game_thread_and_wait(
+    std::function<void()> task,
+    std::uint32_t timeoutMs,
+    std::string& error) {
+    if (!gameThreadDispatcher_.attached()) {
+        error = "game-thread dispatcher not attached";
+        return false;
+    }
+    return gameThreadDispatcher_.submit_and_wait(
+        std::move(task), timeoutMs, error);
+}
+
 bool RdrBridge::try_initialize_game_thread_dispatcher() {
 #ifdef _WIN32
     if (!initialized_ || !nativeInvoker_.ready()) {
