@@ -1873,3 +1873,92 @@ fullReadPath y concentrarse en:
 
 No introducir todavía cambios de gameplay ni asumir que
 NET_SESSION_START_GAMEPLAY es la solución.
+
+
+============================================================
+52. PRUEBA DE ESCAPE + PAUSA + TITLE UI + CRASH EN NUEVO JUEGO
+============================================================
+
+El último client.log corresponde al mismo branch y termina en:
+- snapshot tick=1578/1580;
+- salida del proceso con exitCode=0xC0000005.
+
+La secuencia inmediatamente anterior al crash es relevante:
+- TERMINATE_THIS_SCRIPT sobre contextos 0x14F320 y 0x14F2C0;
+- TERMINATE_THIS_SCRIPT sobre contexto 0x14F070;
+- WAS_LAST_RESET_FOR_MULTIPLAYER=1;
+- IS_LAUNCH_RETAIL=1;
+- GET_THIS_SCRIPT_ID devuelve id=7 para contexto 0x14F320;
+- después TERMINATE_THIS_SCRIPT vuelve a afectar scriptId=7;
+- inmediatamente antes de la excepción aparece:
+  local-player identity pending local=0x14F52B880 manager=0x14DAA12A0 guid=0x00000000;
+- luego FirstChance:
+  exception=0xC0000005 accessOp=8
+  fault/rip=0x1519F9660
+  ripRva=0x119F9660
+  thread=8
+  module=RDR.exe
+  exitCode=0xC0000005.
+
+No hay un evento UI explícito que permita asignar con certeza el crash al
+click de "Crear partida", porque el tracer anterior no observaba UI_SEND_EVENT
+ni UI_EXIT. Por lo tanto, no afirmar que ese click es la instrucción que
+crashea; sí afirmar que el crash ocurre al final de una transición de scripts
+multiplayer/retail y después de múltiples TERMINATE_THIS_SCRIPT.
+
+El runtime sigue marcando:
+state=active
+gameState=3
+worldLoadedStable=1
+localPlayer=1
+durante esta etapa. Por eso Frontier sigue ejecutando la lógica de estado local
+y el test remoto aunque el frontend/UI pueda haber cambiado.
+
+Esto es una condición que hay que tratar como sospechosa, pero todavía no como
+causa única del access violation.
+
+Detalle estructural importante descubierto en boot.sc:
+StartScreen1 -> startScreenExit hace DOS cosas:
+1. Exit(StartScreen1)
+2. StackPush(StartScreen2)
+
+El bootstrap actual hacía UI_EXIT("StartScreen1") directamente y luego emitía
+net.EnterOnlineForInvite. Eso no reproduce literalmente la transición SCXML.
+
+Además, el bootstrap actual enviaba manualmente:
+- fileSetForMPLoad
+- fileStartupChecksComplete
+- NET_AUTHENTICATE_GAMER
+
+mientras que boot.sc deja que LoadingScreen -> waitforInTransition ->
+Startup_Checks ejecute su ciclo real. En particular, forzar
+fileStartupChecksComplete puede saltarse parte del ciclo SaveGame/StartupChecks.
+
+Estos dos puntos quedan registrados como sospechas concretas de coherencia del
+frontend, especialmente porque la prueba del usuario entra en la pausa del
+mundo, vuelve a UI de Title Screen y luego falla al intentar crear una partida.
+
+Cambio de diagnóstico aplicado después de esta prueba:
+- startup_native_tracer.hpp/cpp ahora observan, sin alterar la ejecución,
+  UI_SEND_EVENT, UI_EXIT, HUD_FADE_TO_LOADING_SCREEN, HUD_IS_FADING y
+  NET_AUTHENTICATE_GAMER cuando sus handlers están disponibles.
+- UI_SEND_EVENT filtra los eventos críticos:
+  startScreenExit
+  net.EnterOnlineForInvite
+  net.EnterOnline
+  fileSetForMPLoad
+  fileStartupChecksComplete
+  fileStartNewGame
+  mainMenuExit
+- UI_EXIT registra el objeto de UI que se cierra.
+- Los hooks se registran como opcionales/deferred para no impedir el arranque
+  si el native todavía no existe en la tabla.
+
+Head actual del branch:
+aea8499dc2678393700744cd25bd2d8d17c468c4
+
+Próximo punto de decisión:
+Antes de tocar RemotePlayerManager o inventar un native de START_GAMEPLAY,
+usar los nuevos trazadores para reconstruir la secuencia exacta de UI y
+determinar si fileStartNewGame/StartScreen transitions preceden directamente
+al teardown y al access violation.
