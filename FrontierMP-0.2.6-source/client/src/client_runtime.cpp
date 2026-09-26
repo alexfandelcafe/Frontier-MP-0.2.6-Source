@@ -50,6 +50,7 @@ bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, cons
     stopRequested_.store(false, std::memory_order_release);
     lastFrontendBootstrapAttemptMs_ = 0;
     historicalOnlineBootstrapLogged_ = false;
+    nativeUiBootstrapEnabled_ = environment_value("FRONTIER_NATIVE_UI_BOOTSTRAP") == "1";
     localSpawnPoint_ = {};
     lastLocalPlayerSpawnAttemptMs_ = 0;
     localPlayerSpawnReady_ = false;
@@ -75,6 +76,8 @@ bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, cons
     if (debugRemoteTestEnabled_) {
         log_line("[FrontierClient] solo remote-player test enabled");
     }
+    log_line(std::string("[FrontierClient] native UI bootstrap ") +
+             (nativeUiBootstrapEnabled_ ? "enabled" : "disabled (CEF/frontend-owned mode)"));
 
     if (!gameBridge_.initialize(fingerprint, build)) {
         log_line("[FrontierClient] game bridge initialization failed; networking will continue without local state replication");
@@ -319,7 +322,8 @@ void ClientRuntime::update() {
             // Do not emit net.EnterOnlineForInvite while the native frontend is
             // still being constructed; the stock event dispatcher can otherwise
             // consume the event before the UI state machine exists.
-            if (sessionMode_ == "freeroam" &&
+            if (nativeUiBootstrapEnabled_ &&
+                sessionMode_ == "freeroam" &&
                 !historicalOnlineBootstrapLogged_ &&
                 session_.runtime_state().state !=
                     frontier::game::FrontierSessionState::RuntimeQueryFailed) {
