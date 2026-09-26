@@ -89,9 +89,21 @@ void Server::handle_packet(Connection* connection, const std::vector<std::uint8_
 
     // Hello establishes the session. After Welcome, reject packets that do
     // not carry the server-issued connection id recorded for this endpoint.
+    const bool newHandshake =
+        message.type == protocol::MessageType::Hello &&
+        connection->welcomed &&
+        header.connectionId != connection->connectionId;
+
     if (message.type != protocol::MessageType::Hello &&
         (!connection->welcomed || header.connectionId != connection->connectionId)) {
         return;
+    }
+
+    if (newHandshake) {
+        connection->receiveHistory = {};
+        connection->reliability = {};
+        connection->connectionId = make_u64_token();
+        connection->stateInitialized = false;
     }
 
     connection->reliability.acknowledge(header.ack, header.ackBits);
