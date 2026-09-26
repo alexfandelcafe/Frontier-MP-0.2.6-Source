@@ -630,70 +630,17 @@ bool StartupNativeTracer::attach(NativeInvoker& invoker, GameThreadDispatcher& d
                      originalNetSessionIsGameplayStarted_,
                      "NET_SESSION_IS_GAMEPLAY_STARTED");
 
-    install_optional(kCreatePlayerActorInLayout,
-                     &StartupNativeTracer::create_player_actor_in_layout_hook,
-                     originalCreatePlayerActorInLayout_,
-                     "CREATE_PLAYER_ACTOR_IN_LAYOUT");
-    install_optional(kGetPlayerActor,
-                     &StartupNativeTracer::get_player_actor_hook,
-                     originalGetPlayerActor_,
-                     "GET_PLAYER_ACTOR");
-    install_optional(kCreateActorInLayout,
-                     &StartupNativeTracer::create_actor_in_layout_hook,
-                     originalCreateActorInLayout_,
-                     "CREATE_ACTOR_IN_LAYOUT");
-    install_optional(kGetActorEnum,
-                     &StartupNativeTracer::get_actor_enum_hook,
-                     originalGetActorEnum_,
-                     "GET_ACTOR_ENUM");
-    install_optional(kIsActorInited,
-                     &StartupNativeTracer::is_actor_inited_hook,
-                     originalIsActorInited_,
-                     "IS_ACTOR_INITED");
-    install_optional(kIsActorValid,
-                     &StartupNativeTracer::is_actor_valid_hook,
-                     originalIsActorValid_,
-                     "IS_ACTOR_VALID");
-    install_optional(kIsActorPlayer,
-                     &StartupNativeTracer::is_actor_player_hook,
-                     originalIsActorPlayer_,
-                     "IS_ACTOR_PLAYER");
-    install_optional(kIsActorLocalPlayer,
-                     &StartupNativeTracer::is_actor_local_player_hook,
-                     originalIsActorLocalPlayer_,
-                     "IS_ACTOR_LOCAL_PLAYER");
-    install_optional(kIsLocalPlayerValid,
-                     &StartupNativeTracer::is_local_player_valid_hook,
-                     originalIsLocalPlayerValid_,
-                     "IS_LOCAL_PLAYER_VALID");
-    install_optional(kRespawnPlayerActorInLayout,
-                     &StartupNativeTracer::respawn_player_actor_in_layout_hook,
-                     originalRespawnPlayerActorInLayout_,
-                     "RESPAWN_PLAYER_ACTOR_IN_LAYOUT");
-    install_optional(kSwitchPlayerToEnum,
-                     &StartupNativeTracer::switch_player_to_enum_hook,
-                     originalSwitchPlayerToEnum_,
-                     "SWITCH_PLAYER_TO_ENUM");
-    install_optional(kInitNativeActorenumPlayer,
-                     &StartupNativeTracer::init_native_actorenum_player_hook,
-                     originalInitNativeActorenumPlayer_,
-                     "INIT_NATIVE_ACTORENUM_PLAYER");
-    install_optional(kGetActorSlot,
-                     &StartupNativeTracer::get_actor_slot_hook,
-                     originalGetActorSlot_,
-                     "GET_ACTOR_SLOT");
-    install_optional(kGetSlotActor,
-                     &StartupNativeTracer::get_slot_actor_hook,
-                     originalGetSlotActor_,
-                     "GET_SLOT_ACTOR");
-    install_optional(kGetLocalSlot,
-                     &StartupNativeTracer::get_local_slot_hook,
-                     originalGetLocalSlot_,
-                     "GET_LOCAL_SLOT");
-    install_optional(kIsSlotValid,
-                     &StartupNativeTracer::is_slot_valid_hook,
-                     originalIsSlotValid_,
-                     "IS_SLOT_VALID");
+    // Actor/player lifecycle natives stay unhooked during initial startup.
+    // GET_PLAYER_ACTOR is attached later by retry_actor_optional_hooks() after
+    // the registration table is live; the wider actor surface remains disabled
+    // until each ABI is validated against a real game call.
+    char actorTraceStatus[224]{};
+    std::snprintf(
+        actorTraceStatus,
+        sizeof(actorTraceStatus),
+        "[FrontierNativeTrace] deferred actor lifecycle tracing limited to GET_PLAYER_ACTOR hash=0x%08X",
+        kGetPlayerActor);
+    log(actorTraceStatus);
 
     install_optional(kCreateLayout,
                      &StartupNativeTracer::create_layout_hook,
