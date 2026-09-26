@@ -26,6 +26,11 @@ class RdrBridge final {
 public:
     bool initialize(const ExecutableFingerprint& fingerprint, KnownBuild build);
     bool read_local_player_state(PlayerState& outState, std::string& error) const;
+    // Historical RDRMP readiness contract: the player is ready only when
+    // GET_PLAYER_ACTOR(-1) returns a valid actor. The sm_LocalPlayer pointer is
+    // reported as a diagnostic signal but is not used as the final readiness bit.
+    bool read_local_player_runtime(bool& outReady, std::uint32_t& outActor,
+                                   bool& outLocalPlayerObject, std::string& error) const;
     bool request_remote_actor_test(const PlayerState& origin, std::string& error) const;
     bool send_ui_event(const std::string& eventName, std::string& error) const;
     bool advance_historical_online_bootstrap(std::string& logLine);
