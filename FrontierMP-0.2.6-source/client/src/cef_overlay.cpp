@@ -116,12 +116,14 @@ public:
         // ownership to a replacement browser process.
         if (commandLine != nullptr) {
             commandLine->AppendSwitch("do-not-de-elevate");
+            commandLine->AppendSwitch("disable-gpu");
+            commandLine->AppendSwitch("disable-gpu-compositing");
         }
 
         log_line(
             "[FrontierCEF] command line hook processType=" +
             processType.ToString() +
-            " switch=do-not-de-elevate");
+            " switches=do-not-de-elevate,disable-gpu,disable-gpu-compositing");
     }
 
     IMPLEMENT_REFCOUNTING(FrontierCefApp);
@@ -227,7 +229,7 @@ void position_browser_window(
 
     SetWindowPos(
         browserWindow,
-        HWND_TOP,
+        HWND_TOPMOST,
         topLeft.x,
         topLeft.y,
         rect.right - rect.left,
@@ -458,6 +460,10 @@ bool CefOverlay::initialize_on_game_thread() {
     windowInfo.SetAsPopup(state.gameWindow, "FrontierMP");
 
     CefBrowserSettings browserSettings;
+    // Force an opaque page surface so a successfully created browser cannot
+    // appear visually empty because of transparent/alpha composition.
+    browserSettings.background_color =
+        CefColorSetARGB(255, 18, 18, 18);
     state.client = new FrontierCefClient();
     const std::string url = file_url(state.ui);
 
@@ -500,9 +506,17 @@ bool CefOverlay::initialize_on_game_thread() {
             GWL_STYLE,
             style | WS_POPUP | WS_VISIBLE);
 
+        const LONG_PTR exStyle = GetWindowLongPtrA(
+            browserWindow, GWL_EXSTYLE);
+        SetWindowLongPtrA(
+            browserWindow,
+            GWL_EXSTYLE,
+            (exStyle | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW) &
+                ~static_cast<LONG_PTR>(WS_EX_APPWINDOW));
+
         SetWindowPos(
             browserWindow,
-            HWND_TOP,
+            HWND_TOPMOST,
             screenRect.left,
             screenRect.top,
             screenRect.right - screenRect.left,
