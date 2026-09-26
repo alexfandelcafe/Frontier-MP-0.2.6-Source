@@ -78,7 +78,7 @@ The CEF package used for the build must contain at least:
 
 ```text
 include/
-libcef_dll_wrapper/CMakeLists.txt
+libcef_dll/CMakeLists.txt
 Release/libcef.lib
 ```
 
