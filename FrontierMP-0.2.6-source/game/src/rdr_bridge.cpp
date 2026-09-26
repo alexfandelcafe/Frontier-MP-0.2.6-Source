@@ -2401,59 +2401,31 @@ bool RdrBridge::read_local_player_runtime(
         return false;
     }
 
-    std::uint32_t actor = 0u;
-    bool actorValid = false;
-    bool localPlayerObject = false;
-    std::string dispatchError;
-    const bool completed = gameThreadDispatcher_.submit_and_wait(
-        [this, &actor, &actorValid, &localPlayerObject]() {
-            std::uintptr_t localPlayerPointer = 0u;
-            localPlayerObject = read_pointer(localPlayerStorage_, localPlayerPointer);
+    std::uintptr_t localPlayerPointer = 0u;
+    outLocalPlayerObject =
+        read_pointer(localPlayerStorage_, localPlayerPointer);
 
-            std::uintptr_t actorArgs[1]{};
-            // -1 is the historical GET_PLAYER_ACTOR local-player selector used
-            // by client-main.dll's InitSpawn loop.
-            actorArgs[0] = static_cast<std::uintptr_t>(0xFFFFFFFFu);
-            std::uintptr_t actorResult = 0u;
-            if (!nativeInvoker_.invoke_raw(
-                    kNativeGetPlayerActor, actorArgs, 1u, actorResult)) {
-                actor = 0u;
-                actorValid = false;
-                return;
-            }
-
-            actor = static_cast<std::uint32_t>(actorResult);
-            if (actor == 0u) {
-                actorValid = false;
-                return;
-            }
-
-            // Match InitSpawn exactly: a non-zero GET_PLAYER_ACTOR(-1)
-            // result is sufficient to pass the player barrier. IS_ACTOR_VALID is
-            // only a secondary diagnostic because native registration can expose
-            // the actor query before the auxiliary validation handler.
-            actorValid = true;
-            if (nativeInvoker_.has_handler(kNativeIsActorValid)) {
-                std::uintptr_t validArgs[1]{
-                    static_cast<std::uintptr_t>(actor)};
-                std::uintptr_t validResult = 0u;
-                (void)nativeInvoker_.invoke_raw(
-                    kNativeIsActorValid, validArgs, 1u, validResult);
-            }
-        },
-        250u,
-        dispatchError);
-
-    if (!completed) {
-        error = dispatchError.empty()
-            ? "local-player runtime query did not complete"
-            : dispatchError;
-        return false;
+    // Do not synthesize GET_PLAYER_ACTOR from Frontier's worker thread. The
+    // historical InitSpawn script already performs this native call on the game
+    // thread. StartupNativeTracer records that real result for us.
+    std::uint32_t observedActor = 0u;
+    if (!startupNativeTracer_.observed_local_player_actor(observedActor)) {
+        outActor = 0u;
+        outReady = false;
+        error = "waiting for game's GET_PLAYER_ACTOR(-1) observation";
+        return true;
     }
 
-    outActor = actor;
-    outLocalPlayerObject = localPlayerObject;
-    outReady = actor != 0u && actorValid;
+    outActor = observedActor;
+    outReady = observedActor != 0u;
+    if (!outReady) {
+        char buffer[384]{};
+        std::snprintf(
+            buffer, sizeof(buffer),
+            "local-player contract pending sm_LocalPlayer=%u observed GET_PLAYER_ACTOR(-1)=0",
+            outLocalPlayerObject ? 1u : 0u);
+        error = buffer;
+    }
 
     if (!outReady) {
         char buffer[384]{};
