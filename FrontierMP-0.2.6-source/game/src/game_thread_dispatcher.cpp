@@ -377,25 +377,44 @@ bool GameThreadDispatcher::submit_and_wait(std::function<void()> task,
         [&pending] { return pending->completed; });
 
     if (!signalled) {
+        bool removedFromQueue = false;
         {
             std::lock_guard queueLock(queueMutex_);
             for (auto it = queue_.begin(); it != queue_.end(); ++it) {
                 if (it->get() == pending.get()) {
                     queue_.erase(it);
+                    removedFromQueue = true;
                     break;
                 }
             }
         }
 
-        if (!pending->completed) {
-            pending->cancelled = true;
+        if (removedFromQueue) {
+            {
+                std::lock_guard taskLock(pending->mutex);
+                if (!pending->completed) {
+                    pending->cancelled = true;
+                    pending->completed = true;
+                }
+            }
+            pending->cv.notify_one();
             error = "game-thread task timed out";
             return false;
         }
+
+        // The task has already left the queue. It may be executing on the game
+        // thread, so do not return while its callback can still touch stack-owned
+        // result/error references. Wait for that in-flight task to finish.
+        taskLock.lock();
+        pending->cv.wait(
+            taskLock,
+            [&pending] { return pending->completed; });
     }
 
     if (pending->cancelled) {
-        error = "game-thread task cancelled";
+        error = signalled
+            ? "game-thread task cancelled"
+            : "game-thread task completed after timeout";
         return false;
     }
 
