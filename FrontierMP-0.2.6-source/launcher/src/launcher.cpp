@@ -306,12 +306,13 @@ std::vector<wchar_t> Launcher::build_environment(
     // CEF is loaded inside RDR.exe. Prepend the FrontierClient directory to
     // PATH so the Windows loader can resolve CEF side-by-side dependencies
     // such as chrome_elf.dll when LoadLibraryW runs in the game process.
+    wchar_t existingPath[32768]{};
+    const DWORD pathLength =
+        GetEnvironmentVariableW(L"PATH", existingPath, 32768);
+
     std::wstring pathValue;
-    for (const auto& entry : entries) {
-        if (entry.rfind(L"PATH=", 0) == 0) {
-            pathValue = entry.substr(5);
-            break;
-        }
+    if (pathLength != 0 && pathLength < 32768) {
+        pathValue.assign(existingPath, pathLength);
     }
 
     const auto clientDirectory = options.clientDll.parent_path().wstring();
@@ -322,7 +323,8 @@ std::vector<wchar_t> Launcher::build_environment(
                 entries.begin(),
                 entries.end(),
                 [](const std::wstring& entry) {
-                    return entry.rfind(L"PATH=", 0) == 0;
+                    return entry.size() >= 5 &&
+                        _wcsnicmp(entry.c_str(), L"PATH=", 5) == 0;
                 }),
             entries.end());
         entries.push_back(L"PATH=" + pathValue);
