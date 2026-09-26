@@ -25,6 +25,7 @@ struct FrontierRuntimeState final {
     bool worldLoadedStable{};
     bool simulateStartMultiplayer{};
     bool startPositionFromCommandLine{};
+    bool bootstrapComplete{};
     bool localPlayerReady{};
 };
 
