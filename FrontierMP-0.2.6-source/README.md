@@ -69,6 +69,30 @@ If the first line is present but the second is not, the signatures matched but t
 The dedicated server now accepts the first real local-player transform as a bootstrap state instead of comparing it against the synthetic `(0,0,0)` pre-spawn state. Subsequent updates remain subject to the movement validation window.
 
 
+
+## CEF frontend overlay
+
+The native RDR Title Screen is left in place as the visual scene. FrontierClient does not drive Title Screen UI events by default. When FRONTIER_CEF_PACKAGE_DIR points to a full CEF Windows distribution, the client builds a CEF host and displays cef/cef_ui/mainmenu/index.html in a child window over the RDR window.
+
+The CEF package used for the build must contain at least:
+
+```text
+include/
+libcef_dll_wrapper/CMakeLists.txt
+Release/libcef.lib
+```
+
+Configure with:
+
+```text
+cmake --preset windows-vs2026-x64 -DFRONTIER_CEF_PACKAGE_DIR="C:/path/to/cef"
+cmake --build build\vs2026-x64 --config Release
+```
+
+The build also produces FrontierCefSubprocess.exe, which is placed beside FrontierClient.dll. The external CEF package is copied into the client's cef/ directory so Chromium resources and locales stay outside the RDR installation.
+
+Without FRONTIER_CEF_PACKAGE_DIR, the client continues to build without CEF support.
+
 ## Game session bootstrap
 
 FrontierMP 0.2.3 adds a build-gated native invoker and a read-only FrontierSession state machine. It observes the game frontend/world transition before any mutation is attempted. The launcher passes `FRONTIER_SESSION_MODE=freeroam`.
