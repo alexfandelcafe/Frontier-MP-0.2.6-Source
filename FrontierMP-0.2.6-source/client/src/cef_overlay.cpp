@@ -529,7 +529,16 @@ HRESULT WINAPI frontier_create_device_and_swapchain(
     if (SUCCEEDED(result) &&
         swapChain != nullptr &&
         *swapChain != nullptr) {
+        log_line("[FrontierD3D] RDR D3D11CreateDeviceAndSwapChain succeeded");
         hook_swapchain(g_presentHook, *swapChain);
+    } else {
+        log_line(
+            "[FrontierD3D] RDR D3D11CreateDeviceAndSwapChain result=0x" +
+            [] (HRESULT value) {
+                std::ostringstream stream;
+                stream << std::hex << static_cast<unsigned long>(value);
+                return stream.str();
+            }(result));
     }
 
     return result;
@@ -1720,6 +1729,12 @@ void CefOverlay::on_present(::IDXGISwapChain* swapChain) {
             state_->frameHeight,
             state_->frameGeneration)) {
         return;
+    }
+
+    if (!state_->firstCompositeLogged) {
+        state_->firstCompositeLogged = true;
+        log_line(
+            "[FrontierD3D] first CEF frame composited into RDR backbuffer");
     }
 }
 
