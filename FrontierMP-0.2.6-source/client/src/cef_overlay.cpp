@@ -363,10 +363,13 @@ bool CefOverlay::initialize_on_game_thread() {
 
     CefString(&settings.browser_subprocess_path) =
         state.subprocess.string();
+    // Keep required CEF resources beside libcef.dll. On Windows CEF
+    // expects icudtl.dat and the non-localized .pak files in the main
+    // application directory even when a custom resources directory is used.
     CefString(&settings.resources_dir_path) =
-        (state.cefDir / "Resources").string();
+        state.moduleDir.string();
     CefString(&settings.locales_dir_path) =
-        (state.cefDir / "locales").string();
+        (state.moduleDir / "locales").string();
 
     char localAppData[MAX_PATH]{};
     const DWORD envLength =
@@ -386,6 +389,20 @@ bool CefOverlay::initialize_on_game_thread() {
             "logs" /
             "cef.log";
         CefString(&settings.log_file) = logPath.string();
+    }
+
+    const std::array<const char*, 4> requiredFiles{
+        "icudtl.dat",
+        "chrome_100_percent.pak",
+        "chrome_200_percent.pak",
+        "resources.pak"};
+    for (const char* fileName : requiredFiles) {
+        const auto path = state.moduleDir / fileName;
+        if (!std::filesystem::exists(path)) {
+            log_line("[FrontierCEF] required resource missing: " + path.string());
+            state.app = nullptr;
+            return false;
+        }
     }
 
     log_line("[FrontierCEF] initializing on RDR game thread");
