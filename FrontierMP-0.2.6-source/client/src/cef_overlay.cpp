@@ -885,8 +885,9 @@ void unhook_render_path() {
             (*vtable)[8] == reinterpret_cast<void*>(&frontier_present) &&
             g_presentHook.presentOriginal != nullptr) {
             std::string ignored;
-            void* original = reinterpret_cast<void*>(g_presentHook.presentOriginal);
-            replace_pointer(&(*vtable)[8], original, original, ignored);
+            void* replacement = reinterpret_cast<void*>(g_presentHook.presentOriginal);
+            void* previous = nullptr;
+            replace_pointer(&(*vtable)[8], replacement, previous, ignored);
         }
     }
 
@@ -913,11 +914,12 @@ void unhook_render_path() {
             if ((*vtable2)[24] ==
                     reinterpret_cast<void*>(&frontier_factory_create_swap_chain_for_composition) &&
                 g_presentHook.createSwapChainForCompositionOriginal != nullptr) {
-                void* original =
+                void* replacement =
                     reinterpret_cast<void*>(
                         g_presentHook.createSwapChainForCompositionOriginal);
+                void* previous = nullptr;
                 std::string ignored;
-                replace_pointer(&(*vtable2)[24], original, original, ignored);
+                replace_pointer(&(*vtable2)[24], replacement, previous, ignored);
             }
         }
     }
@@ -929,10 +931,11 @@ void unhook_render_path() {
         if (vtable != nullptr && *vtable != nullptr &&
             (*vtable)[10] == reinterpret_cast<void*>(&frontier_factory_create_swap_chain) &&
             g_presentHook.createSwapChainOriginal != nullptr) {
-            void* original =
+            void* replacement =
                 reinterpret_cast<void*>(g_presentHook.createSwapChainOriginal);
+            void* previous = nullptr;
             std::string ignored;
-            replace_pointer(&(*vtable)[10], original, original, ignored);
+            replace_pointer(&(*vtable)[10], replacement, previous, ignored);
         }
     }
 
