@@ -208,6 +208,9 @@ if(WIN32 AND FRONTIER_BUILD_CLIENT)
             COMMAND ${CMAKE_COMMAND} -E copy_directory
                     "${FRONTIER_CEF_PACKAGE_DIR}"
                     "$<TARGET_FILE_DIR:frontier_client>/cef"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    "${FRONTIER_CEF_PACKAGE_DIR}/Release"
+                    "$<TARGET_FILE_DIR:frontier_client>"
             VERBATIM
         )
     endif()
