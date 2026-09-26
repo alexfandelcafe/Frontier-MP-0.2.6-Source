@@ -591,7 +591,7 @@ bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild 
         // decoded to 0x1E6A60, whose bytes are an x64-invalid tail ("add esp; ret")
         // immediately followed by a different function at +0x10. Hook only when
         // exactly one decoded target has a plausible x64 function entry.
-        const waitHits = find_pattern_hits(
+        const auto waitHits = find_pattern_hits(
             text,
             fingerprint.textSize,
             *waitPattern,
