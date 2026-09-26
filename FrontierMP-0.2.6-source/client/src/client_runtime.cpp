@@ -50,6 +50,9 @@ bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, cons
     stopRequested_.store(false, std::memory_order_release);
     lastFrontendBootstrapAttemptMs_ = 0;
     historicalOnlineBootstrapLogged_ = false;
+    localSpawnPoint_ = {};
+    lastLocalPlayerSpawnAttemptMs_ = 0;
+    localPlayerSpawnReady_ = false;
     frontier::game::ExecutableFingerprint fingerprint{};
     if (!frontier::game::BuildDetector::inspect_loaded_module(fingerprint)) {
         log_line("[FrontierClient] build inspection failed");
@@ -82,6 +85,10 @@ bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, cons
     g_network = std::make_unique<NetworkClient>();
     g_network->set_on_welcome([this](const auto& welcome) {
         localPlayerId_ = welcome.playerId;
+        localSpawnPoint_ = welcome.spawn;
+        lastLocalPlayerSpawnAttemptMs_ = 0;
+        localPlayerSpawnReady_ = false;
+        gameBridge_.reset_local_player_spawn();
         remotePlayers_.set_local_player_id(localPlayerId_);
 
         std::ostringstream message;
@@ -215,6 +222,10 @@ bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, cons
             remotePlayers_.clear(gameBridge_);
         }
         localPlayerId_ = 0;
+        localSpawnPoint_ = {};
+        lastLocalPlayerSpawnAttemptMs_ = 0;
+        localPlayerSpawnReady_ = false;
+        gameBridge_.reset_local_player_spawn();
         log_line("[FrontierClient] " + reason);
     });
 
@@ -241,6 +252,19 @@ bool ClientRuntime::initialize_from_process_command_line() {
         catch (...) { parsedPort = 30120; }
     }
     if (parsedPort > 65535u) parsedPort = 30120;
+
+    localPlayerActorModel_ = frontier::kDefaultPlayerActorModel;
+    const std::string modelText = environment_value("FRONTIER_PLAYER_ACTOR_MODEL");
+    if (!modelText.empty()) {
+        try {
+            const auto parsedModel = std::stoul(modelText, nullptr, 0);
+            if (parsedModel <= 0xFFFFFFFFu) {
+                localPlayerActorModel_ = static_cast<std::uint32_t>(parsedModel);
+            }
+        } catch (...) {
+            localPlayerActorModel_ = frontier::kDefaultPlayerActorModel;
+        }
+    }
 
     return initialize(host.empty() ? "127.0.0.1" : host,
                       static_cast<std::uint16_t>(parsedPort),
@@ -309,6 +333,41 @@ void ClientRuntime::update() {
                 if (bootstrapComplete) {
                     historicalOnlineBootstrapLogged_ = true;
                 }
+            }
+        }
+
+        if (g_network->state() == ConnectionState::Connected &&
+            gameBridge_.initialized() &&
+            session_.runtime_state().worldLoadedStable &&
+            localPlayerId_ != 0 &&
+            !localPlayerSpawnReady_ &&
+            (lastLocalPlayerSpawnAttemptMs_ == 0 ||
+             now - lastLocalPlayerSpawnAttemptMs_ >= 250)) {
+            lastLocalPlayerSpawnAttemptMs_ = now;
+
+            frontier::PlayerState spawnState{};
+            spawnState.playerId = localPlayerId_;
+            spawnState.position = localSpawnPoint_.position;
+            spawnState.yaw = localSpawnPoint_.yaw;
+
+            bool spawnReady = false;
+            std::string spawnError;
+            const bool spawnCallCompleted = gameBridge_.ensure_local_player(
+                localPlayerId_,
+                spawnState,
+                localPlayerActorModel_,
+                spawnReady,
+                spawnError);
+
+            if (spawnReady) {
+                localPlayerSpawnReady_ = true;
+                log_line("[FrontierClient] historical local-player spawn chain reached actor");
+            } else if (!spawnCallCompleted &&
+                       (lastBridgeLogMs_ == 0 || now - lastBridgeLogMs_ >= 1000)) {
+                log_line("[FrontierClient] local-player spawn pending: " +
+                         (spawnError.empty() ? std::string("waiting for RAGE player actor")
+                                             : spawnError));
+                lastBridgeLogMs_ = now;
             }
         }
 

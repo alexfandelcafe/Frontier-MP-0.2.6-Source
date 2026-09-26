@@ -26,6 +26,9 @@ class RdrBridge final {
 public:
     bool initialize(const ExecutableFingerprint& fingerprint, KnownBuild build);
     bool read_local_player_state(PlayerState& outState, std::string& error) const;
+    bool ensure_local_player(std::uint16_t playerId, const PlayerState& spawnState,
+                             std::uint32_t actorModel, bool& outReady, std::string& error);
+    void reset_local_player_spawn();
     bool request_remote_actor_test(const PlayerState& origin, std::string& error) const;
     bool send_ui_event(const std::string& eventName, std::string& error) const;
     bool advance_historical_online_bootstrap(std::string& logLine);
@@ -128,6 +131,10 @@ private:
     mutable bool runtimeRefreshPending_{};
     mutable std::mutex localPlayerDiagnosticMutex_;
     mutable std::string localPlayerChainDiagnostic_;
+    mutable std::mutex localPlayerSpawnMutex_;
+    bool localPlayerSpawnIssued_{};
+    std::uint32_t localPlayerSpawnLayout_{};
+    std::uintptr_t localPlayerSpawnActorRef_{};
     mutable std::mutex remoteActorTestMutex_;
     mutable bool remoteActorTestPending_{};
     mutable bool remoteActorTestSpawned_{};

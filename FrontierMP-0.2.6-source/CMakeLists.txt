@@ -9,6 +9,7 @@ option(FRONTIER_BUILD_CLIENT "Build the in-game client DLL" ON)
 option(FRONTIER_BUILD_TOOLS "Build developer tools" ON)
 option(FRONTIER_BUILD_TESTS "Build protocol unit tests" ON)
 option(FRONTIER_BUILD_LAUNCHER "Build the Windows launcher/loader" ON)
+set(FRONTIER_CEF_PACKAGE_DIR "" CACHE PATH "Optional packaged CEF runtime directory (for example client-rdrmp2/data/cef)")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
@@ -111,6 +112,27 @@ if(WIN32 AND FRONTIER_BUILD_CLIENT)
                 "$<TARGET_FILE_DIR:frontier_client>/game/content"
         VERBATIM
     )
+    
+    # Historical RDRMP-compatible CEF package boundary. The UI source ships
+    # with FrontierMP; an externally supplied CEF runtime can be overlaid at
+    # build time without adding opaque Chromium binaries to the source tree.
+    add_custom_command(TARGET frontier_client POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:frontier_client>/cef"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_CURRENT_SOURCE_DIR}/resources/cef"
+                "$<TARGET_FILE_DIR:frontier_client>/cef"
+        VERBATIM
+    )
+
+    if(FRONTIER_CEF_PACKAGE_DIR)
+        add_custom_command(TARGET frontier_client POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    "${FRONTIER_CEF_PACKAGE_DIR}"
+                    "$<TARGET_FILE_DIR:frontier_client>/cef"
+            VERBATIM
+        )
+    endif()
 endif()
 
 # The launcher and client are separate targets, but the launcher must never

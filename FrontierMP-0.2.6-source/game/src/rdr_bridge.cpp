@@ -42,6 +42,8 @@ constexpr std::uint32_t kNativeUiSendEvent = 0xB58825F5;
 constexpr std::uint32_t kNativeHudFadeToLoadingScreen = 0xB0B4296A;
 constexpr std::uint32_t kNativeHudIsFading = 0xE5CC6F08;
 constexpr std::uint32_t kNativeUiExit = 0x2DF89C2E;
+constexpr std::uint32_t kNativeSetPlayerControl = 0xD17AFCD8u;
+constexpr std::uint32_t kNativeSetCameraFollowActor = 0x8EFDFE89u;
 constexpr std::uint32_t kNativeNetAuthenticateGamer = 0x8E0D7219;
 constexpr std::uint32_t kNativeStreamingIsWorldLoaded = 0x87B74064;
 constexpr std::uint32_t kNativeIsSimulateStartMultiplayer = 0x9A73C2CD;
@@ -585,6 +587,13 @@ bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild 
         std::lock_guard lock(runtimeSnapshotMutex_);
         runtimeSnapshot_ = {};
         runtimeRefreshPending_ = false;
+    }
+
+    {
+        std::lock_guard lock(localPlayerSpawnMutex_);
+        localPlayerSpawnIssued_ = false;
+        localPlayerSpawnLayout_ = 0;
+        localPlayerSpawnActorRef_ = 0;
     }
 
 #ifdef _WIN32
@@ -2323,6 +2332,290 @@ bool RdrBridge::destroy_remote_actor(
     }
     return error.empty();
 }
+
+
+bool RdrBridge::ensure_local_player(
+    std::uint16_t playerId,
+    const PlayerState& spawnState,
+    std::uint32_t actorModel,
+    bool& outReady,
+    std::string& error) {
+    outReady = false;
+    error.clear();
+
+    if (!initialized_) {
+        error = "bridge not initialized";
+        return false;
+    }
+    if (!nativeInvoker_.ready()) {
+        error = "native invoker not ready";
+        return false;
+    }
+    if (!gameThreadDispatcher_.attached()) {
+        error = gameThreadDispatcherError_.empty()
+            ? "game-thread dispatcher not attached"
+            : gameThreadDispatcherError_;
+        return false;
+    }
+    if (playerId == 0) {
+        error = "local player id not assigned";
+        return false;
+    }
+
+    const std::uint32_t model =
+        actorModel != 0 ? actorModel : frontier::kDefaultPlayerActorModel;
+    const PlayerState requestedSpawn = spawnState;
+    bool ready = false;
+    bool creationObserved = false;
+    std::uint32_t layoutId = 0;
+    std::uint32_t actorHandle = 0;
+    std::uintptr_t actorRef = 0;
+    std::string dispatchError;
+
+    const bool completed = gameThreadDispatcher_.submit_and_wait(
+        [this, model, requestedSpawn, &ready, &creationObserved, &layoutId,
+         &actorHandle, &actorRef, &error]() {
+            auto set_error = [&error](const char* message) {
+                if (error.empty()) error = message;
+            };
+
+            std::uintptr_t actorQueryArgs[1]{0xFFFFFFFFu};
+            std::uintptr_t existingResult = 0u;
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeGetPlayerActor, actorQueryArgs, 1u, existingResult)) {
+                set_error("GET_PLAYER_ACTOR invoke failed");
+                return;
+            }
+
+            if (existingResult != 0u) {
+                actorHandle = static_cast<std::uint32_t>(existingResult);
+                std::uintptr_t validArgs[1]{actorHandle};
+                std::uintptr_t validResult = 0u;
+                if (!nativeInvoker_.invoke_raw(
+                        kNativeIsActorValid, validArgs, 1u, validResult)) {
+                    set_error("IS_ACTOR_VALID invoke failed for existing player");
+                    return;
+                }
+                if (validResult == 0u) {
+                    set_error("existing local player actor is invalid");
+                    return;
+                }
+                ready = true;
+                creationObserved = true;
+                return;
+            }
+
+            {
+                std::lock_guard lock(localPlayerSpawnMutex_);
+                if (localPlayerSpawnIssued_) {
+                    set_error("local player creation pending");
+                    return;
+                }
+            }
+
+            char playerLayoutName[] = "PlayerLayout";
+            std::uintptr_t layoutArgs[1]{
+                reinterpret_cast<std::uintptr_t>(playerLayoutName)};
+            std::uintptr_t layoutResult = 0u;
+
+            // Historical FUN_1800069B0/FUN_1800028B0.
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeFindNamedLayout, layoutArgs, 1u, layoutResult)) {
+                set_error("FIND_NAMED_LAYOUT(PlayerLayout) invoke failed");
+                return;
+            }
+            layoutId = static_cast<std::uint32_t>(layoutResult);
+
+            if (layoutId != 0u) {
+                layoutArgs[0] = static_cast<std::uintptr_t>(layoutId);
+                layoutResult = 0u;
+                if (!nativeInvoker_.invoke_raw(
+                        kNativeIsLayoutRefValid, layoutArgs, 1u, layoutResult) ||
+                    layoutResult == 0u) {
+                    layoutId = 0u;
+                }
+            }
+
+            if (layoutId == 0u) {
+                layoutArgs[0] =
+                    reinterpret_cast<std::uintptr_t>(playerLayoutName);
+                layoutResult = 0u;
+                if (!nativeInvoker_.invoke_raw(
+                        kNativeCreateLayout, layoutArgs, 1u, layoutResult)) {
+                    set_error("CREATE_LAYOUT(PlayerLayout) invoke failed");
+                    return;
+                }
+                layoutId = static_cast<std::uint32_t>(layoutResult);
+                if (layoutId == 0u) {
+                    set_error("CREATE_LAYOUT(PlayerLayout) returned 0");
+                    return;
+                }
+                layoutArgs[0] = static_cast<std::uintptr_t>(layoutId);
+                layoutResult = 0u;
+                if (!nativeInvoker_.invoke_raw(
+                        kNativeIsLayoutRefValid, layoutArgs, 1u, layoutResult) ||
+                    layoutResult == 0u) {
+                    set_error("created PlayerLayout is invalid");
+                    return;
+                }
+            }
+
+            std::uintptr_t enumArgs[1]{static_cast<std::uintptr_t>(model)};
+            std::uintptr_t enumInstalledResult = 0u;
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeIsActorenumInstalled, enumArgs, 1u, enumInstalledResult)) {
+                set_error("IS_ACTORENUM_INSTALLED invoke failed");
+                return;
+            }
+            if (enumInstalledResult == 0u) {
+                set_error("local player actor enum is not installed");
+                return;
+            }
+
+            // Historical FUN_180002210/FUN_1800023B0.
+            std::uintptr_t streamArgs[3]{};
+            streamArgs[0] = static_cast<std::uintptr_t>(model);
+            streamArgs[1] = 1u;
+            streamArgs[2] = 0u;
+            std::uintptr_t streamResult = 0u;
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeStreamingRequestActor, streamArgs, 3u, streamResult)) {
+                set_error("STREAMING_REQUEST_ACTOR invoke failed");
+                return;
+            }
+
+            std::uintptr_t loadedArgs[2]{};
+            loadedArgs[0] = static_cast<std::uintptr_t>(model);
+            loadedArgs[1] =
+                static_cast<std::uintptr_t>(static_cast<std::intptr_t>(-1));
+            std::uintptr_t loadedResult = 0u;
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeStreamingIsActorLoaded, loadedArgs, 2u, loadedResult)) {
+                set_error("STREAMING_IS_ACTOR_LOADED invoke failed");
+                return;
+            }
+            if (loadedResult == 0u) {
+                set_error("local player model still loading");
+                return;
+            }
+
+            // Exact historical FUN_180006B10 argument shape.
+            std::uintptr_t createArgs[8]{};
+            createArgs[0] = static_cast<std::uintptr_t>(layoutId);
+            createArgs[1] = reinterpret_cast<std::uintptr_t>("player");
+            createArgs[2] = static_cast<std::uintptr_t>(model);
+            createArgs[3] =
+                pack_vec2(requestedSpawn.position.x, requestedSpawn.position.y);
+            createArgs[4] = float_bits(requestedSpawn.position.z);
+            createArgs[5] = pack_vec2(0.0f, 0.0f);
+            createArgs[6] = float_bits(requestedSpawn.yaw);
+            createArgs[7] = 0u;
+
+            std::uintptr_t createResult = 0u;
+            bool createOk = nativeInvoker_.invoke_raw(
+                kNativeCreatePlayerActorInLayout, createArgs, 8u, createResult);
+
+            if ((!createOk || createResult == 0u) && layoutId != 0u) {
+                createArgs[0] =
+                    kTaggedLayoutRef | static_cast<std::uintptr_t>(layoutId);
+                createResult = 0u;
+                createOk = nativeInvoker_.invoke_raw(
+                    kNativeCreatePlayerActorInLayout, createArgs, 8u, createResult);
+            }
+
+            if (!createOk || createResult == 0u) {
+                set_error("CREATE_PLAYER_ACTOR_IN_LAYOUT invoke failed");
+                return;
+            }
+
+            actorRef = createResult;
+            actorHandle = static_cast<std::uint32_t>(actorRef);
+            {
+                std::lock_guard lock(localPlayerSpawnMutex_);
+                localPlayerSpawnIssued_ = true;
+                localPlayerSpawnLayout_ = layoutId;
+                localPlayerSpawnActorRef_ = actorRef;
+            }
+            creationObserved = true;
+
+            // Historical local branch immediately prepares camera and controls.
+            std::uintptr_t cameraArgs[1]{actorHandle};
+            std::uintptr_t cameraResult = 0u;
+            (void)nativeInvoker_.invoke_raw(
+                kNativeSetCameraFollowActor, cameraArgs, 1u, cameraResult);
+
+            std::uintptr_t controlArgs[4]{0u, 1u, 0u, 0u};
+            std::uintptr_t controlResult = 0u;
+            (void)nativeInvoker_.invoke_raw(
+                kNativeSetPlayerControl, controlArgs, 4u, controlResult);
+
+            std::uintptr_t validArgs[1]{actorHandle};
+            std::uintptr_t validResult = 0u;
+            if (!nativeInvoker_.invoke_raw(
+                    kNativeIsActorValid, validArgs, 1u, validResult) ||
+                validResult == 0u) {
+                set_error("created local player actor failed validity check");
+                return;
+            }
+
+            ready = true;
+        },
+        500u,
+        dispatchError);
+
+    if (!completed) {
+        error = dispatchError.empty()
+            ? "local player spawn task did not complete"
+            : dispatchError;
+        return false;
+    }
+
+    if (ready) {
+        outReady = true;
+        char message[320]{};
+        std::snprintf(
+            message,
+            sizeof(message),
+            "[FrontierLocalPlayer] ready playerId=%u actor=0x%08X layout=0x%08X "
+            "model=%u spawn=(%.3f,%.3f,%.3f) yaw=%.3f",
+            static_cast<unsigned>(playerId),
+            actorHandle,
+            layoutId,
+            model,
+            requestedSpawn.position.x,
+            requestedSpawn.position.y,
+            requestedSpawn.position.z,
+            requestedSpawn.yaw);
+        write_bridge_log_line(message);
+        return true;
+    }
+
+    if (creationObserved) {
+        char message[320]{};
+        std::snprintf(
+            message,
+            sizeof(message),
+            "[FrontierLocalPlayer] creation submitted playerId=%u actorRef=0x%llX "
+            "actorHandle=0x%08X layout=0x%08X model=%u",
+            static_cast<unsigned>(playerId),
+            static_cast<unsigned long long>(actorRef),
+            actorHandle,
+            layoutId,
+            model);
+        write_bridge_log_line(message);
+    }
+
+    return false;
+}
+
+
+void RdrBridge::reset_local_player_spawn() {
+    std::lock_guard lock(localPlayerSpawnMutex_);
+    localPlayerSpawnIssued_ = false;
+    localPlayerSpawnLayout_ = 0;
+    localPlayerSpawnActorRef_ = 0;
+}
+
 
 bool RdrBridge::send_ui_event(const std::string& eventName, std::string& error) const {
     error.clear();

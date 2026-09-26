@@ -34,6 +34,10 @@ private:
     std::string sessionMode_{"freeroam"};
     RemotePlayerManager remotePlayers_{};
     std::uint16_t localPlayerId_{};
+    frontier::game::SpawnPoint localSpawnPoint_{};
+    std::uint32_t localPlayerActorModel_{frontier::kDefaultPlayerActorModel};
+    std::uint64_t lastLocalPlayerSpawnAttemptMs_{};
+    bool localPlayerSpawnReady_{};
     bool debugRemoteTestEnabled_{};
 };
 
