@@ -82,6 +82,8 @@ private:
     ContentPathRedirector contentPathRedirector_{};
     enum class HistoricalOnlineBootstrapStage : std::uint8_t {
         NotStarted,
+        WaitingForStartScreenExit,
+        WaitingForEnterOnlineForInvite,
         WaitingForFade,
         WaitingForPlayerActor,
         Complete,
