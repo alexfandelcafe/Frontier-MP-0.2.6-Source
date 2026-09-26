@@ -1673,3 +1673,139 @@ verificado todavía contra la build exacta.
 La instrumentación del commit 55a3350c sigue siendo útil, pero ahora es una
 prueba secundaria: primero hay que sacar el render/control del Title Screen.
 
+
+
+============================================================
+48. CLIENT.LOG ACTUAL: INTERPRETACIÓN DEL ARRANQUE
+============================================================
+
+Log revisado en la rama game-thread/remote-actor-spawn-test-0.2.41.
+
+Hechos observados:
+
+1. El invocador nativo no está listo al principio:
+   [FrontierSession] waiting for native invoker registration table
+   y posteriormente:
+   [FrontierSession] native invoker initialized
+
+2. La instrumentación de scripts sí localiza candidatos para:
+   - scrThread::Wait
+   - sagCoreScript::RDRStartNewScript
+   - rage::scrThread::StartNewThreadOverride
+
+3. En el runtime observado, el primer Wait registrado ocurre antes de que el
+   invocador nativo esté listo:
+   script=<native-not-ready>
+
+4. Después de la inicialización del invocador NO aparecen en este log nombres
+   de scripts obtenidos mediante GET_SCRIPT_NAME.
+   Esto deja sin probar qué script controla realmente la pantalla/título.
+
+5. El bootstrap histórico actual registra:
+   startScreenExit queued
+   net.EnterOnlineForInvite queued after StartScreen1 exit
+   StartScreen2 online transition complete
+   LoadOnline stage=2 complete
+   pero estos mensajes describen acciones de Frontier; no prueban que la
+   máquina SCXML haya ejecutado exactamente las transiciones de boot.sc.
+
+6. El estado del motor pasa por:
+   gameState=3
+   -> gameState=5
+   -> gameState=3
+   y finalmente:
+   gameState=3 worldLoaded=1 localPlayer=1
+   -> gameState=4 worldLoaded=1 localPlayer=1
+
+   Esto demuestra actividad del runtime/streaming y creación del actor,
+   pero NO demuestra por sí solo que la cámara/render hayan abandonado el
+   escenario 3D del Title Screen.
+
+7. El local player queda creado de forma reproducible:
+   CREATE_PLAYER_ACTOR_IN_LAYOUT -> 0x102
+   IS_ACTOR_VALID=1
+   IS_ACTOR_PLAYER=1
+   IS_ACTOR_LOCAL_PLAYER=1
+   GET_PLAYER_ACTOR(-1)=0x102
+
+8. El remote actor de prueba también se crea como 0x10B y permanece válido,
+   pero su posición real leída continúa en (0,0,0) mientras el objetivo de
+   locomoción cambia. Este problema es independiente del diagnóstico del
+   Title Screen.
+
+============================================================
+49. CONTENT REDIRECTOR: CORRECCIÓN DE DIAGNÓSTICO
+============================================================
+
+La versión anterior de ContentPathRedirector limitaba los logs de
+fullReadPath a las primeras 32 llamadas globales.
+
+Eso impedía concluir:
+"boot.sc nunca fue leído".
+
+Podía ocurrir simplemente que la solicitud llegara después de la llamada 32.
+
+Cambio aplicado:
+commit 1401277b6d79994599d13bdd0720f3099e7eae01
+
+Ahora cualquier coincidencia con una de las rutas históricas registra siempre:
+[FrontierContent] historical route hit ...
+
+Por tanto, el próximo client.log permitirá distinguir:
+
+A) no hubo solicitud de content/ui/boot.sc
+B) sí hubo solicitud y fue redirigida
+C) la redirección falló por buffer inseguro
+
+La entrada anterior:
+route prepared source=content/ui/boot.sc ... bytes=171
+
+NO significa que el archivo tenga 171 bytes ni que haya sido leído por el
+juego. Ese número es la longitud del path de destino más el terminador.
+
+============================================================
+50. BOOT.SC: DIFERENCIA ENTRE EL SCRIPT REAL Y EL BOOTSTRAP MANUAL
+============================================================
+
+boot.sc.xml define para StartScreen1:
+
+net.EnterOnlineForInvite
+  ->
+SendEvent('startScreenExit')
+  ->
+SendEvent('net.EnterOnlineForInvite')
+
+Y startScreenExit ejecuta:
+- Exit(StartScreen1)
+- StackPush(StartScreen2)
+
+Luego StartScreen2, al recibir net.EnterOnlineForInvite:
+- SendEvent('fileSetForMPLoad')
+- NetMachine.SetMultiplayerModeToLaunch('JoinWish')
+- UIGame.ValidateNormalMode()
+- SendEvent('mainMenuExit')
+- Enter(LoadingScreen)
+- Enter(waitforInTransition)
+
+Frontier actualmente no reproduce esa cadena de forma literal:
+1. UI_EXIT("StartScreen1")
+2. UI_SEND_EVENT("net.EnterOnlineForInvite")
+3. HUD_FADE_TO_LOADING_SCREEN
+4. eventos file*
+5. NET_AUTHENTICATE_GAMER
+
+La diferencia importante es que el código actual separa manualmente
+UI_EXIT de la transición que en boot.sc provoca el StackPush(StartScreen2).
+
+Por eso no debe asumirse todavía que el estado visual visto por el usuario
+sea equivalente al estado de UI que boot.sc pretende producir.
+
+Próximo diagnóstico prioritario:
+- confirmar si content/ui/boot.sc llega realmente a fullReadPath;
+- obtener nombres reales de scripts mediante el lifecycle de scripts;
+- identificar qué transición cambia o libera la cámara del Title Screen;
+- solo después decidir si conviene cambiar el bootstrap manual para que
+  reproduzca literalmente la secuencia de boot.sc.
+
+NO usar NET_SESSION_START_GAMEPLAY como solución por defecto mientras no exista
+evidencia de que ese native pertenece al flujo correcto de este build.
