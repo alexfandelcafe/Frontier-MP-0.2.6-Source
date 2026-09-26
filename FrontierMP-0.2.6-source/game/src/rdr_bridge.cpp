@@ -545,6 +545,15 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
                             "[FrontierSession] historical LoadOnline "
                             "finish step invoke failed; retrying";
                     }
+                    std::string retryError;
+                    if (!submitTask(
+                            HistoricalOnlineBootstrapTask::FinishLoadOnline,
+                            retryError) &&
+                        logLine.empty()) {
+                        logLine =
+                            "[FrontierSession] historical LoadOnline "
+                            "finish retry queue failed: " + retryError;
+                    }
                 } else {
                     logLine =
                         "[FrontierSession] historical LoadOnline "
