@@ -6,6 +6,7 @@
 #endif
 
 #include <cstring>
+#include <limits>
 
 namespace frontier::game {
 
@@ -173,6 +174,7 @@ bool InlineHook::install(std::uintptr_t target,
     target_ = target;
     trampoline_ = reinterpret_cast<std::uintptr_t>(trampoline);
     patchSize_ = patchSize;
+    ownsTrampoline_ = true;
     (void)trampolineOffset;
     return true;
 #else
@@ -185,12 +187,81 @@ bool InlineHook::install(std::uintptr_t target,
 #endif
 }
 
+bool InlineHook::install_call_site(std::uintptr_t callSite,
+                                  std::uintptr_t replacement,
+                                  const std::string& name,
+                                  std::string& error) {
+    error.clear();
+    reset();
+
+#ifdef _WIN32
+    constexpr std::size_t kCallInstructionSize = 5;
+    if (callSite == 0 || replacement == 0) {
+        error = name + ": null call-site/replacement";
+        return false;
+    }
+    if (!executable_region(callSite, kCallInstructionSize)) {
+        error = name + ": call-site is not an executable memory region";
+        return false;
+    }
+
+    std::uint8_t original[kCallInstructionSize]{};
+    std::memcpy(original, reinterpret_cast<const void*>(callSite), kCallInstructionSize);
+    if (original[0] != 0xE8) {
+        error = name + ": expected E8 rel32 call-site";
+        return false;
+    }
+
+    std::int32_t originalDisplacement = 0;
+    std::memcpy(&originalDisplacement, original + 1, sizeof(originalDisplacement));
+    const auto originalTarget =
+        callSite + kCallInstructionSize + static_cast<std::intptr_t>(originalDisplacement);
+    if (!executable_region(originalTarget, 1)) {
+        error = name + ": decoded original target is not executable";
+        return false;
+    }
+
+    const auto nextInstruction = callSite + kCallInstructionSize;
+    const auto replacementDelta =
+        static_cast<std::intptr_t>(replacement) - static_cast<std::intptr_t>(nextInstruction);
+    if (replacementDelta < static_cast<std::intptr_t>(std::numeric_limits<std::int32_t>::min()) ||
+        replacementDelta > static_cast<std::intptr_t>(std::numeric_limits<std::int32_t>::max())) {
+        error = name + ": replacement is outside E8 rel32 range";
+        return false;
+    }
+
+    originalBytes_.assign(original, original + kCallInstructionSize);
+
+    std::uint8_t patch[kCallInstructionSize]{};
+    patch[0] = 0xE8;
+    const auto replacementDisplacement = static_cast<std::int32_t>(replacementDelta);
+    std::memcpy(patch + 1, &replacementDisplacement, sizeof(replacementDisplacement));
+
+    if (!patch_function(callSite, patch, kCallInstructionSize, error)) {
+        originalBytes_.clear();
+        return false;
+    }
+
+    target_ = callSite;
+    trampoline_ = originalTarget;
+    patchSize_ = kCallInstructionSize;
+    ownsTrampoline_ = false;
+    return true;
+#else
+    (void)callSite;
+    (void)replacement;
+    (void)name;
+    error = "inline hooks are Windows-only";
+    return false;
+#endif
+}
+
 void InlineHook::reset() {
 #ifdef _WIN32
     if (target_ != 0 && !originalBytes_.empty()) {
         restore_function(target_, originalBytes_);
     }
-    if (trampoline_ != 0) {
+    if (trampoline_ != 0 && ownsTrampoline_) {
         VirtualFree(reinterpret_cast<void*>(trampoline_), 0, MEM_RELEASE);
     }
 #endif
@@ -198,6 +269,7 @@ void InlineHook::reset() {
     target_ = 0;
     trampoline_ = 0;
     patchSize_ = 0;
+    ownsTrampoline_ = false;
     originalBytes_.clear();
 }
 

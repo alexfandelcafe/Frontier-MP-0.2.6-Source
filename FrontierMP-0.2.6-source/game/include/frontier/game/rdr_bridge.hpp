@@ -5,6 +5,7 @@
 #include "frontier/game/game_thread_dispatcher.hpp"
 #include "frontier/game/startup_native_tracer.hpp"
 #include "frontier/game/content_path_redirector.hpp"
+#include "frontier/game/inline_hook.hpp"
 #include "frontier/types.hpp"
 
 #include <atomic>
@@ -55,6 +56,9 @@ public:
     bool actor_manager_symbol_resolved() const { return actorManagerSlotsStorage_ != 0; }
 
 private:
+    static void historical_wait_hook(void* context);
+    void on_historical_wait(void* context);
+
     std::uintptr_t resolve_rip_target(std::uintptr_t instruction) const;
     bool readable(std::uintptr_t address, std::size_t size) const;
     bool read_pointer(std::uintptr_t address, std::uintptr_t& out) const;
@@ -80,6 +84,12 @@ private:
     std::string gameThreadDispatcherError_;
     StartupNativeTracer startupNativeTracer_{};
     ContentPathRedirector contentPathRedirector_{};
+    InlineHook historicalWaitHook_{};
+    std::uintptr_t historicalWaitTarget_{};
+    std::uintptr_t historicalRdrStartNewScriptTarget_{};
+    std::uintptr_t historicalStartNewThreadOverrideTarget_{};
+    std::atomic<std::uint32_t> historicalWaitTraceCount_{};
+    static RdrBridge* activeHistoricalScriptTrace_;
     enum class HistoricalOnlineBootstrapStage : std::uint8_t {
         NotStarted,
         WaitingForStartScreenExit,
