@@ -479,6 +479,7 @@ struct PresentHookState final {
 
     PresentProc presentOriginal{};
     IDXGISwapChain* hookedSwapChain{};
+    ComPtr<IDXGISwapChain> hookedSwapChainRef{};
     std::array<void*, 18> hookedVtable{};
     std::array<void*, 18> originalVtable{};
     void** originalVtableAddress{};
@@ -771,6 +772,7 @@ void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
     state.originalVtableAddress = *vtable;
     *vtable = state.hookedVtable.data();
     state.hookedSwapChain = swapChain;
+    state.hookedSwapChainRef = swapChain;
     state.swapchainHooked = true;
 
     DXGI_SWAP_CHAIN_DESC desc{};
@@ -992,6 +994,7 @@ void unhook_render_path() {
     }
 
     g_presentHook.hookedSwapChain = nullptr;
+    g_presentHook.hookedSwapChainRef.Reset();
     g_presentHook.hookedVtable.fill(nullptr);
     g_presentHook.originalVtable.fill(nullptr);
     g_presentHook.originalVtableAddress = nullptr;
