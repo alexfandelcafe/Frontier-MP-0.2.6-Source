@@ -501,21 +501,21 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
         ++historicalOnlineBootstrapAttempts_;
         std::string error;
         if (!submitTask(
-                HistoricalOnlineBootstrapTask::SendEnterOnlineForInvite,
+                HistoricalOnlineBootstrapTask::FadeToLoadingScreen,
                 error)) {
             historicalOnlineBootstrapStage_ =
                 HistoricalOnlineBootstrapStage::Failed;
             logLine =
-                "[FrontierSession] historical boot.sc stage=1 "
-                "net.EnterOnlineForInvite queue failed: " + error;
+                "[FrontierSession] historical LoadOnline stage=1 "
+                "HUD_FADE_TO_LOADING_SCREEN queue failed: " + error;
             return false;
         }
 
         historicalOnlineBootstrapStage_ =
-            HistoricalOnlineBootstrapStage::WaitingForPlayerActor;
+            HistoricalOnlineBootstrapStage::WaitingForFade;
         logLine =
-            "[FrontierSession] historical boot.sc stage=1 "
-            "net.EnterOnlineForInvite queued";
+            "[FrontierSession] historical LoadOnline stage=1 "
+            "HUD_FADE_TO_LOADING_SCREEN queued";
         return false;
     }
 
@@ -546,6 +546,7 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
 
             if (historicalOnlineBootstrapTask_ ==
                 HistoricalOnlineBootstrapTask::FinishLoadOnline) {
+                historicalOnlineBootstrapEventCompleted_ = true;
                 historicalOnlineBootstrapStage_ =
                     HistoricalOnlineBootstrapStage::WaitingForPlayerActor;
 
@@ -650,23 +651,6 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
                     std::memory_order_acquire);
 
             if (completedTask ==
-                HistoricalOnlineBootstrapTask::SendEnterOnlineForInvite) {
-                if (failed) {
-                    historicalOnlineBootstrapStage_ =
-                        HistoricalOnlineBootstrapStage::Failed;
-                    logLine =
-                        "[FrontierSession] historical boot.sc stage=1 "
-                        "net.EnterOnlineForInvite invoke failed";
-                    return false;
-                }
-
-                historicalOnlineBootstrapEventCompleted_ = true;
-                historicalOnlineBootstrapTask_ =
-                    HistoricalOnlineBootstrapTask::None;
-                logLine =
-                    "[FrontierSession] historical boot.sc stage=1 complete "
-                    "net.EnterOnlineForInvite delivered";
-            } else if (completedTask ==
                        HistoricalOnlineBootstrapTask::QueryPlayerActor) {
                 if (failed) {
                     if (historicalOnlineBootstrapAttempts_ == 1 ||
