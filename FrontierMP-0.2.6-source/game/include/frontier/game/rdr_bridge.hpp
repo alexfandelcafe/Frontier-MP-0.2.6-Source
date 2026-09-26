@@ -57,7 +57,9 @@ public:
     const std::string& native_invoker_error() const { return nativeInvoker_.last_error(); }
     bool read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bool& worldLoadedKnown,
                            bool& simulateStartMultiplayer, bool& simulateStartMultiplayerKnown,
-                           bool& startPosCommandLine, bool& startPosCommandLineKnown, std::string& error) const;
+                           bool& startPosCommandLine, bool& startPosCommandLineKnown,
+                           bool& multiplayerGameplayStarted, bool& multiplayerGameplayStartedKnown,
+                           std::string& error) const;
 
     bool initialized() const { return initialized_; }
     bool local_player_symbol_resolved() const { return localPlayerStorage_ != 0; }
@@ -80,6 +82,8 @@ private:
         bool simulateStartMultiplayer{};
         bool startPosCommandLineKnown{};
         bool startPosCommandLine{};
+        bool multiplayerGameplayStartedKnown{};
+        bool multiplayerGameplayStarted{};
     };
 
     bool initialized_{};
