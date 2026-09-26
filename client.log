@@ -11,7 +11,7 @@
 [FrontierScript] historical rage::scrThread::StartNewThreadOverride callsite=0x1401E60F7 rva=0x1E60F7 target=0x1401E6550 targetRva=0x1E6550
 [FrontierScript] code-window rage::scrThread::StartNewThreadOverride callsite address=0x1401E60F7 rva=0x1E60F7 bytes=C0 48 8B 09 0F 45 D8 E8 15 1D 00 00 44 8B CB 45 33 C0 33 D2 8B C8 8B F8 E8 54 04 00 00 48 8B D8 85 FF 74 16 8B D7 48 8D 0D 94 36 0F 02 E8 5F 2F 00 00 48 8B C8 E8 57 1B 00 00 48 85 DB 75 23 48 8B 05 93 92 A5 02 48 85 C0 74 7F C7 40 14 01 00 00 00 48 8B 5C 24 30 48
 [FrontierScript] code-window rage::scrThread::StartNewThreadOverride target address=0x1401E6550 rva=0x1E6550 bytes=5F C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC 48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 56 41 57 48 83 EC 20 41 8B F9 41 8B E8 4C 8B F2 8B F1 85 C9 74 7D 44 0F B7 15 69 6C 92 02 45 33 FF 4C 8B 0D 57 6C 92 02 41 8B DF 66 45 3B FA
-[FrontierContent] fullReadPath hook attached target=0x1400C8E60 rva=0xC8E60 root=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game safeMax=240 prologue=FF 25 00 00 00 00 F0 C8 B9 2D F9 7F 00 00 90
+[FrontierContent] fullReadPath hook attached target=0x1400C8E60 rva=0xC8E60 root=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game safeMax=240 prologue=FF 25 00 00 00 00 F0 C8 79 2E F9 7F 00 00 90
 [FrontierContent] route prepared source=content/ui/boot.sc resolved=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game\content/ui/boot.sc.xml bytes=171
 [FrontierContent] route prepared source=content/ui/pausemenu/pausemenuscene.sc resolved=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game\content/ui/pausemenu/pausemenuscene.sc.xml bytes=191
 [FrontierContent] route prepared source=content/ui/pausemenu/savegame.sc resolved=C:\Users\Alex\Desktop\Frontier-MP-0.2.6-Source-game-thread-remote-actor-spawn-test-0.2.41\FrontierMP-0.2.6-source\build\vs2026-x64\bin\Release\game\content/ui/pausemenu/savegame.sc.xml bytes=185
@@ -20,22 +20,23 @@
 [FrontierClient] initialized sessionMode=freeroam
 [FrontierClient] worker initialization result=success
 [FrontierDiag] RDR callsite diagnostic disabled
-[FrontierClient] bootstrap event name=Local\FrontierMP_Bootstrap_5352_47824718
+[FrontierClient] bootstrap event name=Local\FrontierMP_Bootstrap_12004_48583703
 [FrontierClient] bootstrap event signaled
 [FrontierLauncher] RDR.exe resumed; waiting for process exit
 [FrontierSession] waiting for native invoker registration table error=native registration table not ready: candidates=1 initialized=0
-[FrontierClient] connected as player 1 serverTick=465
+[FrontierClient] connected as player 1 serverTick=417
+[FrontierClient] locomotion test phase=walk+Z cycleTime=20.85 playerId=65000
+[FrontierClient] snapshot tick=417 players=2 remoteEntities=1
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] locomotion test phase=stop@+Z cycleTime=23.3 playerId=65000
-[FrontierClient] snapshot tick=466 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=468 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=469 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=471 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=472 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=474 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=475 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=419 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=420 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=422 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=424 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=426 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=427 players=2 remoteEntities=1
 [FrontierContent] fullReadPath call=0 result=1 path=D:/Red Dead Redemption/game/animationres.rpf
 [FrontierContent] fullReadPath call=1 result=1 path=D:/Red Dead Redemption/game/act.rpf
+[FrontierClient] snapshot tick=429 players=2 remoteEntities=1
 [FrontierContent] fullReadPath call=2 result=1 path=D:/Red Dead Redemption/game/fragments.rpf
 [FrontierContent] fullReadPath call=3 result=1 path=D:/Red Dead Redemption/game/fragments2.rpf
 [FrontierContent] fullReadPath call=4 result=1 path=D:/Red Dead Redemption/game/treeres.rpf
@@ -43,7 +44,6 @@
 [FrontierContent] fullReadPath call=6 result=1 path=D:/Red Dead Redemption/game/vfx.rpf
 [FrontierContent] fullReadPath call=7 result=1 path=D:/Red Dead Redemption/game/textures.rpf
 [FrontierContent] fullReadPath call=8 result=1 path=D:/Red Dead Redemption/game/shaders.rpf
-[FrontierClient] snapshot tick=477 players=2 remoteEntities=1
 [FrontierContent] fullReadPath call=9 result=1 path=D:/Red Dead Redemption/game/psocache.rpf
 [FrontierContent] fullReadPath call=10 result=1 path=D:/Red Dead Redemption/game/fonts.rpf
 [FrontierContent] fullReadPath call=11 result=1 path=D:/Red Dead Redemption/game/mapres.rpf
@@ -63,186 +63,220 @@
 [FrontierContent] fullReadPath call=25 result=1 path=D:/Red Dead Redemption/game/base/cutscene.rpf
 [FrontierContent] fullReadPath call=26 result=1 path=D:/Red Dead Redemption/game/base/content.rpf
 [FrontierContent] fullReadPath call=27 result=1 path=D:/Red Dead Redemption/game/flash.rpf
-[FrontierClient] snapshot tick=478 players=2 remoteEntities=1
 [FrontierContent] fullReadPath call=28 result=0 path=D:/Red Dead Redemption/game/patch0
 [FrontierContent] fullReadPath call=29 result=0 path=D:/Red Dead Redemption/game/patchversion.txt
 [FrontierContent] fullReadPath call=30 result=1 path=D:/Red Dead Redemption/game/fragments/fragmentTextureList.wtd
 [FrontierContent] fullReadPath call=31 result=1 path=D:/Red Dead Redemption/game/fragments/fragmentTextureList.wtd
+[FrontierClient] snapshot tick=431 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=432 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=434 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=436 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=437 players=2 remoteEntities=1
+[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
+[FrontierClient] snapshot tick=439 players=2 remoteEntities=1
+[FrontierClient] locomotion test phase=stop@+Z cycleTime=22 playerId=65000
+[FrontierClient] snapshot tick=440 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=442 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=444 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=445 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=446 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=448 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=449 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=450 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=452 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=454 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=456 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=458 players=2 remoteEntities=1
+[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
+[FrontierClient] snapshot tick=460 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=462 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=464 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=466 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=468 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=470 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=472 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=474 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=476 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=478 players=2 remoteEntities=1
+[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
 [FrontierClient] locomotion test phase=walk-Z cycleTime=24 playerId=65000
 [FrontierClient] snapshot tick=480 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=482 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=484 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=486 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=483 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=485 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=487 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=488 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=490 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=491 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=492 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=493 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=494 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=496 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=495 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=497 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=499 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=501 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=503 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=505 players=2 remoteEntities=1
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
+[FrontierClient] snapshot tick=501 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=502 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=504 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=506 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=507 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=509 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=511 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=512 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=513 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=514 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=516 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=518 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=520 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=517 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=519 players=2 remoteEntities=1
+[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
 [FrontierClient] snapshot tick=521 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=522 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=523 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=525 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=527 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=529 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=528 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=530 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=531 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=532 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=533 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=534 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=535 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=536 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=537 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=538 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=539 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=540 players=2 remoteEntities=1
+[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
 [FrontierClient] snapshot tick=542 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=544 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=545 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=547 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=549 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=546 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=548 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=550 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=551 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=552 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=554 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=555 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=556 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=557 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=558 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=559 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=561 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=560 players=2 remoteEntities=1
+[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
+[FrontierClient] snapshot tick=562 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=563 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=565 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=566 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
+[FrontierClient] snapshot tick=567 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=568 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=570 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=572 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=569 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=571 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=573 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=574 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=575 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=576 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=577 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=578 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=579 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=580 players=2 remoteEntities=1
+[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
 [FrontierClient] snapshot tick=582 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=583 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=584 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=585 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=587 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
+[FrontierClient] snapshot tick=586 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=588 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=591 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=593 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=595 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=590 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=592 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=594 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=596 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=598 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=stop@-Z cycleTime=30 playerId=65000
-[FrontierClient] snapshot tick=600 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=599 players=2 remoteEntities=1
+[FrontierClient] locomotion test phase=stop@-Z cycleTime=30.05 playerId=65000
+[FrontierClient] snapshot tick=601 players=2 remoteEntities=1
+[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
 [FrontierClient] snapshot tick=602 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=604 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=605 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=606 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=607 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
 [FrontierClient] snapshot tick=609 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=611 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=612 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=614 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=616 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=618 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=620 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=622 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=623 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=625 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=627 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=628 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=629 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=613 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=615 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=617 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=619 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=621 players=2 remoteEntities=1
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=631 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=623 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=624 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=626 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=627 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=629 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=630 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=632 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=634 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=636 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=638 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=walk+X cycleTime=0 playerId=65000
-[FrontierClient] snapshot tick=640 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=642 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=645 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=648 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=635 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=637 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=639 players=2 remoteEntities=1
+[FrontierClient] locomotion test phase=walk+X cycleTime=0.0499992 playerId=65000
+[FrontierClient] snapshot tick=641 players=2 remoteEntities=1
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
+[FrontierClient] snapshot tick=643 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=645 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=647 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=649 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=651 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=654 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=653 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=655 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=657 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=659 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=662 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=665 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=668 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=661 players=2 remoteEntities=1
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
+[FrontierClient] snapshot tick=663 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=665 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=667 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=669 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=671 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=673 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=675 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=678 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=677 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=679 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=681 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=684 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=687 players=2 remoteEntities=1
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=690 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=683 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=685 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=687 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=689 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=691 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=693 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=696 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=695 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=697 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=699 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=701 players=2 remoteEntities=1
+[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
 [FrontierClient] snapshot tick=703 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=705 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=708 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
+[FrontierClient] snapshot tick=707 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=709 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=711 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=714 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=716 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=713 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=715 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=717 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=718 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=720 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=722 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=724 players=2 remoteEntities=1
+[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
 [FrontierClient] snapshot tick=726 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=728 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=729 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=731 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=733 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=735 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=737 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=730 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=732 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=734 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=736 players=2 remoteEntities=1
+[FrontierScript] historical scrThread::Wait trace=0 thread=5568 infoBase=0xFFFFFFFF script=<native-not-ready> pressstart=0 mainScript=0 return=0x7FF92E797984
+[FrontierClient] snapshot tick=738 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=739 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=741 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=743 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=745 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=747 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=749 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=751 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=742 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=744 players=2 remoteEntities=1
 [FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=753 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=755 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=757 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=759 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=stop@+X cycleTime=6.05 playerId=65000
-[FrontierClient] snapshot tick=761 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=763 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=765 players=2 remoteEntities=1
-[FrontierScript] historical scrThread::Wait trace=0 thread=8164 infoBase=0xFFFFFFFF script=<native-not-ready> pressstart=0 mainScript=0 return=0x7FF92DB97984
-[FrontierClient] snapshot tick=767 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=769 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=771 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=773 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player pointer unavailable storage=0x1422DAF30
-[FrontierClient] snapshot tick=775 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=777 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=746 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=748 players=2 remoteEntities=1
 [FrontierSession] native invoker initialized
-[FrontierClient] snapshot tick=779 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=781 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=750 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=752 players=2 remoteEntities=1
 [FrontierNativeTrace] optional hook unavailable NET_ENABLE_MULTIPLAYER hash=0x9180FF1C
 [FrontierNativeTrace] optional hook unavailable NET_IS_IN_SESSION hash=0x8CA54980
 [FrontierNativeTrace] optional hook unavailable NET_IS_SESSION_CLIENT hash=0xFF65A07C
@@ -253,704 +287,786 @@
 [FrontierNativeTrace] startup native tracer attached
 [FrontierSession] game-thread dispatcher attached
 [FrontierSession] historical boot.sc startScreenExit queued
-[FrontierClient] snapshot tick=783 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=785 players=2 remoteEntities=1
-[FrontierNativeTrace] CREATE_LAYOUT name=?<unreadable> result=0x000000F6 tid=8164 ctx=0x14F320 ret=0x1401E4355
-[FrontierNativeTrace] IS_SIMULATE_START_PRESS=0
-[FrontierNative] scrThread::Wait trace=0 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=1 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=2 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=3 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=4 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=5 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=6 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=7 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=8 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=9 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=10 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=11 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=12 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=13 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=14 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=15 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=16 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=17 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=18 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=19 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=20 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=21 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=22 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=23 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=24 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=25 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=26 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=27 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=28 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=29 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=30 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierNative] scrThread::Wait trace=31 context=0x14F320 thread=8164 ret=0x1401E4355
-[FrontierClient] snapshot tick=787 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=754 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=756 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=758 players=2 remoteEntities=1
 [FrontierSession] state=runtime-query-failed gameState=-1 worldLoaded=0 stableWorldLoaded=0 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0 nativeError=runtime snapshot pending
+[FrontierNativeTrace] CREATE_LAYOUT name=?<unreadable> result=0x000000F6 tid=5568 ctx=0x14F320 ret=0x1401E4355
+[FrontierNativeTrace] IS_SIMULATE_START_PRESS=0
+[FrontierNative] scrThread::Wait trace=0 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=1 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=2 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=3 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=4 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=5 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=6 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=7 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=8 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=9 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=10 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=11 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=12 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=13 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=14 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=15 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=16 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=17 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=18 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=19 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=20 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=21 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=22 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=23 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=24 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=25 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=26 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=27 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=28 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=29 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierNative] scrThread::Wait trace=30 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierClient] locomotion test phase=stop@+X cycleTime=6 playerId=65000
+[FrontierNative] scrThread::Wait trace=31 context=0x14F320 thread=5568 ret=0x1401E4355
+[FrontierClient] snapshot tick=760 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=762 players=2 remoteEntities=1
+[FrontierSession] state=frontend gameState=5 worldLoaded=0 stableWorldLoaded=0 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0
+[FrontierSession] historical boot.sc net.EnterOnlineForInvite queued after StartScreen1 exit
+[FrontierClient] snapshot tick=764 players=2 remoteEntities=1
+[FrontierClient] local-player read pending: local player identity pending local=0x14FF43960 manager=0x14E7E3520 guid=0x00000000
+[FrontierClient] snapshot tick=766 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=768 players=2 remoteEntities=1
+[FrontierSession] state=frontend gameState=3 worldLoaded=0 stableWorldLoaded=0 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0
+[FrontierSession] historical boot.sc StartScreen2 online transition complete; HUD_FADE_TO_LOADING_SCREEN queued
+[FrontierClient] snapshot tick=770 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=772 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=774 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=776 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=778 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=780 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=782 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=784 players=2 remoteEntities=1
+[FrontierClient] local-player read pending: local player identity pending local=0x14FF43960 manager=0x14E7E3520 guid=0x00000000
+[FrontierClient] snapshot tick=786 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=788 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=790 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=791 players=2 remoteEntities=1
-[FrontierSession] state=frontend gameState=3 worldLoaded=0 stableWorldLoaded=0 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0
-[FrontierSession] historical boot.sc net.EnterOnlineForInvite queued after StartScreen1 exit
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8E05D0 manager=0x14DAA1C80 guid=0x00000000
-[FrontierClient] snapshot tick=793 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=795 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=797 players=2 remoteEntities=1
-[FrontierSession] historical boot.sc StartScreen2 online transition complete; HUD_FADE_TO_LOADING_SCREEN queued
-[FrontierClient] snapshot tick=799 players=2 remoteEntities=1
-[FrontierClient] locomotion test phase=walk-X cycleTime=8.05 playerId=65000
-[FrontierClient] snapshot tick=801 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=803 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=792 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=794 players=2 remoteEntities=1
+[FrontierSession] historical LoadOnline stage=2 complete StartScreen2 transition active, file events sent, NET_AUTHENTICATE_GAMER result=0x0
+[FrontierClient] snapshot tick=796 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=798 players=2 remoteEntities=1
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=0 playerPre=-1 playerPost=0 result=0x0 tid=5568 ctx=0x14EF00 ret=0x7FF92E79FF06
+[FrontierClient] locomotion test phase=walk-X cycleTime=8 playerId=65000
+[FrontierClient] snapshot tick=800 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=802 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=804 players=2 remoteEntities=1
+[FrontierClient] local-player read pending: local player identity pending local=0x14FF43960 manager=0x14E7E3520 guid=0x00000000
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=1 playerPre=-1 playerPost=0 result=0x0 tid=5568 ctx=0x14EF00 ret=0x7FF92E79FF06
 [FrontierClient] snapshot tick=805 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=807 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=809 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=811 players=2 remoteEntities=1
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=2 playerPre=-1 playerPost=0 result=0x0 tid=5568 ctx=0x14EF00 ret=0x7FF92E79FF06
+[FrontierClient] snapshot tick=810 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=812 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=813 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8E05D0 manager=0x14DAA1C80 guid=0x00000000
 [FrontierClient] snapshot tick=815 players=2 remoteEntities=1
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=3 playerPre=-1 playerPost=0 result=0x0 tid=5568 ctx=0x14EF00 ret=0x7FF92E79FF06
 [FrontierClient] snapshot tick=817 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=819 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=821 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=823 players=2 remoteEntities=1
-[FrontierSession] historical LoadOnline stage=2 complete StartScreen2 transition active, file events sent, NET_AUTHENTICATE_GAMER result=0x0
+[FrontierClient] snapshot tick=818 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=820 players=2 remoteEntities=1
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=4 playerPre=-1 playerPost=0 result=0x0 tid=5568 ctx=0x14EF00 ret=0x7FF92E79FF06
+[FrontierClient] snapshot tick=822 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=824 players=2 remoteEntities=1
+[FrontierClient] local-player read pending: local player identity pending local=0x14FF43960 manager=0x14E7E3520 guid=0x00000000
 [FrontierClient] snapshot tick=825 players=2 remoteEntities=1
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=5 playerPre=-1 playerPost=0 result=0x0 tid=5568 ctx=0x14EF00 ret=0x7FF92E79FF06
 [FrontierClient] snapshot tick=827 players=2 remoteEntities=1
-[FrontierNativeTrace] GET_PLAYER_ACTOR trace=0 playerPre=-1 playerPost=0 result=0x0 tid=8164 ctx=0x14EF00 ret=0x7FF92DB9FF06
 [FrontierClient] snapshot tick=829 players=2 remoteEntities=1
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=6 playerPre=-1 playerPost=0 result=0x0 tid=5568 ctx=0x14EF00 ret=0x7FF92E79FF06
 [FrontierClient] snapshot tick=831 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=832 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=833 players=2 remoteEntities=1
-[FrontierNativeTrace] GET_PLAYER_ACTOR trace=1 playerPre=-1 playerPost=0 result=0x0 tid=8164 ctx=0x14EF00 ret=0x7FF92DB9FF06
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8E05D0 manager=0x14DAA1C80 guid=0x00000000
 [FrontierClient] snapshot tick=835 players=2 remoteEntities=1
+[FrontierSession] state=frontend gameState=3 worldLoaded=1 stableWorldLoaded=0 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=7 playerPre=-1 playerPost=0 result=0x0 tid=5568 ctx=0x14EF00 ret=0x7FF92E79FF06
 [FrontierClient] snapshot tick=837 players=2 remoteEntities=1
-[FrontierNativeTrace] GET_PLAYER_ACTOR trace=2 playerPre=-1 playerPost=0 result=0x0 tid=8164 ctx=0x14EF00 ret=0x7FF92DB9FF06
 [FrontierClient] snapshot tick=839 players=2 remoteEntities=1
+[FrontierSession] state=waiting-local-player gameState=3 worldLoaded=1 stableWorldLoaded=1 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=8 playerPre=-1 playerPost=0 result=0x0 tid=5568 ctx=0x14EF00 ret=0x7FF92E79FF06
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=9 playerPre=-1 playerPost=0 result=0x0 tid=5568 ctx=0x14EDF0 ret=0x7FF92E79FF06
+[FrontierNativeTrace] FIND_NAMED_LAYOUT name=PlayerLayout result=0x00000000 tid=5568 ctx=0x14EDF0 ret=0x7FF92E79FF06
+[FrontierNativeTrace] CREATE_LAYOUT name=PlayerLayout result=0x00000101 tid=5568 ctx=0x14EDF0 ret=0x7FF92E79FF06
+[FrontierNativeTrace] IS_LAYOUTREF_VALID layout=0x00000101 result=1 tid=5568 ctx=0x14EDF0 ret=0x7FF92E79FF06
 [FrontierClient] snapshot tick=841 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=843 players=2 remoteEntities=1
-[FrontierNativeTrace] GET_PLAYER_ACTOR trace=3 playerPre=-1 playerPost=0 result=0x0 tid=8164 ctx=0x14EF00 ret=0x7FF92DB9FF06
+[FrontierClient] local-player read pending: local player identity pending local=0x14FF43960 manager=0x14E7E3520 guid=0x00000000
 [FrontierClient] snapshot tick=845 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=847 players=2 remoteEntities=1
-[FrontierNativeTrace] GET_PLAYER_ACTOR trace=4 playerPre=-1 playerPost=0 result=0x0 tid=8164 ctx=0x14EF00 ret=0x7FF92DB9FF06
-[FrontierClient] snapshot tick=849 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=851 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=853 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8E05D0 manager=0x14DAA1C80 guid=0x00000000
-[FrontierNativeTrace] GET_PLAYER_ACTOR trace=5 playerPre=-1 playerPost=0 result=0x0 tid=8164 ctx=0x14EF00 ret=0x7FF92DB9FF06
-[FrontierClient] snapshot tick=855 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=857 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=858 players=2 remoteEntities=1
-[FrontierNativeTrace] GET_PLAYER_ACTOR trace=6 playerPre=-1 playerPost=0 result=0x0 tid=8164 ctx=0x14EF00 ret=0x7FF92DB9FF06
-[FrontierClient] snapshot tick=860 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=862 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=863 players=2 remoteEntities=1
-[FrontierSession] state=frontend gameState=3 worldLoaded=1 stableWorldLoaded=0 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0
-[FrontierNativeTrace] GET_PLAYER_ACTOR trace=7 playerPre=-1 playerPost=0 result=0x0 tid=8164 ctx=0x14EF00 ret=0x7FF92DB9FF06
-[FrontierClient] snapshot tick=865 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=866 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=868 players=2 remoteEntities=1
-[FrontierSession] state=waiting-local-player gameState=3 worldLoaded=1 stableWorldLoaded=1 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=0
-[FrontierNativeTrace] GET_PLAYER_ACTOR trace=8 playerPre=-1 playerPost=0 result=0x0 tid=8164 ctx=0x14EF00 ret=0x7FF92DB9FF06
-[FrontierNativeTrace] GET_PLAYER_ACTOR trace=9 playerPre=-1 playerPost=0 result=0x0 tid=8164 ctx=0x14EDF0 ret=0x7FF92DB9FF06
-[FrontierNativeTrace] FIND_NAMED_LAYOUT name=PlayerLayout result=0x00000000 tid=8164 ctx=0x14EDF0 ret=0x7FF92DB9FF06
-[FrontierNativeTrace] CREATE_LAYOUT name=PlayerLayout result=0x00000101 tid=8164 ctx=0x14EDF0 ret=0x7FF92DB9FF06
-[FrontierNativeTrace] IS_LAYOUTREF_VALID layout=0x00000101 result=1 tid=8164 ctx=0x14EDF0 ret=0x7FF92DB9FF06
-[FrontierClient] snapshot tick=870 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=872 players=2 remoteEntities=1
-[FrontierClient] local-player read pending: local player identity pending local=0x14F8E05D0 manager=0x14DAA1C80 guid=0x00000000
-[FrontierClient] snapshot tick=874 players=2 remoteEntities=1
-[FrontierNativeTrace] GET_PLAYER_ACTOR trace=10 playerPre=-1 playerPost=0 result=0x0 tid=8164 ctx=0x14EF00 ret=0x7FF92DB9FF06
-[FrontierNativeTrace] GET_PLAYER_ACTOR trace=11 playerPre=-1 playerPost=0 result=0x0 tid=8164 ctx=0x14EDF0 ret=0x7FF92DB9FF06
-[FrontierNativeTrace] FIND_NAMED_LAYOUT name=PlayerLayout result=0x00000101 tid=8164 ctx=0x14EDF0 ret=0x7FF92DB9FF06
-[FrontierNativeTrace] IS_LAYOUTREF_VALID layout=0x00000101 result=1 tid=8164 ctx=0x14EDF0 ret=0x7FF92DB9FF06
-[FrontierNativeTrace] CREATE_PLAYER_ACTOR_IN_LAYOUT trace=0 argc=8 layout=0x101 actorName=player model=837 pos=(0.000000,0.000000,0.000000) rotation=(0.000000,0.000000,0.000000) outfitVariation=0 pre={a0=0x101 a1=0x7FF92DBB27B4 a2=0x345 a3=0x0 a4=0x0 a5=0x0 a6=0x0 a7=0x0} postA0=0x102 result=258 tid=8164 ctx=0x14EDF0 ret=0x7FF92DB9FF06
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x00000102 result=1 tid=8164 ctx=0x14E930 ret=0x7FF92DBA53A4
-[FrontierNativeTrace] IS_ACTOR_PLAYER actor=0x00000102 result=1 tid=8164 ctx=0x14E930 ret=0x7FF92DBA5354
-[FrontierNativeTrace] IS_ACTOR_LOCAL_PLAYER actor=0x00000102 result=1 tid=8164 ctx=0x14E930 ret=0x7FF92DBA5304
-[FrontierNativeTrace] GET_ACTOR_SLOT trace=0 actorRaw=0x102 actor=0x00000102 result=0xFFFFFFFF tid=8164 ctx=0x14E930 ret=0x7FF92DB9FF06
-[FrontierNativeTrace] GET_LOCAL_SLOT trace=0 result=0xFFFFFFFF slot=-1 tid=8164 ctx=0x14E930 ret=0x7FF92DB9FF06
-[FrontierNativeTrace] GET_PLAYER_ACTOR trace=12 playerPre=-1 playerPost=258 result=0x102 tid=8164 ctx=0x14E930 ret=0x7FF92DB9FF06
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=10 playerPre=-1 playerPost=0 result=0x0 tid=5568 ctx=0x14EF00 ret=0x7FF92E79FF06
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=11 playerPre=-1 playerPost=0 result=0x0 tid=5568 ctx=0x14EDF0 ret=0x7FF92E79FF06
+[FrontierNativeTrace] FIND_NAMED_LAYOUT name=PlayerLayout result=0x00000101 tid=5568 ctx=0x14EDF0 ret=0x7FF92E79FF06
+[FrontierNativeTrace] IS_LAYOUTREF_VALID layout=0x00000101 result=1 tid=5568 ctx=0x14EDF0 ret=0x7FF92E79FF06
+[FrontierNativeTrace] CREATE_PLAYER_ACTOR_IN_LAYOUT trace=0 argc=8 layout=0x101 actorName=player model=837 pos=(0.000000,0.000000,0.000000) rotation=(0.000000,0.000000,0.000000) outfitVariation=0 pre={a0=0x101 a1=0x7FF92E7B27B4 a2=0x345 a3=0x0 a4=0x0 a5=0x0 a6=0x0 a7=0x0} postA0=0x102 result=258 tid=5568 ctx=0x14EDF0 ret=0x7FF92E79FF06
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x00000102 result=1 tid=5568 ctx=0x14E930 ret=0x7FF92E7A53A4
+[FrontierNativeTrace] IS_ACTOR_PLAYER actor=0x00000102 result=1 tid=5568 ctx=0x14E930 ret=0x7FF92E7A5354
+[FrontierNativeTrace] IS_ACTOR_LOCAL_PLAYER actor=0x00000102 result=1 tid=5568 ctx=0x14E930 ret=0x7FF92E7A5304
+[FrontierNativeTrace] GET_ACTOR_SLOT trace=0 actorRaw=0x102 actor=0x00000102 result=0xFFFFFFFF tid=5568 ctx=0x14E930 ret=0x7FF92E79FF06
+[FrontierNativeTrace] GET_LOCAL_SLOT trace=0 result=0xFFFFFFFF slot=-1 tid=5568 ctx=0x14E930 ret=0x7FF92E79FF06
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=12 playerPre=-1 playerPost=258 result=0x102 tid=5568 ctx=0x14E930 ret=0x7FF92E79FF06
 [FrontierLocalPlayer] setup actor=0x00000102 created=1 valid=1 isPlayer=1 isLocalPlayer=1 actorSlot=4294967295 localSlot=4294967295 cameraFollow=1 playerControl=1 getPlayerActor=0x00000102 match=1
 [FrontierLocalPlayer] ready playerId=1 actor=0x00000102 layout=0x00000101 model=837 spawn=(0.000,0.000,0.000) yaw=0.000
 [FrontierClient] historical local-player spawn chain reached actor
 [FrontierClient] local-player state replication active position=(0, 0, 0)
-[FrontierClient] local-player ready chain local=0x14F8E05D0 manager=0x14DAA1C80 guid=0x00000002 slot=0x14DAA1CA0 actor=0x150407810 component=0x150941080 transform=0x1508EB2E0
-[FrontierClient] snapshot tick=875 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=877 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=879 players=2 remoteEntities=1
+[FrontierClient] local-player ready chain local=0x14FF43960 manager=0x14E7E3520 guid=0x00000002 slot=0x14E7E3540 actor=0x150A74120 component=0x150FB3600 transform=0x150F5D860
+[FrontierClient] snapshot tick=847 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=849 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=851 players=2 remoteEntities=1
 [FrontierSession] state=active gameState=3 worldLoaded=1 stableWorldLoaded=1 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=1
 [FrontierRemotePlayer] session active; remote actor lifecycle enabled
-[FrontierNativeTrace] GET_PLAYER_ACTOR trace=13 playerPre=-1 playerPost=258 result=0x102 tid=8164 ctx=0x14EF00 ret=0x7FF92DB9FF06
-[FrontierNativeTrace] FIND_NAMED_LAYOUT name=AmbientMissions_Layout result=0x00000000 tid=8164 ctx=0x14ED10 ret=0x7FF92DB9FF06
-[FrontierNativeTrace] FIND_NAMED_LAYOUT name=FrontierRemoteLayout result=0x00000000 tid=8164 ctx=0x14ED10 ret=0x7FF92DB9FF06
-[FrontierNativeTrace] CREATE_LAYOUT name=FrontierRemoteLayout result=0x0000010A tid=8164 ctx=0x14ED10 ret=0x7FF92DB9FF06
-[FrontierNativeTrace] IS_LAYOUTREF_VALID layout=0x0000010A result=1 tid=8164 ctx=0x14ED10 ret=0x7FF92DB9FF06
-[FrontierNativeTrace] CREATE_ACTOR_IN_LAYOUT trace=0 argc=7 preLayout=0x10000010A actorName=FrontierRemote_65000 actorEnum=837 pos=(4.919998,0.000000,0.000000) orient=(270.000000,0.000000,0.000000) preRaw={a0=0x10000010A a1=0x14EFD0 a2=0x345 a3=0x409D70A0 a4=0x0 a5=0x43870000 a6=0x0} postA0=0x10000010B result=0x10000010B tid=8164 ctx=0x14ED10 ret=0x7FF92DB9FF06
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14ED10 ret=0x7FF92DBA53A4
-[FrontierNativeTrace] GET_ACTOR_ENUM actor=0x10B result=0x345 enum=837 tid=8164 ctx=0x14ED10 ret=0x7FF92DB9FF06
-[FrontierRemotePlayer] spawned playerId=65000 actorRef=0x10000010B actorHandle=0x0000010B position=(4.920,0.000,0.000)
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(5.160,0.000,0.000) actual=(0.000,0.000,0.000) error=5.160 extrapolated=0
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=13 playerPre=-1 playerPost=258 result=0x102 tid=5568 ctx=0x14EF00 ret=0x7FF92E79FF06
+[FrontierNativeTrace] FIND_NAMED_LAYOUT name=AmbientMissions_Layout result=0x00000000 tid=5568 ctx=0x14ED10 ret=0x7FF92E79FF06
+[FrontierNativeTrace] FIND_NAMED_LAYOUT name=FrontierRemoteLayout result=0x00000000 tid=5568 ctx=0x14ED10 ret=0x7FF92E79FF06
+[FrontierNativeTrace] CREATE_LAYOUT name=FrontierRemoteLayout result=0x0000010A tid=5568 ctx=0x14ED10 ret=0x7FF92E79FF06
+[FrontierNativeTrace] IS_LAYOUTREF_VALID layout=0x0000010A result=1 tid=5568 ctx=0x14ED10 ret=0x7FF92E79FF06
+[FrontierNativeTrace] CREATE_ACTOR_IN_LAYOUT trace=0 argc=7 preLayout=0x10000010A actorName=FrontierRemote_65000 actorEnum=837 pos=(8.280003,0.000000,0.000000) orient=(270.000000,0.000000,0.000000) preRaw={a0=0x10000010A a1=0x14EFD0 a2=0x345 a3=0x41047AE4 a4=0x0 a5=0x43870000 a6=0x0} postA0=0x10000010B result=0x10000010B tid=5568 ctx=0x14ED10 ret=0x7FF92E79FF06
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14ED10 ret=0x7FF92E7A53A4
+[FrontierNativeTrace] GET_ACTOR_ENUM actor=0x10B result=0x345 enum=837 tid=5568 ctx=0x14ED10 ret=0x7FF92E79FF06
+[FrontierRemotePlayer] spawned playerId=65000 actorRef=0x10000010B actorHandle=0x0000010B position=(8.280,0.000,0.000)
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(8.520,0.000,0.000) actual=(0.000,0.000,0.000) error=8.520 extrapolated=0
 [FrontierRemoteTask] prepare actor=0x0000010B moverFrozen=0
-[FrontierRemoteTask] go-to actor=0x0000010B target=(5.160,0.000,0.000)
-[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(5.160,0.000,0.000)
-[FrontierClient] snapshot tick=881 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(4.920,0.000,0.000) actual=(0.000,0.000,0.000) error=4.920 extrapolated=0
-[FrontierClient] snapshot tick=882 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(4.800,0.000,0.000) actual=(0.000,0.000,0.000) error=4.800 extrapolated=0
-[FrontierClient] snapshot tick=884 players=2 remoteEntities=1
+[FrontierRemoteTask] go-to actor=0x0000010B target=(8.520,0.000,0.000)
+[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(8.520,0.000,0.000)
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(8.520,0.000,0.000) actual=(0.000,0.000,0.000) error=8.520 extrapolated=0
+[FrontierClient] snapshot tick=853 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=855 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(8.040,0.000,0.000) actual=(0.000,0.000,0.000) error=8.040 extrapolated=0
 [FrontierSession] historical InitSpawn player actor ready actor=0x00000102
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(4.560,0.000,0.000) actual=(0.000,0.000,0.000) error=4.560 extrapolated=0
-[FrontierClient] snapshot tick=886 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(4.320,0.000,0.000) actual=(0.000,0.000,0.000) error=4.320 extrapolated=0
-[FrontierClient] snapshot tick=888 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(4.080,0.000,0.000) actual=(0.000,0.000,0.000) error=4.080 extrapolated=0
-[FrontierClient] snapshot tick=890 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=892 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(3.600,0.000,0.000) actual=(0.000,0.000,0.000) error=3.600 extrapolated=0
-[FrontierClient] snapshot tick=894 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(3.360,0.000,0.000) actual=(0.000,0.000,0.000) error=3.360 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=896 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(3.120,0.000,0.000) actual=(0.000,0.000,0.000) error=3.120 extrapolated=0
-[FrontierClient] snapshot tick=898 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(2.880,0.000,0.000) actual=(0.000,0.000,0.000) error=2.880 extrapolated=0
-[FrontierRemoteTask] go-to actor=0x0000010B target=(2.880,0.000,0.000)
-[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(2.880,0.000,0.000)
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=900 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(2.640,0.000,0.000) actual=(0.000,0.000,0.000) error=2.640 extrapolated=0
-[FrontierClient] snapshot tick=902 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(2.400,0.000,0.000) actual=(0.000,0.000,0.000) error=2.400 extrapolated=0
-[FrontierClient] snapshot tick=904 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(2.160,0.000,0.000) actual=(0.000,0.000,0.000) error=2.160 extrapolated=0
-[FrontierClient] snapshot tick=906 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(1.920,0.000,0.000) actual=(0.000,0.000,0.000) error=1.920 extrapolated=0
-[FrontierClient] snapshot tick=908 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(1.680,0.000,0.000) actual=(0.000,0.000,0.000) error=1.680 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=910 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(1.440,0.000,0.000) actual=(0.000,0.000,0.000) error=1.440 extrapolated=0
-[FrontierClient] snapshot tick=912 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(1.200,0.000,0.000) actual=(0.000,0.000,0.000) error=1.200 extrapolated=0
-[FrontierClient] snapshot tick=914 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.960,0.000,0.000) actual=(0.000,0.000,0.000) error=0.960 extrapolated=0
-[FrontierClient] snapshot tick=916 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.720,0.000,0.000) actual=(0.000,0.000,0.000) error=0.720 extrapolated=0
-[FrontierClient] snapshot tick=918 players=2 remoteEntities=1
-[FrontierRemoteTask] go-to actor=0x0000010B target=(0.480,0.000,0.000)
-[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.480,0.000,0.000)
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] locomotion test phase=stop@-X cycleTime=14 playerId=65000
-[FrontierClient] snapshot tick=920 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.240,0.000,0.000) actual=(0.000,0.000,0.000) error=0.240 extrapolated=0
-[FrontierClient] snapshot tick=922 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=857 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(7.800,0.000,0.000) actual=(0.000,0.000,0.000) error=7.800 extrapolated=0
+[FrontierClient] snapshot tick=859 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(7.560,0.000,0.000) actual=(0.000,0.000,0.000) error=7.560 extrapolated=0
+[FrontierClient] snapshot tick=861 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(7.320,0.000,0.000) actual=(0.000,0.000,0.000) error=7.320 extrapolated=0
+[FrontierClient] snapshot tick=863 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(7.080,0.000,0.000) actual=(0.000,0.000,0.000) error=7.080 extrapolated=0
+[FrontierClient] snapshot tick=865 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(6.840,0.000,0.000) actual=(0.000,0.000,0.000) error=6.840 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=867 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(6.600,0.000,0.000) actual=(0.000,0.000,0.000) error=6.600 extrapolated=0
+[FrontierClient] snapshot tick=869 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(6.360,0.000,0.000) actual=(0.000,0.000,0.000) error=6.360 extrapolated=0
+[FrontierClient] snapshot tick=871 players=2 remoteEntities=1
+[FrontierRemoteTask] go-to actor=0x0000010B target=(6.120,0.000,0.000)
+[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(6.120,0.000,0.000)
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(6.120,0.000,0.000) actual=(0.000,0.000,0.000) error=6.120 extrapolated=0
+[FrontierClient] snapshot tick=873 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(5.880,0.000,0.000) actual=(0.000,0.000,0.000) error=5.880 extrapolated=0
+[FrontierClient] snapshot tick=875 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(5.640,0.000,0.000) actual=(0.000,0.000,0.000) error=5.640 extrapolated=0
+[FrontierClient] snapshot tick=877 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(5.400,0.000,0.000) actual=(0.000,0.000,0.000) error=5.400 extrapolated=0
+[FrontierClient] snapshot tick=879 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(5.160,0.000,0.000) actual=(0.000,0.000,0.000) error=5.160 extrapolated=0
+[FrontierClient] snapshot tick=881 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=883 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(4.680,0.000,0.000) actual=(0.000,0.000,0.000) error=4.680 extrapolated=0
+[FrontierClient] snapshot tick=885 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(4.440,0.000,0.000) actual=(0.000,0.000,0.000) error=4.440 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=887 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(4.200,0.000,0.000) actual=(0.000,0.000,0.000) error=4.200 extrapolated=0
+[FrontierClient] snapshot tick=889 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(3.960,0.000,0.000) actual=(0.000,0.000,0.000) error=3.960 extrapolated=0
+[FrontierClient] snapshot tick=891 players=2 remoteEntities=1
+[FrontierRemoteTask] go-to actor=0x0000010B target=(3.720,0.000,0.000)
+[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(3.720,0.000,0.000)
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(3.720,0.000,0.000) actual=(0.000,0.000,0.000) error=3.720 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=893 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(3.480,0.000,0.000) actual=(0.000,0.000,0.000) error=3.480 extrapolated=0
+[FrontierClient] snapshot tick=895 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(3.240,0.000,0.000) actual=(0.000,0.000,0.000) error=3.240 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=897 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(3.000,0.000,0.000) actual=(0.000,0.000,0.000) error=3.000 extrapolated=0
+[FrontierClient] snapshot tick=899 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(2.760,0.000,0.000) actual=(0.000,0.000,0.000) error=2.760 extrapolated=0
+[FrontierClient] snapshot tick=901 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(2.520,0.000,0.000) actual=(0.000,0.000,0.000) error=2.520 extrapolated=0
+[FrontierClient] snapshot tick=903 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(2.280,0.000,0.000) actual=(0.000,0.000,0.000) error=2.280 extrapolated=0
+[FrontierClient] snapshot tick=905 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(2.040,0.000,0.000) actual=(0.000,0.000,0.000) error=2.040 extrapolated=0
+[FrontierClient] snapshot tick=907 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(1.800,0.000,0.000) actual=(0.000,0.000,0.000) error=1.800 extrapolated=0
+[FrontierClient] snapshot tick=909 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=911 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(1.320,0.000,0.000) actual=(0.000,0.000,0.000) error=1.320 extrapolated=0
+[FrontierRemoteTask] go-to actor=0x0000010B target=(1.320,0.000,0.000)
+[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(1.320,0.000,0.000)
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=913 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(1.080,0.000,0.000) actual=(0.000,0.000,0.000) error=1.080 extrapolated=0
+[FrontierClient] snapshot tick=915 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.840,0.000,0.000) actual=(0.000,0.000,0.000) error=0.840 extrapolated=0
+[FrontierClient] snapshot tick=917 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.600,0.000,0.000) actual=(0.000,0.000,0.000) error=0.600 extrapolated=0
+[FrontierClient] snapshot tick=919 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.360,0.000,0.000) actual=(0.000,0.000,0.000) error=0.360 extrapolated=0
+[FrontierClient] locomotion test phase=stop@-X cycleTime=14.05 playerId=65000
+[FrontierClient] snapshot tick=921 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.120,0.000,0.000) actual=(0.000,0.000,0.000) error=0.120 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=923 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierClient] snapshot tick=924 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=925 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=926 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=927 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierClient] snapshot tick=928 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=929 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierClient] snapshot tick=930 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
+[FrontierClient] snapshot tick=931 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierClient] snapshot tick=932 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=933 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierClient] snapshot tick=934 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
+[FrontierClient] snapshot tick=935 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=936 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierClient] snapshot tick=938 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
 [FrontierClient] snapshot tick=940 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierClient] snapshot tick=942 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=941 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=943 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierClient] snapshot tick=944 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=945 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=946 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=947 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierClient] snapshot tick=948 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
 [FrontierClient] snapshot tick=950 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
 [FrontierClient] snapshot tick=952 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=953 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierClient] snapshot tick=954 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
+[FrontierClient] snapshot tick=955 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
 [FrontierClient] snapshot tick=956 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
 [FrontierClient] snapshot tick=958 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
 [FrontierClient] locomotion test phase=walk+Z cycleTime=16 playerId=65000
 [FrontierClient] snapshot tick=960 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierClient] snapshot tick=962 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
 [FrontierClient] snapshot tick=964 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.240) actual=(0.000,0.000,0.000) error=0.240 extrapolated=0
 [FrontierClient] snapshot tick=966 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.480) actual=(0.000,0.000,0.000) error=0.480 extrapolated=0
 [FrontierClient] snapshot tick=968 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.720) actual=(0.000,0.000,0.000) error=0.720 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierClient] snapshot tick=970 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.960) actual=(0.000,0.000,0.000) error=0.960 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierClient] snapshot tick=972 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,1.200) actual=(0.000,0.000,0.000) error=1.200 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierClient] snapshot tick=974 players=2 remoteEntities=1
+[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,1.440)
+[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,1.440)
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,1.440) actual=(0.000,0.000,0.000) error=1.440 extrapolated=0
 [FrontierClient] snapshot tick=976 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,1.680) actual=(0.000,0.000,0.000) error=1.680 extrapolated=0
 [FrontierClient] snapshot tick=978 players=2 remoteEntities=1
-[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,1.920)
-[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,1.920)
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,1.920) actual=(0.000,0.000,0.000) error=1.920 extrapolated=0
 [FrontierClient] snapshot tick=980 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,2.160) actual=(0.000,0.000,0.000) error=2.160 extrapolated=0
 [FrontierClient] snapshot tick=982 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,2.400) actual=(0.000,0.000,0.000) error=2.400 extrapolated=0
+[FrontierRemotePlayer] actor-pos failed playerId=65000 actor=0x0000010B error=game-thread task timed out
 [FrontierClient] snapshot tick=984 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,2.640) actual=(0.000,0.000,0.000) error=2.640 extrapolated=0
 [FrontierClient] snapshot tick=986 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,2.880) actual=(0.000,0.000,0.000) error=2.880 extrapolated=0
 [FrontierClient] snapshot tick=988 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=989 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,3.240) actual=(0.000,0.000,0.000) error=3.240 extrapolated=0
-[FrontierClient] snapshot tick=991 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,3.480) actual=(0.000,0.000,0.000) error=3.480 extrapolated=0
-[FrontierClient] snapshot tick=993 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,3.720) actual=(0.000,0.000,0.000) error=3.720 extrapolated=0
+[FrontierRemotePlayer] actor invalid playerId=65000 actor=0x0000010B reason=game-thread task timed out
+[FrontierClient] snapshot tick=990 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=992 players=2 remoteEntities=1
+[FrontierRemotePlayer] spawn failed playerId=65000 error=game-thread task timed out
 [FrontierClient] snapshot tick=994 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=996 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,4.080) actual=(0.000,0.000,0.000) error=4.080 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=997 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,4.200) actual=(0.000,0.000,0.000) error=4.200 extrapolated=0
-[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,4.200)
-[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,4.200)
-[FrontierClient] snapshot tick=999 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,4.440) actual=(0.000,0.000,0.000) error=4.440 extrapolated=0
-[FrontierClient] snapshot tick=1001 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,4.680) actual=(0.000,0.000,0.000) error=4.680 extrapolated=0
-[FrontierClient] snapshot tick=1003 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,4.920) actual=(0.000,0.000,0.000) error=4.920 extrapolated=0
-[FrontierClient] snapshot tick=1005 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=998 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1000 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1002 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_LAYOUTREF_VALID layout=0x0000010A result=1 tid=5568 ctx=0x14ED10 ret=0x7FF92E79FF06
+[FrontierNativeTrace] CREATE_ACTOR_IN_LAYOUT trace=1 argc=7 preLayout=0x10000010A actorName=FrontierRemote_65000 actorEnum=837 pos=(0.000000,0.000000,5.039997) orient=(0.000000,0.000000,0.000000) preRaw={a0=0x10000010A a1=0x14EFD0 a2=0x345 a3=0x0 a4=0x40A147A7 a5=0x0 a6=0x0} postA0=0x10000010B result=0x10000010B tid=5568 ctx=0x14ED10 ret=0x7FF92E79FF06
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14ED10 ret=0x7FF92E7A53A4
+[FrontierNativeTrace] GET_ACTOR_ENUM actor=0x10B result=0x345 enum=837 tid=5568 ctx=0x14ED10 ret=0x7FF92E79FF06
+[FrontierRemotePlayer] spawned playerId=65000 actorRef=0x10000010B actorHandle=0x0000010B position=(0.000,0.000,5.040)
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,4.800) actual=(0.000,0.000,0.000) error=4.800 extrapolated=0
+[FrontierRemoteTask] prepare actor=0x0000010B moverFrozen=0
+[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,4.800)
+[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,4.800)
+[FrontierClient] snapshot tick=1004 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=1006 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,5.280) actual=(0.000,0.000,0.000) error=5.280 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierClient] snapshot tick=1008 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,5.520) actual=(0.000,0.000,0.000) error=5.520 extrapolated=0
-[FrontierClient] snapshot tick=1009 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,5.640) actual=(0.000,0.000,0.000) error=5.640 extrapolated=0
-[FrontierClient] snapshot tick=1011 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,5.880) actual=(0.000,0.000,0.000) error=5.880 extrapolated=0
-[FrontierClient] snapshot tick=1013 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1010 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,5.760) actual=(0.000,0.000,0.000) error=5.760 extrapolated=0
+[FrontierClient] snapshot tick=1012 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,6.000) actual=(0.000,0.000,0.000) error=6.000 extrapolated=0
 [FrontierClient] snapshot tick=1014 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,6.240) actual=(0.000,0.000,0.000) error=6.240 extrapolated=0
 [FrontierClient] snapshot tick=1016 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,6.480) actual=(0.000,0.000,0.000) error=6.480 extrapolated=0
-[FrontierClient] snapshot tick=1017 players=2 remoteEntities=1
-[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,6.600)
-[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,6.600)
+[FrontierClient] snapshot tick=1018 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,6.720) actual=(0.000,0.000,0.000) error=6.720 extrapolated=0
 [FrontierClient] snapshot tick=1019 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,6.840) actual=(0.000,0.000,0.000) error=6.840 extrapolated=0
-[FrontierClient] snapshot tick=1021 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,7.080) actual=(0.000,0.000,0.000) error=7.080 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=1020 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,6.960) actual=(0.000,0.000,0.000) error=6.960 extrapolated=0
+[FrontierClient] snapshot tick=1022 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,7.200) actual=(0.000,0.000,0.000) error=7.200 extrapolated=0
 [FrontierClient] snapshot tick=1023 players=2 remoteEntities=1
+[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,7.320)
+[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,7.320)
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,7.320) actual=(0.000,0.000,0.000) error=7.320 extrapolated=0
 [FrontierClient] snapshot tick=1025 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,7.560) actual=(0.000,0.000,0.000) error=7.560 extrapolated=0
-[FrontierClient] snapshot tick=1027 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor invalid playerId=65000 actor=0x0000010B reason=game-thread task timed out
-[FrontierClient] snapshot tick=1029 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=1026 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,7.680) actual=(0.000,0.000,0.000) error=7.680 extrapolated=0
+[FrontierClient] snapshot tick=1028 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,7.920) actual=(0.000,0.000,0.000) error=7.920 extrapolated=0
+[FrontierClient] snapshot tick=1030 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,8.160) actual=(0.000,0.000,0.000) error=8.160 extrapolated=0
 [FrontierClient] snapshot tick=1031 players=2 remoteEntities=1
-[FrontierRemotePlayer] spawn failed playerId=65000 error=game-thread task timed out
 [FrontierClient] snapshot tick=1033 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,8.520) actual=(0.000,0.000,0.000) error=8.520 extrapolated=0
 [FrontierClient] snapshot tick=1035 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,8.760) actual=(0.000,0.000,0.000) error=8.760 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierClient] snapshot tick=1037 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1039 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1041 players=2 remoteEntities=1
-[FrontierRemotePlayer] spawn failed playerId=65000 error=game-thread task timed out
-[FrontierClient] snapshot tick=1043 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1045 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1047 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1049 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1051 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_LAYOUTREF_VALID layout=0x0000010A result=1 tid=8164 ctx=0x14ED10 ret=0x7FF92DB9FF06
-[FrontierNativeTrace] CREATE_ACTOR_IN_LAYOUT trace=1 argc=7 preLayout=0x10000010A actorName=FrontierRemote_65000 actorEnum=837 pos=(0.000000,0.000000,10.919998) orient=(0.000000,0.000000,0.000000) preRaw={a0=0x10000010A a1=0x14EFD0 a2=0x345 a3=0x0 a4=0x412EB850 a5=0x0 a6=0x0} postA0=0x10000010B result=0x10000010B tid=8164 ctx=0x14ED10 ret=0x7FF92DB9FF06
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14ED10 ret=0x7FF92DBA53A4
-[FrontierNativeTrace] GET_ACTOR_ENUM actor=0x10B result=0x345 enum=837 tid=8164 ctx=0x14ED10 ret=0x7FF92DB9FF06
-[FrontierRemotePlayer] spawned playerId=65000 actorRef=0x10000010B actorHandle=0x0000010B position=(0.000,0.000,10.920)
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,10.680) actual=(0.000,0.000,0.000) error=10.680 extrapolated=0
-[FrontierRemoteTask] prepare actor=0x0000010B moverFrozen=0
-[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,10.680)
-[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,10.680)
-[FrontierClient] snapshot tick=1053 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,9.000) actual=(0.000,0.000,0.000) error=9.000 extrapolated=0
+[FrontierClient] snapshot tick=1038 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,9.120) actual=(0.000,0.000,0.000) error=9.120 extrapolated=0
+[FrontierClient] snapshot tick=1040 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,9.360) actual=(0.000,0.000,0.000) error=9.360 extrapolated=0
+[FrontierClient] snapshot tick=1042 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,9.600) actual=(0.000,0.000,0.000) error=9.600 extrapolated=0
+[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,9.600)
+[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,9.600)
+[FrontierClient] snapshot tick=1044 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,9.840) actual=(0.000,0.000,0.000) error=9.840 extrapolated=0
+[FrontierClient] snapshot tick=1046 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,10.080) actual=(0.000,0.000,0.000) error=10.080 extrapolated=0
+[FrontierClient] snapshot tick=1048 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,10.320) actual=(0.000,0.000,0.000) error=10.320 extrapolated=0
+[FrontierClient] snapshot tick=1050 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,10.560) actual=(0.000,0.000,0.000) error=10.560 extrapolated=0
+[FrontierClient] snapshot tick=1052 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,10.800) actual=(0.000,0.000,0.000) error=10.800 extrapolated=0
+[FrontierClient] snapshot tick=1054 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=1055 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,11.160) actual=(0.000,0.000,0.000) error=11.160 extrapolated=0
 [FrontierClient] snapshot tick=1057 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,11.400) actual=(0.000,0.000,0.000) error=11.400 extrapolated=0
 [FrontierClient] snapshot tick=1059 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,11.640) actual=(0.000,0.000,0.000) error=11.640 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierClient] snapshot tick=1061 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,11.880) actual=(0.000,0.000,0.000) error=11.880 extrapolated=0
 [FrontierClient] snapshot tick=1063 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
+[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,12.120)
+[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,12.120)
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,12.120) actual=(0.000,0.000,0.000) error=12.120 extrapolated=0
-[FrontierClient] snapshot tick=1064 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=1065 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,12.360) actual=(0.000,0.000,0.000) error=12.360 extrapolated=0
 [FrontierClient] snapshot tick=1067 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,12.600) actual=(0.000,0.000,0.000) error=12.600 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierClient] snapshot tick=1069 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,12.840) actual=(0.000,0.000,0.000) error=12.840 extrapolated=0
-[FrontierClient] snapshot tick=1070 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1072 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,13.200) actual=(0.000,0.000,0.000) error=13.200 extrapolated=0
-[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,13.200)
-[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,13.200)
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=1074 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,13.440) actual=(0.000,0.000,0.000) error=13.440 extrapolated=0
-[FrontierClient] snapshot tick=1076 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,13.680) actual=(0.000,0.000,0.000) error=13.680 extrapolated=0
+[FrontierClient] snapshot tick=1071 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,13.080) actual=(0.000,0.000,0.000) error=13.080 extrapolated=0
+[FrontierClient] snapshot tick=1073 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1075 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,13.560) actual=(0.000,0.000,0.000) error=13.560 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=1077 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,13.800) actual=(0.000,0.000,0.000) error=13.800 extrapolated=0
 [FrontierClient] snapshot tick=1078 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,13.920) actual=(0.000,0.000,0.000) error=13.920 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierClient] locomotion test phase=stop@+Z cycleTime=22 playerId=65000
 [FrontierClient] snapshot tick=1080 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.160) actual=(0.000,0.000,0.000) error=14.160 extrapolated=0
 [FrontierClient] snapshot tick=1082 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400) actual=(0.000,0.000,0.000) error=14.400 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierClient] snapshot tick=1084 players=2 remoteEntities=1
+[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,14.400)
+[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400)
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400) actual=(0.000,0.000,0.000) error=14.400 extrapolated=0
 [FrontierClient] snapshot tick=1086 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400) actual=(0.000,0.000,0.000) error=14.400 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierClient] snapshot tick=1088 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400) actual=(0.000,0.000,0.000) error=14.400 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=1089 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400) actual=(0.000,0.000,0.000) error=14.400 extrapolated=0
-[FrontierClient] snapshot tick=1091 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1090 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=1092 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400) actual=(0.000,0.000,0.000) error=14.400 extrapolated=0
-[FrontierClient] snapshot tick=1093 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=1095 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1094 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400) actual=(0.000,0.000,0.000) error=14.400 extrapolated=0
 [FrontierClient] snapshot tick=1096 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400) actual=(0.000,0.000,0.000) error=14.400 extrapolated=0
-[FrontierClient] snapshot tick=1098 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=1097 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400) actual=(0.000,0.000,0.000) error=14.400 extrapolated=0
-[FrontierClient] snapshot tick=1100 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1099 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400) actual=(0.000,0.000,0.000) error=14.400 extrapolated=0
+[FrontierClient] snapshot tick=1101 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierClient] snapshot tick=1102 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1103 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400) actual=(0.000,0.000,0.000) error=14.400 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=1105 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1104 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400) actual=(0.000,0.000,0.000) error=14.400 extrapolated=0
-[FrontierClient] snapshot tick=1107 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1106 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400) actual=(0.000,0.000,0.000) error=14.400 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierClient] snapshot tick=1108 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400) actual=(0.000,0.000,0.000) error=14.400 extrapolated=0
-[FrontierClient] snapshot tick=1110 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1109 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400) actual=(0.000,0.000,0.000) error=14.400 extrapolated=0
-[FrontierClient] snapshot tick=1112 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1111 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=1113 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400) actual=(0.000,0.000,0.000) error=14.400 extrapolated=0
 [FrontierClient] snapshot tick=1114 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400) actual=(0.000,0.000,0.000) error=14.400 extrapolated=0
 [FrontierClient] snapshot tick=1116 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400) actual=(0.000,0.000,0.000) error=14.400 extrapolated=0
 [FrontierClient] snapshot tick=1118 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400) actual=(0.000,0.000,0.000) error=14.400 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierClient] locomotion test phase=walk-Z cycleTime=24 playerId=65000
 [FrontierClient] snapshot tick=1120 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400) actual=(0.000,0.000,0.000) error=14.400 extrapolated=0
 [FrontierClient] snapshot tick=1122 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.400) actual=(0.000,0.000,0.000) error=14.400 extrapolated=0
 [FrontierClient] snapshot tick=1124 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,14.160) actual=(0.000,0.000,0.000) error=14.160 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierClient] snapshot tick=1126 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,13.920) actual=(0.000,0.000,0.000) error=13.920 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierClient] snapshot tick=1128 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,13.680) actual=(0.000,0.000,0.000) error=13.680 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierClient] snapshot tick=1130 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,13.440) actual=(0.000,0.000,0.000) error=13.440 extrapolated=0
 [FrontierClient] snapshot tick=1132 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,13.200) actual=(0.000,0.000,0.000) error=13.200 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierClient] snapshot tick=1134 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,12.960) actual=(0.000,0.000,0.000) error=12.960 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierClient] snapshot tick=1136 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,12.720) actual=(0.000,0.000,0.000) error=12.720 extrapolated=0
-[FrontierClient] snapshot tick=1138 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,12.480) actual=(0.000,0.000,0.000) error=12.480 extrapolated=0
+[FrontierClient] snapshot tick=1137 players=2 remoteEntities=1
+[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,12.600)
+[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,12.600)
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,12.600) actual=(0.000,0.000,0.000) error=12.600 extrapolated=0
 [FrontierClient] snapshot tick=1139 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,12.360) actual=(0.000,0.000,0.000) error=12.360 extrapolated=0
 [FrontierClient] snapshot tick=1141 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,12.120) actual=(0.000,0.000,0.000) error=12.120 extrapolated=0
 [FrontierClient] snapshot tick=1143 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,11.880) actual=(0.000,0.000,0.000) error=11.880 extrapolated=0
-[FrontierClient] snapshot tick=1145 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=1147 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,11.400) actual=(0.000,0.000,0.000) error=11.400 extrapolated=0
-[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,11.400)
-[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,11.400)
-[FrontierClient] snapshot tick=1149 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,11.160) actual=(0.000,0.000,0.000) error=11.160 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=1151 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,10.920) actual=(0.000,0.000,0.000) error=10.920 extrapolated=0
-[FrontierClient] snapshot tick=1153 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,10.680) actual=(0.000,0.000,0.000) error=10.680 extrapolated=0
-[FrontierClient] snapshot tick=1155 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,10.440) actual=(0.000,0.000,0.000) error=10.440 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=1144 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,11.760) actual=(0.000,0.000,0.000) error=11.760 extrapolated=0
+[FrontierClient] snapshot tick=1146 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,11.520) actual=(0.000,0.000,0.000) error=11.520 extrapolated=0
+[FrontierClient] snapshot tick=1148 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,11.280) actual=(0.000,0.000,0.000) error=11.280 extrapolated=0
+[FrontierClient] snapshot tick=1150 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,11.040) actual=(0.000,0.000,0.000) error=11.040 extrapolated=0
+[FrontierClient] snapshot tick=1152 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,10.800) actual=(0.000,0.000,0.000) error=10.800 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=1154 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,10.560) actual=(0.000,0.000,0.000) error=10.560 extrapolated=0
+[FrontierClient] snapshot tick=1156 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=1157 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,10.200) actual=(0.000,0.000,0.000) error=10.200 extrapolated=0
+[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,10.200)
+[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,10.200)
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierClient] snapshot tick=1159 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,9.960) actual=(0.000,0.000,0.000) error=9.960 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierClient] snapshot tick=1161 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,9.720) actual=(0.000,0.000,0.000) error=9.720 extrapolated=0
 [FrontierClient] snapshot tick=1163 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,9.480) actual=(0.000,0.000,0.000) error=9.480 extrapolated=0
 [FrontierClient] snapshot tick=1165 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,9.240) actual=(0.000,0.000,0.000) error=9.240 extrapolated=0
 [FrontierClient] snapshot tick=1167 players=2 remoteEntities=1
-[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,9.000)
-[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,9.000)
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,9.000) actual=(0.000,0.000,0.000) error=9.000 extrapolated=0
-[FrontierClient] snapshot tick=1169 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1168 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierClient] snapshot tick=1170 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,8.640) actual=(0.000,0.000,0.000) error=8.640 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierClient] snapshot tick=1172 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,8.400) actual=(0.000,0.000,0.000) error=8.400 extrapolated=0
 [FrontierClient] snapshot tick=1174 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,8.160) actual=(0.000,0.000,0.000) error=8.160 extrapolated=0
 [FrontierClient] snapshot tick=1176 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,7.920) actual=(0.000,0.000,0.000) error=7.920 extrapolated=0
+[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,7.920)
+[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,7.920)
 [FrontierClient] snapshot tick=1178 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,7.680) actual=(0.000,0.000,0.000) error=7.680 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierClient] snapshot tick=1180 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,7.440) actual=(0.000,0.000,0.000) error=7.440 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierClient] snapshot tick=1182 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1183 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,7.080) actual=(0.000,0.000,0.000) error=7.080 extrapolated=0
-[FrontierClient] snapshot tick=1185 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,6.840) actual=(0.000,0.000,0.000) error=6.840 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=1187 players=2 remoteEntities=1
-[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,6.600)
-[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,6.600)
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,6.600) actual=(0.000,0.000,0.000) error=6.600 extrapolated=0
-[FrontierClient] snapshot tick=1189 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,6.360) actual=(0.000,0.000,0.000) error=6.360 extrapolated=0
-[FrontierClient] snapshot tick=1191 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,6.120) actual=(0.000,0.000,0.000) error=6.120 extrapolated=0
-[FrontierClient] snapshot tick=1193 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,5.880) actual=(0.000,0.000,0.000) error=5.880 extrapolated=0
-[FrontierClient] snapshot tick=1195 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,5.640) actual=(0.000,0.000,0.000) error=5.640 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,7.200) actual=(0.000,0.000,0.000) error=7.200 extrapolated=0
+[FrontierClient] snapshot tick=1184 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,6.960) actual=(0.000,0.000,0.000) error=6.960 extrapolated=0
+[FrontierClient] snapshot tick=1186 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,6.720) actual=(0.000,0.000,0.000) error=6.720 extrapolated=0
+[FrontierClient] snapshot tick=1188 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,6.480) actual=(0.000,0.000,0.000) error=6.480 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=1190 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,6.240) actual=(0.000,0.000,0.000) error=6.240 extrapolated=0
+[FrontierClient] snapshot tick=1192 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,6.000) actual=(0.000,0.000,0.000) error=6.000 extrapolated=0
+[FrontierClient] snapshot tick=1194 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,5.760) actual=(0.000,0.000,0.000) error=5.760 extrapolated=0
+[FrontierClient] snapshot tick=1196 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=1197 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,5.400) actual=(0.000,0.000,0.000) error=5.400 extrapolated=0
+[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,5.400)
+[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,5.400)
 [FrontierClient] snapshot tick=1199 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,5.160) actual=(0.000,0.000,0.000) error=5.160 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierClient] snapshot tick=1201 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=1202 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,4.800) actual=(0.000,0.000,0.000) error=4.800 extrapolated=0
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,4.920) actual=(0.000,0.000,0.000) error=4.920 extrapolated=0
+[FrontierClient] snapshot tick=1203 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,4.680) actual=(0.000,0.000,0.000) error=4.680 extrapolated=0
 [FrontierClient] snapshot tick=1204 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,4.560) actual=(0.000,0.000,0.000) error=4.560 extrapolated=0
 [FrontierClient] snapshot tick=1206 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,4.320) actual=(0.000,0.000,0.000) error=4.320 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,4.320)
-[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,4.320)
 [FrontierClient] snapshot tick=1208 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,4.080) actual=(0.000,0.000,0.000) error=4.080 extrapolated=0
 [FrontierClient] snapshot tick=1210 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,3.840) actual=(0.000,0.000,0.000) error=3.840 extrapolated=0
 [FrontierClient] snapshot tick=1212 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,3.600) actual=(0.000,0.000,0.000) error=3.600 extrapolated=0
 [FrontierClient] snapshot tick=1214 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1215 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,3.240) actual=(0.000,0.000,0.000) error=3.240 extrapolated=0
-[FrontierClient] snapshot tick=1217 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,3.000) actual=(0.000,0.000,0.000) error=3.000 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=1219 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,2.760) actual=(0.000,0.000,0.000) error=2.760 extrapolated=0
-[FrontierClient] snapshot tick=1221 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,2.520) actual=(0.000,0.000,0.000) error=2.520 extrapolated=0
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,3.360) actual=(0.000,0.000,0.000) error=3.360 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,3.360) actual=(0.000,0.000,0.000) error=3.360 extrapolated=0
+[FrontierClient] snapshot tick=1216 players=2 remoteEntities=1
+[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,3.120)
+[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,3.120)
+[FrontierClient] snapshot tick=1218 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,2.880) actual=(0.000,0.000,0.000) error=2.880 extrapolated=0
+[FrontierClient] snapshot tick=1220 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,2.640) actual=(0.000,0.000,0.000) error=2.640 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierClient] snapshot tick=1222 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,2.400) actual=(0.000,0.000,0.000) error=2.400 extrapolated=0
-[FrontierClient] snapshot tick=1224 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,2.160) actual=(0.000,0.000,0.000) error=2.160 extrapolated=0
-[FrontierClient] snapshot tick=1226 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,1.920) actual=(0.000,0.000,0.000) error=1.920 extrapolated=0
-[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,1.920)
-[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,1.920)
-[FrontierClient] snapshot tick=1228 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,1.680) actual=(0.000,0.000,0.000) error=1.680 extrapolated=0
-[FrontierClient] snapshot tick=1230 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,1.440) actual=(0.000,0.000,0.000) error=1.440 extrapolated=0
-[FrontierClient] snapshot tick=1232 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=1234 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.960) actual=(0.000,0.000,0.000) error=0.960 extrapolated=0
-[FrontierClient] snapshot tick=1236 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.720) actual=(0.000,0.000,0.000) error=0.720 extrapolated=0
-[FrontierClient] snapshot tick=1238 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.480) actual=(0.000,0.000,0.000) error=0.480 extrapolated=0
-[FrontierClient] locomotion test phase=stop@-Z cycleTime=30 playerId=65000
-[FrontierClient] snapshot tick=1240 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.240) actual=(0.000,0.000,0.000) error=0.240 extrapolated=0
+[FrontierClient] snapshot tick=1223 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,2.280) actual=(0.000,0.000,0.000) error=2.280 extrapolated=0
+[FrontierClient] snapshot tick=1225 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,2.040) actual=(0.000,0.000,0.000) error=2.040 extrapolated=0
+[FrontierClient] snapshot tick=1227 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,1.800) actual=(0.000,0.000,0.000) error=1.800 extrapolated=0
+[FrontierClient] snapshot tick=1229 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,1.560) actual=(0.000,0.000,0.000) error=1.560 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=1231 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,1.320) actual=(0.000,0.000,0.000) error=1.320 extrapolated=0
+[FrontierClient] snapshot tick=1233 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,1.080) actual=(0.000,0.000,0.000) error=1.080 extrapolated=0
+[FrontierClient] snapshot tick=1235 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.840) actual=(0.000,0.000,0.000) error=0.840 extrapolated=0
+[FrontierClient] snapshot tick=1237 players=2 remoteEntities=1
+[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,0.600)
+[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,0.600)
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.600) actual=(0.000,0.000,0.000) error=0.600 extrapolated=0
+[FrontierClient] snapshot tick=1239 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.360) actual=(0.000,0.000,0.000) error=0.360 extrapolated=0
+[FrontierClient] locomotion test phase=stop@-Z cycleTime=30.05 playerId=65000
 [FrontierClient] snapshot tick=1241 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.120) actual=(0.000,0.000,0.000) error=0.120 extrapolated=0
 [FrontierClient] snapshot tick=1243 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
 [FrontierClient] snapshot tick=1245 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierClient] snapshot tick=1247 players=2 remoteEntities=1
-[FrontierRemoteTask] go-to actor=0x0000010B target=(0.000,0.000,0.000)
-[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000)
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
+[FrontierClient] snapshot tick=1247 players=2 remoteEntities=1
 [FrontierClient] snapshot tick=1249 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
 [FrontierClient] snapshot tick=1251 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierClient] snapshot tick=1252 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=1253 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=1254 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1255 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierClient] snapshot tick=1256 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=1257 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
 [FrontierClient] snapshot tick=1258 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=1259 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierClient] snapshot tick=1261 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1260 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierClient] snapshot tick=1263 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
+[FrontierClient] snapshot tick=1262 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierClient] snapshot tick=1265 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1264 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierClient] snapshot tick=1267 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1266 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=1268 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=1269 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierClient] snapshot tick=1271 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1270 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1272 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierClient] snapshot tick=1273 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierClient] snapshot tick=1274 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
 [FrontierClient] snapshot tick=1276 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierClient] snapshot tick=1278 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1277 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] locomotion test phase=walk+X cycleTime=0 playerId=65000
-[FrontierClient] snapshot tick=1280 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1279 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierClient] snapshot tick=1282 players=2 remoteEntities=1
+[FrontierClient] locomotion test phase=walk+X cycleTime=0.0500031 playerId=65000
+[FrontierClient] snapshot tick=1281 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.000,0.000,0.000) actual=(0.000,0.000,0.000) error=0.000 extrapolated=0
-[FrontierClient] snapshot tick=1284 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.240,0.000,0.000) actual=(0.000,0.000,0.000) error=0.240 extrapolated=0
-[FrontierClient] snapshot tick=1286 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.480,0.000,0.000) actual=(0.000,0.000,0.000) error=0.480 extrapolated=0
+[FrontierClient] snapshot tick=1283 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.120,0.000,0.000) actual=(0.000,0.000,0.000) error=0.120 extrapolated=0
+[FrontierClient] snapshot tick=1285 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.360,0.000,0.000) actual=(0.000,0.000,0.000) error=0.360 extrapolated=0
+[FrontierClient] snapshot tick=1287 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
 [FrontierClient] snapshot tick=1288 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.720,0.000,0.000) actual=(0.000,0.000,0.000) error=0.720 extrapolated=0
 [FrontierClient] snapshot tick=1290 players=2 remoteEntities=1
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(0.960,0.000,0.000) actual=(0.000,0.000,0.000) error=0.960 extrapolated=0
-[FrontierClient] snapshot tick=1292 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(1.200,0.000,0.000) actual=(0.000,0.000,0.000) error=1.200 extrapolated=0
+[FrontierClient] snapshot tick=1291 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=1293 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(1.320,0.000,0.000) actual=(0.000,0.000,0.000) error=1.320 extrapolated=0
 [FrontierClient] snapshot tick=1294 players=2 remoteEntities=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
 [FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(1.440,0.000,0.000) actual=(0.000,0.000,0.000) error=1.440 extrapolated=0
-[FrontierClient] snapshot tick=1296 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(1.680,0.000,0.000) actual=(0.000,0.000,0.000) error=1.680 extrapolated=0
-[FrontierClient] snapshot tick=1298 players=2 remoteEntities=1
-[FrontierRemoteTask] go-to actor=0x0000010B target=(1.920,0.000,0.000)
-[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(1.920,0.000,0.000)
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(1.920,0.000,0.000) actual=(0.000,0.000,0.000) error=1.920 extrapolated=0
-[FrontierClient] snapshot tick=1300 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(2.160,0.000,0.000) actual=(0.000,0.000,0.000) error=2.160 extrapolated=0
-[FrontierClient] snapshot tick=1302 players=2 remoteEntities=1
-[FrontierClient] snapshot tick=1304 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(2.640,0.000,0.000) actual=(0.000,0.000,0.000) error=2.640 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=1306 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(2.880,0.000,0.000) actual=(0.000,0.000,0.000) error=2.880 extrapolated=0
-[FrontierClient] snapshot tick=1308 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(3.120,0.000,0.000) actual=(0.000,0.000,0.000) error=3.120 extrapolated=0
-[FrontierSession] state=active gameState=4 worldLoaded=1 stableWorldLoaded=1 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=1
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=1310 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(3.360,0.000,0.000) actual=(0.000,0.000,0.000) error=3.360 extrapolated=0
-[FrontierClient] snapshot tick=1312 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(3.600,0.000,0.000) actual=(0.000,0.000,0.000) error=3.600 extrapolated=0
-[FrontierClient] snapshot tick=1314 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(3.840,0.000,0.000) actual=(0.000,0.000,0.000) error=3.840 extrapolated=0
-[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=8164 ctx=0x14EF10 ret=0x7FF92DBA53A4
-[FrontierClient] snapshot tick=1316 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(4.080,0.000,0.000) actual=(0.000,0.000,0.000) error=4.080 extrapolated=0
+[FrontierClient] snapshot tick=1295 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1297 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(1.800,0.000,0.000) actual=(0.000,0.000,0.000) error=1.800 extrapolated=0
+[FrontierRemoteTask] go-to actor=0x0000010B target=(1.800,0.000,0.000)
+[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(1.800,0.000,0.000)
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=1299 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(2.040,0.000,0.000) actual=(0.000,0.000,0.000) error=2.040 extrapolated=0
+[FrontierClient] snapshot tick=1301 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(2.280,0.000,0.000) actual=(0.000,0.000,0.000) error=2.280 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=1303 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(2.520,0.000,0.000) actual=(0.000,0.000,0.000) error=2.520 extrapolated=0
+[FrontierClient] snapshot tick=1305 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(2.760,0.000,0.000) actual=(0.000,0.000,0.000) error=2.760 extrapolated=0
+[FrontierClient] snapshot tick=1307 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(3.000,0.000,0.000) actual=(0.000,0.000,0.000) error=3.000 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=1309 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(3.240,0.000,0.000) actual=(0.000,0.000,0.000) error=3.240 extrapolated=0
+[FrontierClient] snapshot tick=1311 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(3.480,0.000,0.000) actual=(0.000,0.000,0.000) error=3.480 extrapolated=0
+[FrontierClient] snapshot tick=1313 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(3.720,0.000,0.000) actual=(0.000,0.000,0.000) error=3.720 extrapolated=0
+[FrontierClient] snapshot tick=1315 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(3.960,0.000,0.000) actual=(0.000,0.000,0.000) error=3.960 extrapolated=0
 [FrontierClient] snapshot tick=1317 players=2 remoteEntities=1
 [FrontierRemoteTask] go-to actor=0x0000010B target=(4.200,0.000,0.000)
 [FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(4.200,0.000,0.000)
-[FrontierClient] snapshot tick=1318 players=2 remoteEntities=1
-[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(4.320,0.000,0.000) actual=(0.000,0.000,0.000) error=4.320 extrapolated=0
-[FrontierClient] snapshot tick=1320 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(4.200,0.000,0.000) actual=(0.000,0.000,0.000) error=4.200 extrapolated=0
+[FrontierClient] snapshot tick=1319 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(4.440,0.000,0.000) actual=(0.000,0.000,0.000) error=4.440 extrapolated=0
+[FrontierClient] snapshot tick=1321 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(4.680,0.000,0.000) actual=(0.000,0.000,0.000) error=4.680 extrapolated=0
+[FrontierClient] snapshot tick=1323 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=1324 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(5.040,0.000,0.000) actual=(0.000,0.000,0.000) error=5.040 extrapolated=0
+[FrontierClient] snapshot tick=1326 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(5.280,0.000,0.000) actual=(0.000,0.000,0.000) error=5.280 extrapolated=0
+[FrontierClient] snapshot tick=1328 players=2 remoteEntities=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(5.520,0.000,0.000) actual=(0.000,0.000,0.000) error=5.520 extrapolated=0
+[FrontierClient] snapshot tick=1330 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(5.760,0.000,0.000) actual=(0.000,0.000,0.000) error=5.760 extrapolated=0
+[FrontierClient] snapshot tick=1332 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(6.000,0.000,0.000) actual=(0.000,0.000,0.000) error=6.000 extrapolated=0
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=1334 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(6.240,0.000,0.000) actual=(0.000,0.000,0.000) error=6.240 extrapolated=0
+[FrontierClient] snapshot tick=1336 players=2 remoteEntities=1
+[FrontierClient] snapshot tick=1337 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(6.600,0.000,0.000) actual=(0.000,0.000,0.000) error=6.600 extrapolated=0
+[FrontierRemoteTask] go-to actor=0x0000010B target=(6.600,0.000,0.000)
+[FrontierRemotePlayer] locomotion target playerId=65000 actor=0x0000010B target=(6.600,0.000,0.000)
+[FrontierSession] state=active gameState=4 worldLoaded=0 stableWorldLoaded=1 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=1339 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(6.840,0.000,0.000) actual=(0.000,0.000,0.000) error=6.840 extrapolated=0
+[FrontierClient] snapshot tick=1341 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(7.080,0.000,0.000) actual=(0.000,0.000,0.000) error=7.080 extrapolated=0
+[FrontierClient] snapshot tick=1342 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(7.200,0.000,0.000) actual=(0.000,0.000,0.000) error=7.200 extrapolated=0
+[FrontierSession] state=active gameState=4 worldLoaded=1 stableWorldLoaded=1 simulateStartMultiplayer=0 startPosCommandLine=0 localPlayer=1
+[FrontierNativeTrace] IS_ACTOR_VALID actor=0x0000010B result=1 tid=5568 ctx=0x14EF10 ret=0x7FF92E7A53A4
+[FrontierClient] snapshot tick=1344 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(7.440,0.000,0.000) actual=(0.000,0.000,0.000) error=7.440 extrapolated=0
+[FrontierClient] snapshot tick=1346 players=2 remoteEntities=1
+[FrontierRemotePlayer] actor-pos playerId=65000 actor=0x0000010B target=(7.680,0.000,0.000) actual=(0.000,0.000,0.000) error=7.680 extrapolated=0
+[FrontierClient] snapshot tick=1348 players=2 remoteEntities=1
 [FrontierLauncher] RDR.exe exitCode=0x0
