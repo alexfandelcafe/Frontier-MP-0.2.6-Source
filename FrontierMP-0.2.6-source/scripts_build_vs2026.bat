@@ -9,7 +9,24 @@ if errorlevel 1 (
 )
 echo Using CMake:
 cmake --version
-cmake --preset windows-vs2026-x64
+echo.
+if defined FRONTIER_CEF_PACKAGE_DIR (
+    echo CEF SDK: %FRONTIER_CEF_PACKAGE_DIR%
+    if not exist "%FRONTIER_CEF_PACKAGE_DIR%\include\cef_api_hash.h" (
+        echo ERROR: FRONTIER_CEF_PACKAGE_DIR does not contain a CEF SDK.
+        echo Expected: include\cef_api_hash.h
+        exit /b 4
+    )
+    if not exist "%FRONTIER_CEF_PACKAGE_DIR%\libcef_dll\CMakeLists.txt" (
+        echo ERROR: FRONTIER_CEF_PACKAGE_DIR is missing libcef_dll\CMakeLists.txt.
+        exit /b 4
+    )
+    cmake --preset windows-vs2026-x64 -DFRONTIER_CEF_PACKAGE_DIR="%FRONTIER_CEF_PACKAGE_DIR%"
+) else (
+    echo CEF SDK: disabled
+    echo Set FRONTIER_CEF_PACKAGE_DIR to a full CEF Windows distribution to build the CEF overlay.
+    cmake --preset windows-vs2026-x64 -DFRONTIER_CEF_PACKAGE_DIR=""
+)
 if errorlevel 1 exit /b %errorlevel%
 cmake --build --preset windows-vs2026-x64-release
 if errorlevel 1 exit /b %errorlevel%
@@ -28,6 +45,20 @@ if exist "build\vs2026-x64\bin\Release\FrontierClient.dll" (
     echo   ERROR: FrontierClient.dll was not generated.
     echo   Search the build output above for frontier_client build errors.
     exit /b 3
+)
+if defined FRONTIER_CEF_PACKAGE_DIR (
+    if exist "build\vs2026-x64\bin\Release\FrontierCefSubprocess.exe" (
+        echo   OK: FrontierCefSubprocess.exe
+    ) else (
+        echo   ERROR: FrontierCefSubprocess.exe was not generated.
+        exit /b 5
+    )
+    if exist "build\vs2026-x64\bin\Release\libcef.dll" (
+        echo   OK: libcef.dll
+    ) else (
+        echo   ERROR: libcef.dll was not staged beside FrontierClient.dll.
+        exit /b 6
+    )
 )
 if exist "build\vs2026-x64\bin\Release\frontier_server.exe" (
     echo   OK: frontier_server.exe
