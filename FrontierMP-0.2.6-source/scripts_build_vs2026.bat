@@ -75,7 +75,7 @@ if not "%BUILD_RC%"=="0" (
 )
 
 echo.
-echo Checking generated FrontierMP binaries...
+echo Checking generated FrontierMP binaries...\necho.\necho ===== Generated executables =====\nfor /r "build\\vs2026-x64" %%F in (*.exe) do echo   %%F\necho ===== Generated DLLs =====\nfor /r "build\\vs2026-x64" %%F in (*.dll) do echo   %%F\necho ===== End generated binaries =====\necho Checking generated FrontierMP binaries...
 if exist "build\vs2026-x64\bin\Release\FrontierMP.exe" (
     echo   OK: FrontierMP.exe
 ) else (
