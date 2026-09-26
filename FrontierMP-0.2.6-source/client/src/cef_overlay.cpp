@@ -1422,6 +1422,8 @@ bool upload_and_draw(
     return true;
 }
 
+namespace {
+
 void window_to_cef_modifiers(WPARAM wParam, UINT message, uint32_t& modifiers) {
     modifiers = EVENTFLAG_NONE;
 
