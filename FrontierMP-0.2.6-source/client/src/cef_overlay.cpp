@@ -1,4 +1,5 @@
 #include "frontier/client/cef_overlay.hpp"
+#include "frontier/game/rdr_bridge.hpp"
 
 #include <windows.h>
 
@@ -6,6 +7,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -210,117 +212,198 @@ void position_browser_window(
 
 } // namespace
 
+struct CefOverlay::State final {
+    std::filesystem::path moduleDir;
+    std::filesystem::path cefDir;
+    std::filesystem::path subprocess;
+    std::filesystem::path ui;
+    HWND gameWindow{};
+    CefRefPtr<FrontierCefApp> app{};
+    CefRefPtr<FrontierCefClient> client{};
+    CefRefPtr<CefBrowser> browser{};
+    bool initialized{};
+};
+
 CefOverlay::~CefOverlay() {
     stop();
 }
 
-bool CefOverlay::start() {
+bool CefOverlay::start(frontier::game::RdrBridge& bridge) {
     if (thread_.joinable()) return true;
 
+    bridge_ = &bridge;
     stopRequested_.store(false, std::memory_order_release);
     try {
         thread_ = std::thread([this] { thread_main(); });
     } catch (...) {
-        log_line("[FrontierCEF] failed to create host thread");
+        bridge_ = nullptr;
+        log_line("[FrontierCEF] failed to create coordinator thread");
         return false;
     }
 
-    log_line("[FrontierCEF] host thread started");
+    log_line("[FrontierCEF] coordinator thread started; waiting for game-thread dispatcher");
     return true;
 }
 
 void CefOverlay::stop() {
     stopRequested_.store(true, std::memory_order_release);
+
+    if (state_ != nullptr &&
+        state_->initialized &&
+        bridge_ != nullptr &&
+        bridge_->game_thread_dispatcher_attached()) {
+        std::string error;
+        if (!bridge_->submit_game_thread_and_wait(
+                [this] { shutdown_on_game_thread(); },
+                5000u,
+                error) &&
+            !error.empty()) {
+            log_line("[FrontierCEF] game-thread shutdown request failed: " + error);
+        }
+    }
+
     if (thread_.joinable()) {
         thread_.join();
     }
+
+    bridge_ = nullptr;
 }
 
 void CefOverlay::thread_main() {
-    const std::filesystem::path moduleDir = module_directory();
-    if (moduleDir.empty()) {
+    while (!stopRequested_.load(std::memory_order_acquire)) {
+        if (bridge_ != nullptr &&
+            bridge_->game_thread_dispatcher_attached()) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    if (stopRequested_.load(std::memory_order_acquire)) return;
+    if (bridge_ == nullptr) {
+        log_line("[FrontierCEF] coordinator lost RDR bridge");
+        return;
+    }
+
+    std::string error;
+    const bool submitted =
+        bridge_->submit_game_thread_and_wait(
+            [this] {
+                const bool initialized = initialize_on_game_thread();
+                log_line(
+                    std::string("[FrontierCEF] game-thread initialization result=") +
+                    (initialized ? "success" : "failure"));
+            },
+            15000u,
+            error);
+
+    if (!submitted) {
+        log_line(
+            "[FrontierCEF] game-thread initialization request failed: " +
+            (error.empty() ? "unknown error" : error));
+        return;
+    }
+
+    while (!stopRequested_.load(std::memory_order_acquire)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+}
+
+bool CefOverlay::initialize_on_game_thread() {
+    if (state_ == nullptr) {
+        state_ = std::make_unique<State>();
+    }
+
+    State& state = *state_;
+    if (state.initialized) return true;
+
+    state.moduleDir = module_directory();
+    if (state.moduleDir.empty()) {
         log_line("[FrontierCEF] module directory unavailable");
-        return;
+        return false;
     }
 
-    const std::filesystem::path cefDir = moduleDir / "cef";
-    const std::filesystem::path subprocess =
-        moduleDir / "FrontierCefSubprocess.exe";
-    const std::filesystem::path ui =
-        cefDir / "cef_ui" / "mainmenu" / "index.html";
+    state.cefDir = state.moduleDir / "cef";
+    state.subprocess = state.moduleDir / "FrontierCefSubprocess.exe";
+    state.ui = state.cefDir / "cef_ui" / "mainmenu" / "index.html";
 
-    if (!std::filesystem::exists(subprocess)) {
-        log_line("[FrontierCEF] subprocess executable missing: " + subprocess.string());
-        return;
+    if (!std::filesystem::exists(state.subprocess)) {
+        log_line("[FrontierCEF] subprocess executable missing: " + state.subprocess.string());
+        return false;
     }
 
-    if (!std::filesystem::exists(ui)) {
-        log_line("[FrontierCEF] main menu HTML missing: " + ui.string());
-        return;
+    if (!std::filesystem::exists(state.ui)) {
+        log_line("[FrontierCEF] main menu HTML missing: " + state.ui.string());
+        return false;
     }
+
+    log_line(
+        "[FrontierCEF] CefInitialize thread=" +
+        std::to_string(static_cast<unsigned long>(GetCurrentThreadId())));
 
     CefMainArgs mainArgs(GetModuleHandleA(nullptr));
-    CefRefPtr<FrontierCefApp> app = new FrontierCefApp();
+    state.app = new FrontierCefApp();
 
-    const int executeResult = CefExecuteProcess(mainArgs, app, nullptr);
+    const int executeResult =
+        CefExecuteProcess(mainArgs, state.app, nullptr);
     if (executeResult >= 0) {
         std::ostringstream message;
         message << "[FrontierCEF] subprocess path returned executeResult="
                 << executeResult;
         log_line(message.str());
-        return;
+        state.app = nullptr;
+        return false;
     }
 
     CefSettings settings{};
     settings.no_sandbox = true;
-    settings.external_message_pump = true;
+    settings.external_message_pump = false;
     settings.multi_threaded_message_loop = false;
     settings.windowless_rendering_enabled = false;
     settings.log_severity = LOGSEVERITY_WARNING;
 
-    CefString(&settings.browser_subprocess_path) = subprocess.string();
-    CefString(&settings.resources_dir_path) = (cefDir / "Resources").string();
-    CefString(&settings.locales_dir_path) = (cefDir / "locales").string();
+    CefString(&settings.browser_subprocess_path) =
+        state.subprocess.string();
+    CefString(&settings.resources_dir_path) =
+        (state.cefDir / "Resources").string();
+    CefString(&settings.locales_dir_path) =
+        (state.cefDir / "locales").string();
 
     char localAppData[MAX_PATH]{};
     const DWORD envLength =
         GetEnvironmentVariableA("LOCALAPPDATA", localAppData, MAX_PATH);
     if (envLength != 0 && envLength < MAX_PATH) {
         const std::filesystem::path cacheDir =
-            std::filesystem::path(localAppData) / "FrontierMP" / "cef-cache";
+            std::filesystem::path(localAppData) /
+            "FrontierMP" /
+            "cef-cache";
         std::error_code ec;
         std::filesystem::create_directories(cacheDir, ec);
         CefString(&settings.cache_path) = cacheDir.string();
 
         const std::filesystem::path logPath =
-            std::filesystem::path(localAppData) / "FrontierMP" / "logs" / "cef.log";
+            std::filesystem::path(localAppData) /
+            "FrontierMP" /
+            "logs" /
+            "cef.log";
         CefString(&settings.log_file) = logPath.string();
     }
 
-    log_line("[FrontierCEF] initializing");
-    if (!CefInitialize(mainArgs, settings, app, nullptr)) {
+    log_line("[FrontierCEF] initializing on RDR game thread");
+    if (!CefInitialize(mainArgs, settings, state.app, nullptr)) {
         log_line("[FrontierCEF] CefInitialize failed");
-        return;
+        state.app = nullptr;
+        return false;
     }
 
-    HWND gameWindow = nullptr;
-    for (int attempt = 0;
-         attempt < 100 && gameWindow == nullptr &&
-         !stopRequested_.load(std::memory_order_acquire);
-         ++attempt) {
-        gameWindow = find_rdr_window();
-        if (gameWindow == nullptr) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-    }
-
-    if (gameWindow == nullptr) {
+    state.gameWindow = find_rdr_window();
+    if (state.gameWindow == nullptr) {
         log_line("[FrontierCEF] RDR window not found");
         CefShutdown();
-        return;
+        state.app = nullptr;
+        return false;
     }
 
-    const RECT rect = overlay_rect(gameWindow);
+    const RECT rect = overlay_rect(state.gameWindow);
     const CefRect cefRect(
         rect.left,
         rect.top,
@@ -328,50 +411,91 @@ void CefOverlay::thread_main() {
         rect.bottom - rect.top);
 
     CefWindowInfo windowInfo;
-    windowInfo.SetAsChild(gameWindow, cefRect);
+    windowInfo.SetAsChild(state.gameWindow, cefRect);
 
     CefBrowserSettings browserSettings;
-    CefRefPtr<FrontierCefClient> client = new FrontierCefClient();
-    const std::string url = file_url(ui);
+    state.client = new FrontierCefClient();
+    const std::string url = file_url(state.ui);
 
     log_line("[FrontierCEF] creating browser url=" + url);
-    CefRefPtr<CefBrowser> browser =
+    state.browser =
         CefBrowserHost::CreateBrowserSync(
             windowInfo,
-            client,
+            state.client,
             url,
             browserSettings,
             nullptr,
             nullptr);
 
-    if (browser == nullptr) {
+    if (state.browser == nullptr) {
         log_line("[FrontierCEF] CreateBrowserSync failed");
+        state.client = nullptr;
+        state.app = nullptr;
         CefShutdown();
+        return false;
+    }
+
+    const HWND browserWindow =
+        state.browser->GetHost()->GetWindowHandle();
+    if (browserWindow != nullptr) {
+        ShowWindow(browserWindow, SW_SHOW);
+    }
+
+    state.initialized = true;
+    pump_on_game_thread();
+    return true;
+}
+
+void CefOverlay::pump_on_game_thread() {
+    if (state_ == nullptr ||
+        !state_->initialized ||
+        stopRequested_.load(std::memory_order_acquire)) {
         return;
     }
 
-    ShowWindow(browser->GetHost()->GetWindowHandle(), SW_SHOW);
+    State& state = *state_;
+    if (state.gameWindow == nullptr ||
+        !IsWindow(state.gameWindow)) {
+        log_line("[FrontierCEF] RDR window was destroyed");
+        shutdown_on_game_thread();
+        return;
+    }
 
-    while (!stopRequested_.load(std::memory_order_acquire)) {
-        if (!IsWindow(gameWindow)) {
-            log_line("[FrontierCEF] RDR window was destroyed");
-            break;
+    CefDoMessageLoopWork();
+
+    if (state.browser != nullptr) {
+        position_browser_window(state.gameWindow, state.browser);
+    }
+
+    if (bridge_ != nullptr &&
+        bridge_->game_thread_dispatcher_attached() &&
+        !stopRequested_.load(std::memory_order_acquire)) {
+        std::string error;
+        if (!bridge_->submit_game_thread(
+                [this] { pump_on_game_thread(); },
+                error) &&
+            !error.empty()) {
+            log_line("[FrontierCEF] game-thread pump reschedule failed: " + error);
         }
+    }
+}
 
-        CefDoMessageLoopWork();
-        position_browser_window(gameWindow, browser);
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+void CefOverlay::shutdown_on_game_thread() {
+    if (state_ == nullptr || !state_->initialized) return;
+
+    State& state = *state_;
+    if (state.browser != nullptr) {
+        state.browser->GetHost()->CloseBrowser(true);
+        state.browser = nullptr;
     }
 
-    if (browser != nullptr) {
-        browser->GetHost()->CloseBrowser(true);
-        browser = nullptr;
-    }
+    state.client = nullptr;
+    state.app = nullptr;
+    state.gameWindow = nullptr;
 
-    client = nullptr;
-    app = nullptr;
     CefShutdown();
-    log_line("[FrontierCEF] shut down");
+    state.initialized = false;
+    log_line("[FrontierCEF] shut down on RDR game thread");
 }
 
 } // namespace frontier::client
