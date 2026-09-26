@@ -297,6 +297,7 @@ struct PresentHookState final {
 };
 
 PresentHookState g_presentHook{};
+std::atomic<CefOverlay*> g_activeOverlay{nullptr};
 std::atomic<WNDPROC> g_originalWindowProc{nullptr};
 
 bool replace_pointer(void** slot, void* replacement, void*& original, std::string& error) {
@@ -747,6 +748,7 @@ bool CefOverlay::start(frontier::game::RdrBridge& bridge) {
 
     bridge_ = &bridge;
     stopRequested_.store(false, std::memory_order_release);
+    g_activeOverlay.store(this, std::memory_order_release);
 
     // Install the IAT hook before FrontierClient signals the suspended
     // launcher. This catches RDR's D3D11 swapchain creation without requiring
@@ -758,6 +760,7 @@ bool CefOverlay::start(frontier::game::RdrBridge& bridge) {
     try {
         thread_ = std::thread([this] { thread_main(); });
     } catch (...) {
+        g_activeOverlay.store(nullptr, std::memory_order_release);
         unhook_render_path();
         bridge_ = nullptr;
         log_line("[FrontierCEF] failed to create coordinator thread");
@@ -787,6 +790,7 @@ void CefOverlay::stop() {
         thread_.join();
     }
 
+    g_activeOverlay.store(nullptr, std::memory_order_release);
     unhook_render_path();
     bridge_ = nullptr;
 }
@@ -973,9 +977,8 @@ bool CefOverlay::initialize_on_game_thread() {
     }
 
     log_line("[FrontierCEF] browser created without a native window");
-    attach_window_input_on_game_thread();
-
     state.initialized = true;
+    attach_window_input_on_game_thread();
     pump_on_game_thread();
     return true;
 }
@@ -1436,7 +1439,7 @@ LRESULT CALLBACK frontier_window_proc(
     WPARAM wParam,
     LPARAM lParam) {
     CefOverlay* overlay =
-        g_presentHook.overlay.load(std::memory_order_acquire);
+        g_activeOverlay.load(std::memory_order_acquire);
 
     if (overlay != nullptr) {
         std::intptr_t result = 0;
