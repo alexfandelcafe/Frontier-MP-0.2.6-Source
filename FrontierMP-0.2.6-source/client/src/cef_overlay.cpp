@@ -355,7 +355,7 @@ public:
 
         const auto values = message->GetArgumentList();
         if (values == nullptr || values->GetSize() == 0 ||
-            !values->GetType(0) == VTYPE_STRING) {
+            values->GetType(0) != VTYPE_STRING) {
             return false;
         }
 
@@ -1250,11 +1250,64 @@ CefOverlay::~CefOverlay() {
     stop();
 }
 
+void CefOverlay::set_frontend_command_handler(
+    FrontendCommandHandler handler) {
+    std::lock_guard lock(frontendCommandMutex_);
+    frontendCommandHandler_ = std::move(handler);
+}
+
+bool CefOverlay::handle_frontend_command(
+    const std::string& command,
+    const std::vector<std::string>& arguments) {
+    if (command == "connect") {
+        frontendConnectRequested_.store(true, std::memory_order_release);
+
+        FrontendCommandHandler handler;
+        {
+            std::lock_guard lock(frontendCommandMutex_);
+            handler = frontendCommandHandler_;
+        }
+
+        if (handler) {
+            handler(command, arguments);
+        }
+
+        log_line("[FrontierCEF] frontend connect command received");
+        return true;
+    }
+
+    if (command == "quit") {
+        if (bridge_ == nullptr) {
+            return false;
+        }
+
+        const bool queued = bridge_->submit_game_thread(
+            [this] {
+                if (state_ != nullptr &&
+                    state_->gameWindow != nullptr &&
+                    IsWindow(state_->gameWindow)) {
+                    PostMessageA(state_->gameWindow, WM_CLOSE, 0, 0);
+                }
+            },
+            *new std::string());
+
+        if (!queued) {
+            log_line("[FrontierCEF] frontend quit command queue failed");
+        } else {
+            log_line("[FrontierCEF] frontend quit command queued");
+        }
+        return queued;
+    }
+
+    return false;
+}
+
 bool CefOverlay::start(frontier::game::RdrBridge& bridge) {
     if (thread_.joinable()) return true;
 
     bridge_ = &bridge;
     stopRequested_.store(false, std::memory_order_release);
+    frontendConnectRequested_.store(false, std::memory_order_release);
     g_activeOverlay.store(this, std::memory_order_release);
 
     // Install the IAT hook before FrontierClient signals the suspended
@@ -1280,6 +1333,7 @@ bool CefOverlay::start(frontier::game::RdrBridge& bridge) {
 
 void CefOverlay::stop() {
     stopRequested_.store(true, std::memory_order_release);
+    frontendConnectRequested_.store(false, std::memory_order_release);
 
     if (bridge_ != nullptr &&
         bridge_->game_thread_dispatcher_attached()) {
@@ -1534,6 +1588,24 @@ void CefOverlay::pump_on_game_thread() {
     }
 
     CefDoMessageLoopWork();
+
+    if (frontendConnectRequested_.load(std::memory_order_acquire) &&
+        bridge_ != nullptr &&
+        bridge_->game_thread_dispatcher_attached()) {
+        std::string bootstrapLog;
+        const bool bootstrapComplete =
+            bridge_->advance_historical_online_bootstrap(bootstrapLog);
+
+        if (!bootstrapLog.empty()) {
+            log_line(bootstrapLog);
+        }
+
+        if (bootstrapComplete ||
+            bridge_->historical_online_bootstrap_complete()) {
+            frontendConnectRequested_.store(false, std::memory_order_release);
+            log_line("[FrontierCEF] frontend multiplayer transition complete");
+        }
+    }
 
     if (bridge_ != nullptr &&
         bridge_->game_thread_dispatcher_attached() &&
