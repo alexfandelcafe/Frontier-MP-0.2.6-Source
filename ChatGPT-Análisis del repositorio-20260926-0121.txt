@@ -843,6 +843,345 @@ Diferencias mas importantes entre frontier y RDRMP? Como hace RDRMP para iniciar
 
 yo lo que estoy intentando hacer es que para cargar el mundo no sea necesario entrar a la parte de cargar partida, estoy intentado que abra el mundo vacio sin misiones ni nada con un personaje de skin default
 
+Sí. Con lo que aparece ahora en los dos repositorios, el enfoque correcto para Frontier es bastante más claro: no necesitas pasar por “Cargar partida”. Lo que necesitas reproducir es el arranque de multiplayer de RDRMP, y después dejar que el motor cree el player actor sin cargar una partida de historia.
 
+Diferencia fundamental
+
+La diferencia más importante no está en networking. Está en quién conduce el arranque del juego.
+
+Etapa	RDRMP	Frontier actual
+Frontend	CEF + UI propia	Sin equivalente CEF
+Entrada al mundo	Ruta de LoadOnline / InitSpawn	FSM propia + natives
+Creación del player	Sistema nativo de player/slot/actor	Principalmente lectura de memoria + intentos manuales
+Scripts	Fibras/threads/scripts del cliente	Invocaciones directas
+Señal de player listo	GET_PLAYER_ACTOR(-1) / sm_LocalPlayer	Chain propia sm_LocalPlayer -> GUID -> actor manager
+Espera de mundo	Después de obtener actor	Frontier estaba usando worldLoaded demasiado pronto
+Historia/save	No es necesario para el flujo MP	Actualmente el flujo sigue dependiendo parcialmente del estado frontend
+
+Hay una diferencia especialmente importante: en RDRMP existen explícitamente las operaciones de lifecycle:
+
+init_native_actorenum_player
+create_player_actor_in_layout
+respawn_player_actor_in_layout
+switch_player_to_enum
+
+get_player_actor
+is_local_player
+is_local_player_valid
+
+get_local_slot
+get_slot_actor
+get_actor_slot
+is_slot_valid
+
+Eso aparece en client-luascripting.dll. Frontier ya tiene prácticamente todos esos hashes identificados, pero todavía no está reproduciendo la cadena que los usa para crear/activar al jugador local.
+
+Cómo arranca realmente RDRMP
+
+La evidencia del client-main.dll apunta a este esquema:
+
+RDR.exe
+   │
+   ├─ carga el runtime del cliente
+   │
+   ├─ inicializa CEF
+   │      └─ cef/cef_ui/mainmenu/index.html
+   │
+   ├─ frontend RDRMP
+   │      └─ Main Menu / OnConnect
+   │
+   └─ LoadOnline
+          │
+          ├─ fileSetForMPLoad
+          ├─ fileStartupChecksComplete
+          ├─ UI_Unstreammovie / startscreen
+          ├─ Online
+          ├─ player_name
+          │
+          └─ arranque de scripts online
+                    │
+                    ▼
+                 InitSpawn
+                    │
+                    ├─ LoadAllResources()
+                    ├─ esperar DoesAllResourcesAreLoaded()
+                    ├─ ClientWelcome(...)
+                    │
+                    ├─ esperar GET_PLAYER_ACTOR(-1)
+                    │
+                    ├─ esperar STREAMING_IS_WORLD_LOADED
+                    │
+                    └─ continuar multiplayer
+
+Esto es importante porque confirma algo que estabas viendo empíricamente con CEF:
+
+El CEF no es el mundo
+
+El CEF es principalmente el frontend del cliente.
+
+En los strings de client-main.dll aparecen:
+
+cef/cef_ui/mainmenu/index.html
+mainmenu
+OnConnect
+Main Menu
+
+y también:
+
+StartScreen1
+fileSetForMPLoad
+fileStartupChecksComplete
+UI_Unstreammovie
+startscreen
+Online
+player_name
+
+Por eso visualmente parece que RDRMP “reemplaza” el title screen. La distinción técnica sería:
+
+Title screen nativo de RDR
+        ↓
+RDRMP toma control del frontend
+        ↓
+CEF mainmenu
+        ↓
+selección/conexión
+        ↓
+se abandona StartScreen1
+        ↓
+bootstrap multiplayer
+
+No necesitas mantener el CEF para que el mundo exista. El CEF es una interfaz de entrada.
+
+Lo que estás intentando hacer es viable
+
+Tu objetivo real es:
+
+arrancar cliente
+      ↓
+entrar directamente al runtime multiplayer
+      ↓
+cargar mundo
+      ↓
+crear un actor local
+      ↓
+usar skin/default player
+      ↓
+SIN savegame
+      ↓
+SIN misión
+      ↓
+SIN campaign bootstrap
+
+Eso es conceptualmente mucho más parecido al flujo histórico de RDRMP que a cargar una partida.
+
+Y hay una pista muy fuerte en InitSpawn:
+
+GET_PLAYER_ACTOR(-1)
+        ↓
+STREAMING_IS_WORLD_LOADED
+
+Es decir:
+
+RDRMP no considera que el arranque multiplayer haya terminado simplemente porque el mundo está cargado. Primero necesita que exista el player actor.
+
+Eso encaja exactamente con tu problema actual:
+
+Frontier:
+worldLoaded = 1
+stableWorldLoaded = 1
+GET_PLAYER_ACTOR(-1) = 0
+
+El mundo está ahí, pero el jugador todavía no existe desde la perspectiva del sistema de multiplayer.
+
+Hay además un problema concreto en Frontier
+
+Encontré una diferencia muy importante en el rdr_bridge.cpp actual.
+
+advance_historical_online_bootstrap() tiene una etapa:
+
+HistoricalOnlineBootstrapTask::SendStartScreenExit
+
+pero en el switch (task) que ejecuta las tareas del game thread no hay un case para SendStartScreenExit.
+
+El switch tiene:
+
+SendEnterOnlineForInvite
+FadeToLoadingScreen
+QueryFade
+FinishLoadOnline
+QueryPlayerActor
+None
+
+pero no:
+
+SendStartScreenExit
+
+Además, ok empieza como:
+
+bool ok = true;
+
+Por lo tanto esa tarea puede marcarse como exitosa sin hacer realmente nada.
+
+Eso significa que Frontier puede registrar:
+
+startScreenExit queued
+
+y avanzar de estado sin haber ejecutado una operación equivalente a la salida real del frontend.
+
+Esto es especialmente relevante porque después el propio código hace:
+
+UI_EXIT("StartScreen1")
+
+dentro de FinishLoadOnline.
+
+Hay otro problema de arquitectura
+
+Actualmente ClientRuntime::update() sólo llama al bootstrap histórico mientras:
+
+session_.runtime_state().state ==
+    FrontierSessionState::Frontend
+
+Pero tu bootstrap precisamente puede provocar que el estado avance fuera de Frontend.
+
+En otras palabras:
+
+Frontend
+  ↓
+bootstrap
+  ↓
+WaitingForLocalPlayer
+  ↓
+FrontierSession deja Frontend
+  ↓
+ClientRuntime deja de llamar bootstrap
+
+Entonces la máquina de estados del bootstrap y la máquina de estados de FrontierSession están compitiendo entre sí.
+
+Para este objetivo yo las separaría:
+
+ClientRuntime
+     │
+     └── HistoricalOnlineBootstrap
+              │
+              ├─ frontend transition
+              ├─ online transition
+              ├─ actor creation
+              └─ player ready
+
+y no:
+
+SessionState == Frontend
+        └── decide si el bootstrap puede continuar
+Lo que falta encontrar
+
+La pieza crítica sigue siendo ésta:
+
+¿Qué hace que aparezca sm_LocalPlayer?
+
+Tenemos ya las piezas alrededor:
+
+RDRMP
+ │
+ ├─ LoadOnline
+ │
+ ├─ InitSpawn
+ │
+ ├─ GET_PLAYER_ACTOR
+ │
+ ├─ player/slot natives
+ │
+ └─ actor creation natives
+
+Pero todavía no hemos identificado con certeza la transición:
+
+sm_LocalPlayer == 0
+        ↓
+???
+        ↓
+create/activate player
+        ↓
+slot assignment
+        ↓
+sm_LocalPlayer != 0
+        ↓
+GET_PLAYER_ACTOR(-1) != 0
+
+Y ése es el punto que realmente necesitamos.
+
+Para tu "mundo vacío", yo lo plantearía así
+
+No intentaría crear un CREATE_PLAYER_ACTOR_IN_LAYOUT manual desde cero todavía.
+
+Primero intentaría conseguir esta secuencia nativa:
+
+Exit StartScreen1
+        ↓
+EnterOnlineForInvite
+        ↓
+LoadOnline
+        ↓
+resources
+        ↓
+actor enum player inicializado
+        ↓
+player actor creado
+        ↓
+player asociado a local slot
+        ↓
+sm_LocalPlayer establecido
+        ↓
+GET_PLAYER_ACTOR(-1) válido
+        ↓
+STREAMING_IS_WORLD_LOADED
+        ↓
+mundo jugable
+
+Y después podemos eliminar todo lo que sea mission/story.
+
+El hecho de que client-luascripting.dll tenga:
+
+init_native_actorenum_player
+create_player_actor_in_layout
+switch_player_to_enum
+respawn_player_actor_in_layout
+
+es muy indicativo de que el cliente histórico ya tenía una ruta explícita para producir exactamente el tipo de jugador que buscas.
+
+La diferencia conceptual más importante
+
+No estás intentando:
+
+"Cargar RDR sin una partida"
+
+Realmente estás intentando:
+
+"Cargar el runtime de RDR en modo multiplayer
+sin pasar por el estado de una partida de historia."
+
+Y RDRMP ya demuestra que esa arquitectura existe.
+
+La ruta que yo investigaría ahora es:
+
+client-main
+   ↓
+LoadOnline / InitSpawn
+   ↓
+client-luascripting
+   ↓
+init_native_actorenum_player
+   ↓
+create_player_actor_in_layout
+   ↓
+get_local_slot / get_slot_actor
+   ↓
+switch_player_to_enum
+   ↓
+game-core::sagPlayer::sm_LocalPlayer
+
+Ese último tramo es el que puede convertir Frontier de un cliente que simula actores remotos en un cliente que realmente entra al mundo como jugador local.
+
+Además, el game-core histórico nos da una ventaja: rage::sagPlayer::sm_LocalPlayer tiene una firma de resolución directa, así que podemos observar el momento exacto en que el motor asigna el player local, independientemente de lo que diga nuestro PlayerState.
+
+El siguiente análisis útil sería reconstruir quién llama en RDRMP a create_player_actor_in_layout / respawn_player_actor_in_layout / switch_player_to_enum y qué argumentos usa, porque ahí probablemente está la receta exacta para el personaje default que estás buscando.
 
 Powered by ChatGPT Exporter (https://www.chatgptexporter.com)
