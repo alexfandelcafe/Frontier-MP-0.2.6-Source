@@ -10,6 +10,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <mutex>
 #include <string>
 
@@ -45,6 +46,8 @@ public:
     bool local_player_pointer_available() const;
     bool try_initialize_native_invoker();
     bool try_initialize_game_thread_dispatcher();
+    bool submit_game_thread(std::function<void()> task, std::string& error);
+    bool submit_game_thread_and_wait(std::function<void()> task, std::uint32_t timeoutMs, std::string& error);
     bool game_thread_dispatcher_attached() const { return gameThreadDispatcher_.attached(); }
     const std::string& game_thread_dispatcher_error() const { return gameThreadDispatcherError_; }
     bool startup_native_tracer_attached() const { return startupNativeTracer_.attached(); }
