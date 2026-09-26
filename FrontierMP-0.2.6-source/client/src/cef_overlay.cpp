@@ -297,6 +297,7 @@ struct PresentHookState final {
 };
 
 PresentHookState g_presentHook{};
+std::atomic<WNDPROC> g_originalWindowProc{nullptr};
 
 bool replace_pointer(void** slot, void* replacement, void*& original, std::string& error) {
     if (slot == nullptr || replacement == nullptr) {
@@ -606,16 +607,19 @@ HRESULT STDMETHODCALLTYPE frontier_present(
     PresentHookState::PresentProc original = nullptr;
     CefOverlay* overlay = nullptr;
 
+    bool shouldRender = false;
     {
         std::lock_guard lock(g_presentHook.mutex);
         original = g_presentHook.presentOriginal;
         overlay = g_presentHook.overlay.load(std::memory_order_acquire);
-
-        if (overlay != nullptr &&
+        shouldRender =
+            overlay != nullptr &&
             original != nullptr &&
-            swapChain == g_presentHook.hookedSwapChain) {
-            overlay->on_present(swapChain);
-        }
+            swapChain == g_presentHook.hookedSwapChain;
+    }
+
+    if (shouldRender && overlay != nullptr) {
+        overlay->on_present(swapChain);
     }
 
     return original != nullptr
@@ -1435,11 +1439,11 @@ LRESULT CALLBACK frontier_window_proc(
 
     // The original procedure is looked up through the overlay state. This
     // path executes only for messages that CEF did not consume.
-    if (overlay != nullptr &&
-        overlay->state_ != nullptr &&
-        overlay->state_->originalWindowProc != nullptr) {
+    const WNDPROC originalProc =
+        g_originalWindowProc.load(std::memory_order_acquire);
+    if (originalProc != nullptr) {
         return CallWindowProcA(
-            overlay->state_->originalWindowProc,
+            originalProc,
             hwnd,
             message,
             wParam,
@@ -1471,6 +1475,9 @@ void CefOverlay::attach_window_input_on_game_thread() {
 
     state_->originalWindowProc =
         reinterpret_cast<WNDPROC>(previous);
+    g_originalWindowProc.store(
+        state_->originalWindowProc,
+        std::memory_order_release);
     state_->windowSubclassed = true;
     log_line("[FrontierCEF] RDR window procedure hooked for CEF input");
 }
@@ -1487,6 +1494,7 @@ void CefOverlay::detach_window_input_on_game_thread() {
         GWLP_WNDPROC,
         reinterpret_cast<LONG_PTR>(state_->originalWindowProc));
 
+    g_originalWindowProc.store(nullptr, std::memory_order_release);
     state_->originalWindowProc = nullptr;
     state_->windowSubclassed = false;
     log_line("[FrontierCEF] RDR window procedure restored");
