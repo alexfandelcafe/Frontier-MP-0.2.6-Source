@@ -982,7 +982,12 @@ extern "C" __declspec(dllexport)
 void FrontierClient_Update() { g_runtime.update(); }
 
 extern "C" __declspec(dllexport)
-void FrontierClient_Shutdown() { g_runtime.shutdown(); }
+void FrontierClient_Shutdown() {
+#ifdef FRONTIER_ENABLE_CEF
+    g_cefOverlay.stop();
+#endif
+    g_runtime.shutdown();
+}
 
 BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID reserved) {
     (void)reserved;
