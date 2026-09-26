@@ -118,8 +118,96 @@ std::string file_url(const std::filesystem::path& path) {
     return "file:///" + encoded;
 }
 
-class FrontierCefApp final : public CefApp {
+class FrontierAppV8Handler final : public CefV8Handler {
 public:
+    explicit FrontierAppV8Handler(std::string command)
+        : command_(std::move(command)) {}
+
+    bool Execute(
+        const CefString&,
+        CefRefPtr<CefV8Value>,
+        const CefV8ValueList& arguments,
+        CefRefPtr<CefV8Value>& retval,
+        CefString& exception) override {
+        retval = CefV8Value::CreateBool(false);
+
+        if (arguments.size() > 8) {
+            exception = "too many app command arguments";
+            return true;
+        }
+
+        auto message = CefProcessMessage::Create("frontier.app_command");
+        auto values = message->GetArgumentList();
+        values->SetString(0, command_);
+
+        for (std::size_t i = 0; i < arguments.size(); ++i) {
+            const auto& value = arguments[i];
+            if (value == nullptr) continue;
+
+            const std::size_t index = i + 1;
+            if (value->IsString()) {
+                values->SetString(index, value->GetStringValue());
+            } else if (value->IsInt()) {
+                values->SetInt(index, value->GetIntValue());
+            } else if (value->IsBool()) {
+                values->SetBool(index, value->GetBoolValue());
+            } else {
+                exception = "unsupported app command argument type";
+                return true;
+            }
+        }
+
+        if (auto context = CefV8Context::GetCurrentContext()) {
+            auto frame = context->GetFrame();
+            if (frame != nullptr &&
+                frame->SendProcessMessage(PID_BROWSER, message)) {
+                retval = CefV8Value::CreateBool(true);
+            }
+        }
+
+        return true;
+    }
+
+private:
+    std::string command_;
+
+    IMPLEMENT_REFCOUNTING(FrontierAppV8Handler);
+};
+
+class FrontierCefApp final : public CefApp, public CefRenderProcessHandler {
+public:
+    CefRefPtr<CefRenderProcessHandler> GetRenderProcessHandler() override {
+        return this;
+    }
+
+    void OnContextCreated(
+        CefRefPtr<CefBrowser> browser,
+        CefRefPtr<CefFrame> frame,
+        CefRefPtr<CefV8Context> context) override {
+        if (browser == nullptr || frame == nullptr || context == nullptr) return;
+
+        auto app = CefV8Value::CreateObject(nullptr, nullptr);
+        app->SetValue(
+            "connect",
+            CefV8Value::CreateFunction(
+                "connect",
+                new FrontierAppV8Handler("connect")),
+            V8_PROPERTY_ATTRIBUTE_NONE);
+        app->SetValue(
+            "quit",
+            CefV8Value::CreateFunction(
+                "quit",
+                new FrontierAppV8Handler("quit")),
+            V8_PROPERTY_ATTRIBUTE_NONE);
+
+        context->GetGlobal()->SetValue(
+            "app",
+            app,
+            V8_PROPERTY_ATTRIBUTE_NONE);
+
+        log_line("[FrontierCEF] frontend app bridge installed");
+    }
+
     void OnBeforeCommandLineProcessing(
         const CefString& processType,
         CefRefPtr<CefCommandLine> commandLine) override {
@@ -250,6 +338,48 @@ public:
                 << " text=" << errorText.ToString()
                 << " url=" << failedUrl.ToString();
         log_line(message.str());
+    }
+
+    bool OnProcessMessageReceived(
+        CefRefPtr<CefBrowser> browser,
+        CefRefPtr<CefFrame> frame,
+        CefProcessId sourceProcess,
+        CefRefPtr<CefProcessMessage> message) override {
+        if (sourceProcess != PID_RENDERER ||
+            browser == nullptr ||
+            message == nullptr ||
+            message->GetName() != "frontier.app_command" ||
+            owner_ == nullptr) {
+            return false;
+        }
+
+        const auto values = message->GetArgumentList();
+        if (values == nullptr || values->GetSize() == 0 ||
+            !values->GetType(0) == VTYPE_STRING) {
+            return false;
+        }
+
+        std::vector<std::string> arguments;
+        for (std::size_t i = 1; i < values->GetSize(); ++i) {
+            switch (values->GetType(i)) {
+            case VTYPE_STRING:
+                arguments.push_back(values->GetString(i).ToString());
+                break;
+            case VTYPE_INT:
+                arguments.push_back(std::to_string(values->GetInt(i)));
+                break;
+            case VTYPE_BOOL:
+                arguments.push_back(values->GetBool(i) ? "true" : "false");
+                break;
+            default:
+                arguments.emplace_back();
+                break;
+            }
+        }
+
+        return owner_->handle_frontend_command(
+            values->GetString(0).ToString(),
+            arguments);
     }
 
     CefRefPtr<CefBrowser> browser() const {
