@@ -48,6 +48,7 @@ constexpr std::uint32_t kNativeNetAuthenticateGamer = 0x8E0D7219;
 constexpr std::uint32_t kNativeStreamingIsWorldLoaded = 0x87B74064;
 constexpr std::uint32_t kNativeIsSimulateStartMultiplayer = 0x9A73C2CD;
 constexpr std::uint32_t kNativeIsStartPosInCommandLine = 0x814D97E8;
+constexpr std::uint32_t kNativeNetSessionIsGameplayStarted = 0xDC88B308u;
 constexpr std::uint32_t kNativeFindNamedLayout = 0x5699DE7E;
 constexpr std::uint32_t kNativeCreateLayout = 0x6CA53214;
 constexpr std::uint32_t kNativeIsLayoutRefValid = 0xFC8E55ED;
@@ -1365,6 +1366,7 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
 bool RdrBridge::read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bool& worldLoadedKnown,
                                    bool& simulateStartMultiplayer, bool& simulateStartMultiplayerKnown,
                                    bool& startPosCommandLine, bool& startPosCommandLineKnown,
+                                   bool& multiplayerGameplayStarted, bool& multiplayerGameplayStartedKnown,
                                    std::string& error) const {
     gameState = -1;
     worldLoaded = false;
@@ -1373,6 +1375,8 @@ bool RdrBridge::read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bo
     simulateStartMultiplayerKnown = false;
     startPosCommandLine = false;
     startPosCommandLineKnown = false;
+    multiplayerGameplayStarted = false;
+    multiplayerGameplayStartedKnown = false;
     error.clear();
 
     if (!nativeInvoker_.ready()) {
@@ -1420,6 +1424,10 @@ bool RdrBridge::read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bo
                     refreshed.startPosCommandLineKnown = true;
                     refreshed.startPosCommandLine = value != 0;
                 }
+                if (nativeInvoker_.invoke_u32(kNativeNetSessionIsGameplayStarted, value)) {
+                    refreshed.multiplayerGameplayStartedKnown = true;
+                    refreshed.multiplayerGameplayStarted = value != 0;
+                }
 
                 std::lock_guard lock(runtimeSnapshotMutex_);
                 if (refreshed.gameStateKnown) {
@@ -1437,6 +1445,11 @@ bool RdrBridge::read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bo
                 if (refreshed.startPosCommandLineKnown) {
                     runtimeSnapshot_.startPosCommandLineKnown = true;
                     runtimeSnapshot_.startPosCommandLine = refreshed.startPosCommandLine;
+                }
+                if (refreshed.multiplayerGameplayStartedKnown) {
+                    runtimeSnapshot_.multiplayerGameplayStartedKnown = true;
+                    runtimeSnapshot_.multiplayerGameplayStarted =
+                        refreshed.multiplayerGameplayStarted;
                 }
                 runtimeRefreshPending_ = false;
             },
@@ -1461,6 +1474,8 @@ bool RdrBridge::read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bo
     simulateStartMultiplayerKnown = snapshot.simulateStartMultiplayerKnown;
     startPosCommandLine = snapshot.startPosCommandLine;
     startPosCommandLineKnown = snapshot.startPosCommandLineKnown;
+    multiplayerGameplayStarted = snapshot.multiplayerGameplayStarted;
+    multiplayerGameplayStartedKnown = snapshot.multiplayerGameplayStartedKnown;
 
     if (!snapshot.gameStateKnown || !snapshot.worldLoadedKnown ||
         !snapshot.simulateStartMultiplayerKnown || !snapshot.startPosCommandLineKnown) {
