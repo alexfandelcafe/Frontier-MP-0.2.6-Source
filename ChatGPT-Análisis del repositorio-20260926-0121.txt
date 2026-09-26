@@ -1,0 +1,848 @@
+Análisis del repositorio
+
+User: Anonymous
+Created: 9/26/2026 0:10:57
+Updated: 9/26/2026 1:18:26
+Exported: 9/26/2026 1:21:42
+Link: https://chatgpt.com/c/6ab737c1-76dc-83e9-835d-a759c3b639bb
+
+## Prompt:
+26/9/2026, 0:10:58
+
+sabiendo que el chat de contexto es https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/ChatGPT-Análisis%20De%20Hooks%20Históricos-20260926-0008.txtanaliza el repo https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/tree/game-thread/remote-actor-spawn-test-0.2.41 y dame tu veredicto
+
+NO USES LA TOOL DE DATA ANALYSIS
+
+## Response:
+26/9/2026, 0:11:00
+
+Voy a contrastar el análisis histórico del archivo de contexto con el estado real de la rama game-thread/remote-actor-spawn-test-0.2.41, revisando estructura, commits y código relevante antes de emitir el veredicto.
+
+Revisando los ganchos
+
+Estoy comprobando si los controladores llegan a existir y si los reintentos se ejecutan demasiado pronto. También necesito revisar cómo se instalan y localizan los ganchos nativos, porque el registro reciente no confirma que aparezcan más tarde.
+
+Revisado los ganchos
+
+Analizando el contexto
+
+Estoy separando lo confirmado de lo hipotético: la carga, la conexión y las entidades remotas funcionan, pero todavía no está claro qué ruta crea al actor local. Revisaré esa secuencia y los enlaces nativos antes de cambiar el código.
+
+Siguiendo la creación local
+
+La ruta de recursos parece preparar scripts y actores remotos, mientras que la lectura local falla porque no existe el puntero esperado. No hay pruebas de invocaciones actuales para crear o inicializar el actor del jugador.
+
+Evaluando el registro reciente
+
+Los actores remotos siguen funcionando de forma independiente, pero el jugador local continúa ausente. El registro tampoco muestra llamadas de creación, reaparición o inicialización, así que debo localizar qué etapa debería desencadenarlas.
+
+Analizado el contexto y seguido la creación local
+
+Analizado el repositorio, historial y flujo de actores remotos multijugador
+
+Ha pensado durante 1m 55s
+
+He revisado el chat de contexto y el estado actual de game-thread/remote-actor-spawn-test-0.2.41, incluido el client.log, los commits recientes y el código del bridge/tracer/runtime.
+
+Veredicto
+
+El proyecto ya superó la parte de red y de actor remoto. El problema actual está bastante bien aislado: todavía no has conseguido que RDR entre en el flujo de creación/activación del jugador local, y además el propio bootstrap de Frontier deja de ejecutarse justo cuando más lo necesitas.
+
+No considero que el repo esté "bloqueado sin rumbo". Al contrario: ya está en una fase de reverse engineering bastante concreta, pero todavía no hay evidencia de gameplay real con sm_LocalPlayer creado y activado.
+
+1. Lo que sí está demostrado
+
+El lado multijugador externo funciona.
+
+En el log actual aparecen repetidamente:
+
+[FrontierClient] connected as player 1
+[FrontierClient] snapshot ... players=2 remoteEntities=1
+
+y el actor sintético 65000 tiene:
+
+creación del actor remoto;
+
+validación;
+
+interpolación;
+
+locomoción mediante TASK_GO_TO_COORD;
+
+telemetría de posición.
+
+Eso está respaldado directamente por RemotePlayerManager y por el comportamiento observado en client.log.
+
+La arquitectura también está razonablemente separada:
+
+NetworkClient
+    ↓
+ClientRuntime
+    ↓
+RemotePlayerManager
+    ↓
+RdrBridge
+    ↓
+NativeInvoker / GameThreadDispatcher
+
+y el servidor/protocolo no está mezclado con direcciones del ejecutable. Esa decisión arquitectónica es correcta para este tipo de proyecto.
+
+2. La transición histórica ya no es el problema principal
+
+El flujo histórico está efectivamente llegando mucho más lejos que antes.
+
+El log actual muestra:
+
+historical boot.sc startScreenExit queued
+historical boot.sc net.EnterOnlineForInvite queued after StartScreen1 exit
+historical boot.sc StartScreen2 online transition complete; HUD_FADE_TO_LOADING_SCREEN queued
+historical LoadOnline stage=2 complete
+StartScreen2 transition active, file events sent, NET_AUTHENTICATE_GAMER result=0x0
+
+Eso es importante.
+
+El experimento de reproducir:
+
+StartScreen1 exit
+→ net.EnterOnlineForInvite
+→ HUD_FADE_TO_LOADING_SCREEN
+→ fileSetForMPLoad
+→ fileStartupChecksComplete
+→ NET_AUTHENTICATE_GAMER
+
+está llegando a ejecutarse.
+
+Por tanto, seguir agregando más eventos de UI no parece atacar ya el cuello de botella real.
+
+3. El hallazgo más importante: el bootstrap se corta a sí mismo
+
+Aquí veo el defecto de control de flujo más claro del branch.
+
+En ClientRuntime::update():
+
+if (sessionMode_ == "freeroam" &&
+    !historicalOnlineBootstrapLogged_ &&
+    session_.runtime_state().state ==
+        FrontierSessionState::Frontend) {
+    gameBridge_.advance_historical_online_bootstrap(...);
+}
+
+Mientras que advance_historical_online_bootstrap() tiene internamente estados como:
+
+WaitingForPlayerActor
+QueryPlayerActor
+Complete
+
+Es decir:
+
+ClientRuntime
+    ↓
+solo llama al bootstrap si state == Frontend
+                         ↓
+bootstrap alcanza WaitingForPlayerActor
+                         ↓
+FrontierSession cambia a WaitingForLocalPlayer
+                         ↓
+ClientRuntime deja de llamar al bootstrap
+
+Y el log lo confirma casi literalmente.
+
+La secuencia reciente es:
+
+1081: historical LoadOnline stage=2 complete ...
+1087: GET_PLAYER_ACTOR ... playerPre=-1 ... result=0x0
+1090: state=waiting-local-player gameState=3 worldLoaded=1 stableWorldLoaded=1 localPlayer=0
+
+Después de eso no aparecen nuevos GET_PLAYER_ACTOR traces.
+
+Por tanto, esto ya no es una hipótesis: la máquina de estados de bootstrap está siendo abandonada por su caller antes de poder completar su propia fase WaitingForPlayerActor.
+
+Ese es, en mi opinión, el defecto lógico más importante del branch actual.
+
+4. Y el log descarta otra hipótesis importante
+
+El GET_PLAYER_ACTOR hook sí está instalado.
+
+Aparece:
+
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=0 ...
+result=0x0
+
+Así que no estamos ante:
+
+"No vemos GET_PLAYER_ACTOR porque el hook nunca consiguió engancharlo."
+
+Lo estamos viendo.
+
+Y el resultado real es:
+
+GET_PLAYER_ACTOR(-1) → 0
+
+Eso significa que el propio runtime de RDR no tiene todavía un player actor válido en ese momento.
+
+A la vez:
+
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+
+no aparece nunca en el log actual.
+
+Tampoco aparecen llamadas observadas a:
+
+RESPAWN_PLAYER_ACTOR_IN_LAYOUT
+SWITCH_PLAYER_TO_ENUM
+INIT_NATIVE_ACTORENUM_PLAYER
+
+Eso es muy significativo.
+
+La conclusión técnica es:
+
+el problema ya no parece ser "cómo leer el player local"; el problema es que todavía no hemos observado quién lo crea y qué cadena de runtime termina convirtiéndolo en el player local real.
+
+5. El trabajo histórico de RDRStartNewScript / StartNewThreadOverride tampoco está terminado
+
+El branch sí consigue resolver esos targets históricos:
+
+sagCoreScript::RDRStartNewScript
+    target=0x1402003D0
+
+rage::scrThread::StartNewThreadOverride
+    target=0x1401E6550
+
+pero en el client.log actual no aparecen invocaciones de esas funciones, sólo su resolución/instalación como targets históricos.
+
+Eso significa que ahora tenemos una diferencia importante entre:
+
+"sé dónde está la función"
+
+y
+
+"he observado que el runtime la utiliza para producir el gameplay online"
+
+La segunda todavía no está demostrada.
+
+En cambio scrThread::Wait sí produce actividad repetida, por ejemplo:
+
+scrThread::Wait trace=...
+thread=13952
+context=0x14F320
+ret=0x1401E4355
+
+Por eso la evidencia actual apunta a que el sistema de scripts está vivo, pero todavía no sabemos qué script/thread concreto dispara la construcción del jugador online.
+
+Ese es exactamente el hueco que falta cerrar.
+
+6. Hay además una segunda inconsistencia arquitectónica
+
+FrontierSession decide que el jugador local está listo mediante:
+
+bridge.read_local_player_state(...)
+
+y esa función hace otra cosa distinta:
+
+localPlayerStorage_
+    ↓
+MinimalSagPlayer
+    ↓
+GUID
+    ↓
+actor manager slots
+    ↓
+actor
+    ↓
+actor component
+
+Pero el histórico InitSpawn usa como condición explícita:
+
+GET_PLAYER_ACTOR(-1)
+
+Son dos conceptos diferentes.
+
+Ahora mismo Frontier tiene:
+
+"GET_PLAYER_ACTOR devuelve actor"
+
+y por otro lado:
+
+"mi cadena de memoria local-player → GUID → manager → actor es legible"
+
+como dos fuentes de verdad diferentes.
+
+Eso puede provocar estados como el que ya tienes:
+
+worldLoaded=1
+stableWorldLoaded=1
+GET_PLAYER_ACTOR=0
+localPlayer=0
+
+Para investigación es útil conservar ambas señales, pero para la máquina de estados principal yo no las trataría como equivalentes.
+
+7. El cambio de retry_*_optional_hooks() fue correcto como diagnóstico, pero no resolvió el cuello de botella
+
+El commit:
+
+c47561a5c591e6c2b44d9a5a1d228ac8df7d2fcd
+
+Retry deferred actor lifecycle native hooks
+
+añadió retry_actor_optional_hooks().
+
+La lógica en sí tiene sentido:
+
+if (original != nullptr || !invoker_->has_handler(hash)) return;
+
+y cubre precisamente:
+
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+GET_PLAYER_ACTOR
+CREATE_ACTOR_IN_LAYOUT
+...
+RESPAWN_PLAYER_ACTOR_IN_LAYOUT
+SWITCH_PLAYER_TO_ENUM
+INIT_NATIVE_ACTORENUM_PLAYER
+...
+CREATE_LAYOUT
+FIND_NAMED_LAYOUT
+
+Pero el problema es quién llama al retry y durante cuánto tiempo.
+
+Como advance_historical_online_bootstrap() dejó de ser llamado después de entrar en WaitingForLocalPlayer, el mecanismo de retry no está operando durante toda la fase en la que pretendía observar la creación del actor.
+
+Por eso el cambio fue útil, pero la implementación actual no completa el objetivo.
+
+8. El hecho de que CREATE_LAYOUT sí aparezca es una pista útil
+
+Tenemos:
+
+CREATE_LAYOUT ... result=0x000000F6
+
+y además scrThread::Wait funcionando.
+
+Por tanto:
+
+script system
+    ↓
+native invocation
+    ↓
+layout creation
+
+sí está ocurriendo.
+
+Eso reduce bastante el espacio de búsqueda.
+
+No parece que RDR esté completamente atascado antes de entrar en su infraestructura de scripts. La pregunta más concreta es ahora:
+
+¿qué script/thread crea el layout y qué llamada posterior debería producir
+CREATE_PLAYER_ACTOR_IN_LAYOUT?
+
+Esa es la pista que perseguiría.
+
+9. El estado del repositorio hoy
+
+HEAD actual de la rama:
+
+5c9db72d84b05231b296bfe99e9817dbaeec58dd
+
+con los últimos cambios de:
+
+retry de hooks de networking;
+
+retry de actor/layout hooks;
+
+tracing de actores;
+
+bootstrap histórico;
+
+estabilización del estado del mundo.
+
+No veo un estado CI asociado al HEAD en la consulta realizada, así que no puedo certificar desde GitHub que el artefacto binario actual haya sido compilado y probado en CI.
+
+Eso es diferente de decir que el código no compile; simplemente no hay evidencia de CI que lo certifique.
+
+Mi conclusión final
+
+Frontier-MP ya tiene una base funcional real. El servidor/red, la conexión, snapshots, entidad remota sintética, creación de actor remoto y locomoción no son sólo arquitectura teórica: están funcionando en el log.
+
+El bloqueo actual es mucho más específico:
+
+frontend
+   ↓
+LoadOnline histórico
+   ↓
+World loaded
+   ↓
+WaitingForPlayerActor
+   ↓
+GET_PLAYER_ACTOR(-1) = 0
+   ↓
+no CREATE_PLAYER_ACTOR_IN_LAYOUT observado
+   ↓
+no activación de local player
+
+Y hay un segundo problema que agrava la investigación:
+
+WaitingForPlayerActor
+      ↓
+FrontierSession pasa a WaitingForLocalPlayer
+      ↓
+ClientRuntime deja de llamar advance_historical_online_bootstrap()
+
+Por tanto, el siguiente cambio no debería ser crear manualmente el player actor.
+
+El siguiente cambio lógico es:
+
+hacer que el bootstrap histórico continúe ejecutándose independientemente de que FrontierSession ya haya abandonado Frontend, y usar esa ventana para observar toda la cadena script → resource → actor creation → player activation.
+
+Después de eso, la evidencia que realmente necesitamos obtener es algo del estilo:
+
+StartNewThreadOverride(...)
+RDRStartNewScript(...)
+script=<nombre>
+...
+CREATE_PLAYER_ACTOR_IN_LAYOUT(...)
+...
+GET_PLAYER_ACTOR(-1) = 0x....
+...
+IS_ACTOR_LOCAL_PLAYER(...)
+...
+IS_LOCAL_PLAYER_VALID(...)
+
+Cuando aparezca esa cadena, dejará de ser una investigación especulativa: tendremos identificado el punto exacto que convierte el runtime cargado en sm_LocalPlayer.
+
+Fuentes directas del branch revisado
+
+Branch game-thread/remote-actor-spawn-test-0.2.41
+
+client_runtime.cpp
+
+rdr_bridge.cpp
+
+startup_native_tracer.cpp
+
+frontier_session.cpp
+
+client.log
+
+Mi valoración técnica, por tanto, es: el proyecto está cerca de un punto de ruptura muy concreto, no cerca de un callejón sin salida. El cuello de botella real es ahora la cadena histórica de creación/activación del jugador local, no networking ni UI.
+
+## Prompt:
+26/9/2026, 0:13:56
+
+https://github.com/alexfandelcafe/DLL-descomprimidos- aca hay dll decomprimidos del cliente de RDRMP que estamos usando como guia
+
+## Response:
+26/9/2026, 0:13:58
+
+Ese repositorio cambia el nivel de evidencia: podemos contrastar el comportamiento de Frontier contra los artefactos históricos del cliente, no sólo contra notas previas. Voy a cruzar especialmente game-core, client-main, scripts y referencias a creación de jugador.
+
+Hay una corrección importante respecto de mi diagnóstico anterior: el histórico demuestra que InitSpawn espera primero al actor local y sólo después espera STREAMING_IS_WORLD_LOADED. Eso invierte parte de nuestra máquina de estados actual.
+
+Resumiendo hallazgos técnicos
+
+Estoy organizando la evidencia del repositorio y destacando funciones, patrones y archivos de análisis relevantes. La decompilación muestra instalaciones de hooks para Wait, FullReadPath y QuitGame, mientras otras funciones parecen resolverse sin engancharse directamente.
+
+Precisando la evidencia
+
+Estoy diferenciando lo confirmado de lo inferido: PostLoad localiza cinco funciones, pero solo engancha directamente tres. También estoy separando el flujo de carga online y aparición inicial, junto con el puntero global del jugador local.
+
+Rastreando la aparición
+
+Estoy reconstruyendo InitSpawn: carga recursos, espera a GET_PLAYER_ACTOR(-1), aguarda el mundo, desvanece la interfaz y continúa. Esto confirma que actúa como barrera, no como creador del actor local.
+
+Detectando la causa probable
+
+Estoy comparando la capa histórica con el flujo actual: faltan observaciones sobre jugador y ranuras, y el arranque deja de reintentarse tras detectar mundo cargado sin jugador local, bloqueando posiblemente la creación posterior.
+
+Resumidos hallazgos técnicos y precisada la causa probable
+
+Inspeccionaste DLL descomprimidas y analizaste la inicialización del jugador
+
+Analizada evidencia histórica de DLL, red y llamadas RDRStart
+
+Ha pensado durante 2m 6s
+
+Sí. Este repositorio es una fuente histórica mucho más valiosa de lo que teníamos hasta ahora, porque no contiene sólo conclusiones: contiene decompilaciones de game-core.dll, client-main.dll, client-luascripting.dll y client-shared.dll.
+
+Y después de cruzarlo con Frontier, cambiaría ligeramente el diagnóstico anterior.
+
+El hallazgo decisivo
+
+En el client-main.dll histórico, InitSpawn está decompilado con bastante claridad.
+
+La secuencia real es:
+
+InitSpawn
+  │
+  ├─ CEF / callbacks
+  │
+  ├─ ResourcesManager::LoadAllResources()
+  │
+  ├─ esperar DoesAllResourcesAreLoaded()
+  │
+  ├─ ThisFiber::Wait(1000)
+  │
+  ├─ ClientSend::ClientWelcome(...)
+  │
+  ├─ esperar GET_PLAYER_ACTOR(-1)
+  │      │
+  │      └─ loop + ThisFiber::Wait(0)
+  │
+  ├─ esperar STREAMING_IS_WORLD_LOADED
+  │      │
+  │      └─ loop + ThisFiber::Wait(0)
+  │
+  ├─ HUD_FADE_IN_NOW
+  │
+  └─ continúa configuración de multiplayer
+
+Eso está directamente en:
+
+client-main.dll_rdrmp_analysis/decomp_all.c
+
+FUN_180002f50 — RVA 0x2F50, InitSpawn.
+
+Y hay un detalle especialmente importante: el helper histórico FUN_180053290 hace exactamente esto:
+
+GET_PLAYER_ACTOR(-1)
+
+usando:
+
+0xE8CFDD53
+
+y devuelve su resultado.
+
+Por tanto, el histórico confirma que InitSpawn no crea el player actor. InitSpawn espera a que otra parte del sistema lo haya creado.
+
+Esto cambia el foco de la investigación.
+
+Frontier está haciendo una cosa conceptualmente distinta
+
+En Frontier ahora tenemos:
+
+worldLoaded
+   ↓
+stableWorldLoaded
+   ↓
+WaitingForLocalPlayer
+   ↓
+read_local_player_state()
+
+mientras que el histórico hace:
+
+ClientWelcome
+   ↓
+GET_PLAYER_ACTOR(-1) != 0
+   ↓
+STREAMING_IS_WORLD_LOADED == true
+   ↓
+HUD_FADE_IN_NOW
+
+Es decir, estábamos usando STREAMING_IS_WORLD_LOADED demasiado pronto como indicador de progreso hacia gameplay.
+
+El log de Frontier lo demuestra:
+
+worldLoaded=1
+stableWorldLoaded=1
+localPlayer=0
+
+y aun así:
+
+GET_PLAYER_ACTOR(-1) = 0
+
+Eso encaja perfectamente con la observación anterior de que el mundo 3D del frontend puede seguir cargado.
+
+La condición histórica es mucho más fuerte:
+
+el runtime no considera terminada esa fase hasta que GET_PLAYER_ACTOR(-1) devuelve un actor real.
+
+Hay otro hallazgo muy importante en client-luascripting.dll
+
+El histórico registra explícitamente estas funciones:
+
+init_native_actorenum_player
+init_native_actorenum_human
+...
+is_actorenum_installed
+
+create_actor_in_layout
+create_player_actor_in_layout
+create_pers_char_in_layout
+respawn_player_actor_in_layout
+
+is_actor_inited
+get_actor_enum
+...
+switch_player_to_enum
+
+Además registra:
+
+get_player_actor
+is_local_player
+is_local_player_valid
+is_slot_valid
+get_slot_actor
+get_actor_slot
+get_local_slot
+
+Esto es importante porque demuestra que el histórico tenía una API de scripting específica para gestionar el player, slots y actores.
+
+No era simplemente:
+
+CREATE_ACTOR
+→ listo
+
+Había toda una capa de estado de jugador.
+
+Y encontramos hashes históricos que faltaban en Frontier
+
+Por ejemplo, los wrappers de client-luascripting.dll muestran:
+
+get_player_actor
+    → 0xE8CFDD53
+
+is_local_player
+    → 0x40EF1003
+
+is_local_player_valid
+    → 0x0ADC17E9
+
+get_local_slot
+    → 0x0AD68A22
+
+get_player_actor coincide exactamente con el que Frontier ya está observando.
+
+Pero is_local_player y is_local_player_valid son natives diferentes de algunos de los hooks de actor que agregamos recientemente.
+
+Eso abre una vía de diagnóstico mucho más precisa:
+
+player
+ ↓
+slot
+ ↓
+actor
+ ↓
+local-player identity
+
+en vez de limitarse a:
+
+actor != 0
+
+game-core.dll aporta otra pieza
+
+En el PostLoad histórico de game-core.dll aparecen explícitamente:
+
+rage::scrThread::Wait
+sagCoreScript::RDRStartNewScript
+rage::scrThread::StartNewThreadOverride
+rage::fiAssetManager::fullReadPath
+QuitGame
+
+y además aparece la resolución de:
+
+rage::sagPlayer::sm_LocalPlayer
+
+con el patrón:
+
+48 89 15 ? ? ? ? E9 ? ? ? ?
+
+Esto es especialmente interesante.
+
+Significa que históricamente existía un punto directo de observación de:
+
+sagPlayer::sm_LocalPlayer
+
+No tenemos que depender exclusivamente de reconstruir mediante memoria:
+
+localPlayerStorage
+ → MinimalSagPlayer
+ → GUID
+ → actor manager
+ → actor component
+
+como hace actualmente read_local_player_state().
+
+Para diagnóstico histórico, sm_LocalPlayer es una señal primaria mucho más cercana al concepto que queremos demostrar.
+
+También queda claro qué hacen realmente los hooks de game-core
+
+El PostLoad histórico resuelve:
+
+RDRStartNewScript
+StartNewThreadOverride
+
+pero el código que vemos muestra instalación efectiva de hooks para:
+
+Wait
+fullReadPath
+QuitGame
+
+mientras que:
+
+s_StartNewScript
+s_StartNewThreadOverride
+
+se conservan como referencias funcionales.
+
+Eso respalda la conclusión anterior: no debemos envolver StartNewThreadOverride alegremente con un callback C++ convencional sólo porque tenemos localizado el target.
+
+Su papel histórico parece más cercano a infraestructura interna de creación/ejecución de scripts.
+
+Lo que esto dice sobre el fallo actual
+
+Ahora la cadena puede dibujarse así:
+
+RDR frontend
+    │
+    ├── boot.sc / UI
+    │
+    ├── LoadOnline
+    │
+    ├── fileSetForMPLoad
+    ├── fileStartupChecksComplete
+    ├── NET_AUTHENTICATE_GAMER
+    │
+    └────► comienza infraestructura online
+              │
+              │
+              ├── scripts / fibers
+              │
+              ├── network/session natives
+              │
+              ├── creación/configuración player
+              │
+              └── asignación sm_LocalPlayer
+                         │
+                         ▼
+                  GET_PLAYER_ACTOR(-1)
+                         │
+                         ▼
+                  InitSpawn continúa
+
+El punto que nos falta no está demostrado como:
+
+"crear actor manualmente"
+
+sino como:
+
+"qué componente histórico provoca que sm_LocalPlayer / GET_PLAYER_ACTOR(-1)
+empiecen a devolver un actor"
+
+Eso es una diferencia importante.
+
+Y hay un bug claro en Frontier que ahora podemos justificar mejor
+
+Actualmente ClientRuntime hace:
+
+if (sessionMode_ == "freeroam" &&
+    !historicalOnlineBootstrapLogged_ &&
+    session_.runtime_state().state == FrontierSessionState::Frontend)
+{
+    gameBridge_.advance_historical_online_bootstrap(...);
+}
+
+Pero advance_historical_online_bootstrap() tiene:
+
+WaitingForPlayerActor
+
+y luego espera:
+
+GET_PLAYER_ACTOR(-1)
+
+Por tanto:
+
+bootstrap → WaitingForPlayerActor
+        ↓
+FrontierSession → WaitingForLocalPlayer
+        ↓
+ClientRuntime deja de llamar al bootstrap
+
+Esto hace que la propia máquina de bootstrap que diseñamos quede parcialmente desconectada de su caller.
+
+El log encaja exactamente:
+
+LoadOnline stage=2 complete
+    ↓
+GET_PLAYER_ACTOR = 0
+    ↓
+worldLoaded=1
+stableWorldLoaded=1
+localPlayer=0
+    ↓
+waiting-local-player
+
+y después no obtenemos la cadena histórica que necesitamos.
+
+Mi nuevo veredicto
+
+Con DLL-descomprimidos- como referencia, mi conclusión es más concreta:
+
+Frontier no está principalmente bloqueado por falta de CREATE_PLAYER_ACTOR_IN_LAYOUT.
+
+Está bloqueado porque no estamos reproduciendo todavía el subsistema histórico que hace que el player actor exista antes de que InitSpawn pueda continuar.
+
+Y ahora sabemos algo que antes sólo inferíamos:
+
+Histórico
+
+ClientWelcome
+   ↓
+GET_PLAYER_ACTOR(-1) != 0
+   ↓
+STREAMING_IS_WORLD_LOADED
+   ↓
+HUD_FADE_IN_NOW
+
+Frontier
+
+FinishLoadOnline
+   ↓
+world loaded
+   ↓
+WaitingForLocalPlayer
+   ↓
+GET_PLAYER_ACTOR(-1) = 0
+
+El orden está invertido y estamos usando una condición de mundo que históricamente venía después del player actor.
+
+Qué investigaría ahora
+
+No tocaría todavía la creación manual del actor.
+
+Haría que Frontier mantenga vivo el bootstrap histórico después de abandonar Frontend y, en paralelo, añadiría observación de:
+
+is_local_player
+is_local_player_valid
+get_local_slot
+get_slot_actor
+get_actor_slot
+sm_LocalPlayer
+
+y correlacionaría eso con:
+
+scrThread::Wait
+RDRStartNewScript
+StartNewThreadOverride
+
+La pregunta concreta pasa a ser:
+
+¿qué script/thread/evento hace aparecer sm_LocalPlayer
+entre ClientWelcome y el primer GET_PLAYER_ACTOR != 0?
+
+Ese es ahora el punto de investigación con mayor valor.
+
+Y una cosa más: client-luascripting.dll merece que lo explotemos mucho más. Es probablemente la pieza que faltaba entre LoadOnline/InitSpawn de client-main.dll y las estructuras de sagPlayer de game-core.dll. Ahí aparecen juntos los natives de actores, jugadores, slots y red que pueden reconstruir la cadena completa.
+
+El repositorio histórico que acabas de pasar, especialmente client-main.dll_rdrmp_analysis/decomp_all.c, client-luascripting.dll_rdrmp_analysis/decomp_all.c y game-core.dll_rdrmp_analysis/decomp_all.c, nos da por primera vez suficiente evidencia para dejar de tratar esto como una hipótesis general y perseguir esa transición concreta.
+
+## Prompt:
+26/9/2026, 1:12:52
+
+Diferencias mas importantes entre frontier y RDRMP? Como hace RDRMP para iniciar el cliente? porque RDRMP tiene un CEF que remplaza el title screen segun he comprobado abriendo el cliente
+
+## Prompt:
+26/9/2026, 1:18:22
+
+yo lo que estoy intentando hacer es que para cargar el mundo no sea necesario entrar a la parte de cargar partida, estoy intentado que abra el mundo vacio sin misiones ni nada con un personaje de skin default
+
+
+
+Powered by ChatGPT Exporter (https://www.chatgptexporter.com)
