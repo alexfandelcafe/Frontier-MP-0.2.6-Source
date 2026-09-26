@@ -75,6 +75,7 @@ bool FrontierSession::update(RdrBridge& bridge, std::string& logLine) {
     next.worldLoaded = worldLoaded;
     next.simulateStartMultiplayer = simulateMp;
     next.startPositionFromCommandLine = startPosCommandLine;
+    next.bootstrapComplete = bridge.historical_online_bootstrap_complete();
 
     if (worldLoadedKnown) {
         if (worldLoaded) {
@@ -99,14 +100,16 @@ bool FrontierSession::update(RdrBridge& bridge, std::string& logLine) {
 
     next.worldLoadedStable = worldLoadedStable_;
 
-    // localPlayerReady is derived from the current stable-world sample, not
-    // retained from a previous active period. This prevents states such as
-    // "frontend ... stableWorldLoaded=0 localPlayer=1".
+    // A loaded world is not proof that the native frontend has relinquished
+    // ownership. The session can only become gameplay-active after the explicit
+    // historical Title Screen -> online transition has completed.
     next.localPlayerReady = false;
     if (gameState < 0 || !worldLoadedKnown) {
         next.state = FrontierSessionState::RuntimeQueryFailed;
-    } else if (!worldLoadedStable_) {
+    } else if (!next.bootstrapComplete) {
         next.state = FrontierSessionState::Frontend;
+    } else if (!worldLoadedStable_) {
+        next.state = FrontierSessionState::WaitingForWorld;
     } else {
         next.state = FrontierSessionState::WaitingForLocalPlayer;
         frontier::PlayerState state{};
@@ -123,6 +126,7 @@ bool FrontierSession::update(RdrBridge& bridge, std::string& logLine) {
                          next.worldLoadedStable != runtime_.worldLoadedStable ||
                          next.simulateStartMultiplayer != runtime_.simulateStartMultiplayer ||
                          next.startPositionFromCommandLine != runtime_.startPositionFromCommandLine ||
+                         next.bootstrapComplete != runtime_.bootstrapComplete ||
                          next.localPlayerReady != runtime_.localPlayerReady;
 
     runtime_ = next;
@@ -135,6 +139,7 @@ bool FrontierSession::update(RdrBridge& bridge, std::string& logLine) {
         logLine += " stableWorldLoaded=" + std::to_string(runtime_.worldLoadedStable ? 1 : 0);
         logLine += " simulateStartMultiplayer=" + std::to_string(runtime_.simulateStartMultiplayer ? 1 : 0);
         logLine += " startPosCommandLine=" + std::to_string(runtime_.startPositionFromCommandLine ? 1 : 0);
+        logLine += " bootstrapComplete=" + std::to_string(runtime_.bootstrapComplete ? 1 : 0);
         logLine += " localPlayer=" + std::to_string(runtime_.localPlayerReady ? 1 : 0);
         if (!runtimeError.empty()) {
             logLine += " nativeError=" + runtimeError;
