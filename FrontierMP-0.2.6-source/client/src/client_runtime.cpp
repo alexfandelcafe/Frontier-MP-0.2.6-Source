@@ -72,6 +72,9 @@ bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, cons
     }
 
     debugRemoteTestEnabled_ = environment_value("FRONTIER_REMOTE_TEST") == "1";
+    playerName_ = playerName;
+    buildId_ = frontier::game::build_label(build);
+    buildHash_ = fingerprint.textHash;
 
     if (debugRemoteTestEnabled_) {
         log_line("[FrontierClient] solo remote-player test enabled");
@@ -229,10 +232,12 @@ bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, cons
         lastLocalPlayerSpawnAttemptMs_ = 0;
         localPlayerSpawnReady_ = false;
         gameBridge_.reset_local_player_spawn();
+        gameBridge_.reset_historical_online_bootstrap();
+        session_.reset();
         log_line("[FrontierClient] " + reason);
     });
 
-    connected_ = g_network->start(host, port, playerName, frontier::game::build_label(build), fingerprint.textHash);
+    connected_ = g_network->start(host, port, playerName_, buildId_, buildHash_);
     if (!connected_) {
         log_line("[FrontierClient] network initialization failed");
         return false;
@@ -281,6 +286,20 @@ void ClientRuntime::run_loop() {
     }
 }
 
+void ClientRuntime::request_server_connection(const std::string& host, std::uint16_t port) {
+    if (host.empty() || port == 0) {
+        log_line("[FrontierClient] rejected empty CEF server connection request");
+        return;
+    }
+
+    {
+        std::lock_guard lock(connectionRequestMutex_);
+        pendingServerHost_ = host;
+        pendingServerPort_ = port;
+        connectionRequestPending_ = true;
+    }
+}
+
 void ClientRuntime::shutdown() {
     stopRequested_.store(true, std::memory_order_relaxed);
     if (g_network) g_network->stop();
@@ -310,6 +329,45 @@ void ClientRuntime::update() {
 
     const auto now = monotonic_ms();
     if (g_network) {
+        std::string requestedHost;
+        std::uint16_t requestedPort = 0;
+        {
+            std::lock_guard lock(connectionRequestMutex_);
+            if (connectionRequestPending_) {
+                requestedHost = pendingServerHost_;
+                requestedPort = pendingServerPort_;
+                connectionRequestPending_ = false;
+            }
+        }
+
+        if (!requestedHost.empty() && requestedPort != 0) {
+            if (g_network->state() != ConnectionState::Disconnected) {
+                g_network->stop();
+            }
+            if (gameBridge_.initialized()) {
+                remotePlayers_.clear(gameBridge_);
+            }
+            localPlayerId_ = 0;
+            localSpawnPoint_ = {};
+            localPlayerSpawnReady_ = false;
+            lastLocalPlayerSpawnAttemptMs_ = 0;
+            gameBridge_.reset_local_player_spawn();
+            gameBridge_.reset_historical_online_bootstrap();
+            session_.reset();
+
+            connected_ = g_network->start(
+                requestedHost,
+                requestedPort,
+                playerName_,
+                buildId_,
+                buildHash_);
+            log_line(
+                std::string("[FrontierClient] CEF server connection request ") +
+                (connected_ ? "accepted" : "failed") +
+                " host=" + requestedHost +
+                " port=" + std::to_string(requestedPort));
+        }
+
         g_network->update(now);
 
         if (gameBridge_.initialized() && (lastSessionUpdateMs_ == 0 || now - lastSessionUpdateMs_ >= 250)) {
@@ -342,8 +400,7 @@ void ClientRuntime::update() {
 
         if (g_network->state() == ConnectionState::Connected &&
             gameBridge_.initialized() &&
-            session_.runtime_state().worldLoadedStable &&
-            session_.runtime_state().gameState != 5 &&
+            session_.runtime_state().state == frontier::game::FrontierSessionState::Active &&
             localPlayerId_ != 0 &&
             !localPlayerSpawnReady_ &&
             (lastLocalPlayerSpawnAttemptMs_ == 0 ||
@@ -376,7 +433,9 @@ void ClientRuntime::update() {
             }
         }
 
-        if (g_network->state() == ConnectionState::Connected && gameBridge_.initialized() &&
+        if (g_network->state() == ConnectionState::Connected &&
+            gameBridge_.initialized() &&
+            session_.runtime_state().state == frontier::game::FrontierSessionState::Active &&
             (lastStateSendMs_ == 0 || now - lastStateSendMs_ >= 50)) {
             PlayerState state{};
             std::string bridgeError;
