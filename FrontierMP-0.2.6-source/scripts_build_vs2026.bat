@@ -68,7 +68,7 @@ if not "%BUILD_RC%"=="0" (
     exit /b %BUILD_RC%
 )
 
-echo.echo.
+echo.
 echo Checking generated FrontierMP binaries...
 if exist "build\vs2026-x64\bin\Release\FrontierMP.exe" (
     echo   OK: FrontierMP.exe
@@ -107,9 +107,6 @@ if not exist "build\vs2026-x64\bin\Release\FrontierMP.exe" exit /b 2
 if not exist "build\vs2026-x64\bin\Release\FrontierClient.dll" exit /b 3
 
 echo Build completed successfully.
-exit /b 0
-
 echo.
-echo Build script finished.
 pause
 exit /b 0
