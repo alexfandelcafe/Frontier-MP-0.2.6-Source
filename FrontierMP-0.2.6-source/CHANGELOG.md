@@ -1,3 +1,8 @@
+## 0.2.74
+- Make historical scrThread::Wait tracing observational-only.
+- Remove GET_SCRIPT_NAME NativeInvoker re-entry from inside the Wait hook to avoid mutating the live script/native context during scheduler execution.
+- Keep script-name correlation deferred to a separate non-reentrant observation point.
+
 ## 0.2.73
 - Log when GET_PLAYER_ACTOR is still absent from the native registration table during deferred tracer retries.
 - Make the next runtime distinguish a missing native handler from a native call that occurs without being observed.
