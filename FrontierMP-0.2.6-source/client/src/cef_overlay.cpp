@@ -140,23 +140,26 @@ class RenderHandler final : public CefRenderHandler {
 public:
     explicit RenderHandler(CefOverlay* owner) : owner_(owner) {}
 
-    bool GetViewRect(
+    void GetViewRect(
         CefRefPtr<CefBrowser>,
         CefRect& rect) override {
-        if (owner_ == nullptr) return false;
-
         const HWND window = owner_window_;
-        if (window == nullptr || !IsWindow(window)) {
-            return false;
+        if (owner_ == nullptr ||
+            window == nullptr ||
+            !IsWindow(window)) {
+            rect = CefRect(0, 0, 1, 1);
+            return;
         }
 
         RECT client{};
-        if (!GetClientRect(window, &client)) return false;
+        if (!GetClientRect(window, &client)) {
+            rect = CefRect(0, 0, 1, 1);
+            return;
+        }
 
         const int width = std::max<LONG>(1, client.right - client.left);
         const int height = std::max<LONG>(1, client.bottom - client.top);
         rect = CefRect(0, 0, width, height);
-        return true;
     }
 
     void OnPaint(
