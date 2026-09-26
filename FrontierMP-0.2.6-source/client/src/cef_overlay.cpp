@@ -453,6 +453,12 @@ struct PresentHookState final {
         UINT,
         UINT);
 
+    using Present1Proc = HRESULT(STDMETHODCALLTYPE*)(
+        IDXGISwapChain1*,
+        UINT,
+        UINT,
+        const DXGI_PRESENT_PARAMETERS*);
+
     std::mutex mutex;
     std::atomic<CefOverlay*> overlay{nullptr};
     HMODULE rdrModule{};
@@ -480,12 +486,18 @@ struct PresentHookState final {
     bool factory2SharesBaseObject{};
 
     PresentProc presentOriginal{};
+    Present1Proc present1Original{};
     IDXGISwapChain* hookedSwapChain{};
     ComPtr<IDXGISwapChain> hookedSwapChainRef{};
+    ComPtr<IDXGISwapChain1> hookedSwapChain1Ref{};
     std::array<void*, 18> hookedVtable{};
     std::array<void*, 18> originalVtable{};
+    std::array<void*, 23> hookedVtable1{};
+    std::array<void*, 23> originalVtable1{};
     void** originalVtableAddress{};
+    void** originalVtable1Address{};
     bool swapchainHooked{};
+    bool swapchain1Hooked{};
     bool installed{};
 };
 
@@ -794,6 +806,12 @@ HRESULT STDMETHODCALLTYPE frontier_present(
     UINT syncInterval,
     UINT flags);
 
+HRESULT STDMETHODCALLTYPE frontier_present1(
+    IDXGISwapChain1* swapChain,
+    UINT syncInterval,
+    UINT flags,
+    const DXGI_PRESENT_PARAMETERS* parameters);
+
 void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain);
 
 void hook_factory(PresentHookState& state, IDXGIFactory* factory) {
@@ -915,8 +933,22 @@ void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
     std::lock_guard lock(state.mutex);
     if (state.swapchainHooked) return;
 
-    void*** vtable =
-        reinterpret_cast<void***>(swapChain);
+    DXGI_SWAP_CHAIN_DESC desc{};
+    const bool haveDesc = SUCCEEDED(swapChain->GetDesc(&desc));
+    const HWND currentRdrWindow = find_rdr_window();
+    if (haveDesc &&
+        currentRdrWindow != nullptr &&
+        desc.OutputWindow != currentRdrWindow) {
+        std::ostringstream message;
+        message << "[FrontierD3D] ignoring non-RDR swapchain="
+                << static_cast<const void*>(swapChain)
+                << " hwnd=" << desc.OutputWindow
+                << " rdrHwnd=" << currentRdrWindow;
+        log_line(message.str());
+        return;
+    }
+
+    void*** vtable = reinterpret_cast<void***>(swapChain);
     if (vtable == nullptr || *vtable == nullptr) return;
 
     for (std::size_t i = 0; i < state.originalVtable.size(); ++i) {
@@ -942,19 +974,64 @@ void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
     state.hookedSwapChainRef = swapChain;
     state.swapchainHooked = true;
 
-    DXGI_SWAP_CHAIN_DESC desc{};
-    if (SUCCEEDED(swapChain->GetDesc(&desc))) {
-        std::ostringstream message;
-        message << "[FrontierD3D] hooked swapchain="
-                << static_cast<const void*>(swapChain)
-                << " hwnd=" << desc.OutputWindow
-                << " size=" << desc.BufferDesc.Width
-                << "x" << desc.BufferDesc.Height
-                << " format=" << static_cast<int>(desc.BufferDesc.Format);
-        log_line(message.str());
-    } else {
-        log_line("[FrontierD3D] hooked swapchain (GetDesc failed)");
+    std::ostringstream message;
+    message << "[FrontierD3D] hooked IDXGISwapChain swapchain="
+            << static_cast<const void*>(swapChain)
+            << " hwnd=" << (haveDesc ? desc.OutputWindow : nullptr)
+            << " size=" << (haveDesc ? desc.BufferDesc.Width : 0)
+            << "x" << (haveDesc ? desc.BufferDesc.Height : 0)
+            << " format="
+            << (haveDesc ? static_cast<int>(desc.BufferDesc.Format) : -1)
+            << " presentSlot=8";
+    log_line(message.str());
+
+    ComPtr<IDXGISwapChain1> swapChain1;
+    if (FAILED(swapChain->QueryInterface(IID_PPV_ARGS(&swapChain1))) ||
+        swapChain1 == nullptr) {
+        log_line("[FrontierD3D] swapchain has no IDXGISwapChain1 interface; Present1 hook unavailable");
+        return;
     }
+
+    void*** vtable1 = reinterpret_cast<void***>(swapChain1.Get());
+    if (vtable1 == nullptr || *vtable1 == nullptr) return;
+
+    for (std::size_t i = 0; i < state.originalVtable1.size(); ++i) {
+        state.originalVtable1[i] = (*vtable1)[i];
+        state.hookedVtable1[i] = (*vtable1)[i];
+    }
+
+    state.present1Original =
+        reinterpret_cast<PresentHookState::Present1Proc>(
+            state.originalVtable1[22]);
+    if (state.present1Original == nullptr) {
+        state.originalVtable1.fill(nullptr);
+        state.hookedVtable1.fill(nullptr);
+        log_line("[FrontierD3D] IDXGISwapChain1 Present1 slot=22 is null");
+        return;
+    }
+
+    state.hookedVtable1[22] =
+        reinterpret_cast<void*>(&frontier_present1);
+    state.originalVtable1Address = *vtable1;
+    *vtable1 = state.hookedVtable1.data();
+    state.hookedSwapChain1Ref = swapChain1;
+    state.swapchain1Hooked = true;
+
+    DXGI_SWAP_CHAIN_DESC1 desc1{};
+    HWND hwnd1 = nullptr;
+    const bool haveDesc1 = SUCCEEDED(swapChain1->GetDesc1(&desc1));
+    const bool haveHwnd1 = SUCCEEDED(swapChain1->GetHwnd(&hwnd1));
+
+    std::ostringstream message1;
+    message1 << "[FrontierD3D] hooked IDXGISwapChain1 swapchain="
+             << static_cast<const void*>(swapChain1.Get())
+             << " hwnd=" << (haveHwnd1 ? hwnd1 : nullptr)
+             << " size=" << (haveDesc1 ? desc1.Width : 0)
+             << "x" << (haveDesc1 ? desc1.Height : 0)
+             << " format="
+             << (haveDesc1 ? static_cast<int>(desc1.Format) : -1)
+             << " present1Slot=22";
+    log_line(message1.str());
 }
 
 HRESULT WINAPI frontier_create_dxgi_factory(
@@ -1163,13 +1240,30 @@ void unhook_render_path() {
         }
     }
 
+    if (g_presentHook.swapchain1Hooked &&
+        g_presentHook.hookedSwapChain1Ref != nullptr) {
+        void*** vtable1 =
+            reinterpret_cast<void***>(g_presentHook.hookedSwapChain1Ref.Get());
+        if (vtable1 != nullptr &&
+            *vtable1 == g_presentHook.hookedVtable1.data() &&
+            g_presentHook.originalVtable1Address != nullptr) {
+            *vtable1 = g_presentHook.originalVtable1Address;
+        }
+    }
+
     g_presentHook.hookedSwapChain = nullptr;
     g_presentHook.hookedSwapChainRef.Reset();
+    g_presentHook.hookedSwapChain1Ref.Reset();
     g_presentHook.hookedVtable.fill(nullptr);
     g_presentHook.originalVtable.fill(nullptr);
+    g_presentHook.hookedVtable1.fill(nullptr);
+    g_presentHook.originalVtable1.fill(nullptr);
     g_presentHook.originalVtableAddress = nullptr;
+    g_presentHook.originalVtable1Address = nullptr;
     g_presentHook.presentOriginal = nullptr;
+    g_presentHook.present1Original = nullptr;
     g_presentHook.swapchainHooked = false;
+    g_presentHook.swapchain1Hooked = false;
 
     if (g_presentHook.factory2Hooked &&
         g_presentHook.hookedFactory2 != nullptr &&
@@ -1366,12 +1460,65 @@ HRESULT STDMETHODCALLTYPE frontier_present(
             swapChain == g_presentHook.hookedSwapChain;
     }
 
+    static std::atomic<std::uint32_t> traceCount{0};
+    const std::uint32_t trace = traceCount.fetch_add(1, std::memory_order_relaxed);
+    if (trace < 8) {
+        std::ostringstream message;
+        message << "[FrontierD3D] Present trace=" << trace
+                << " swapchain=" << static_cast<const void*>(swapChain)
+                << " hooked=" << (shouldRender ? 1 : 0)
+                << " sync=" << syncInterval
+                << " flags=0x" << std::hex << flags;
+        log_line(message.str());
+    }
+
     if (shouldRender && overlay != nullptr) {
         overlay->on_present(swapChain);
     }
 
     return original != nullptr
         ? original(swapChain, syncInterval, flags)
+        : E_FAIL;
+}
+
+HRESULT STDMETHODCALLTYPE frontier_present1(
+    IDXGISwapChain1* swapChain,
+    UINT syncInterval,
+    UINT flags,
+    const DXGI_PRESENT_PARAMETERS* parameters) {
+    PresentHookState::Present1Proc original = nullptr;
+    CefOverlay* overlay = nullptr;
+
+    bool shouldRender = false;
+    {
+        std::lock_guard lock(g_presentHook.mutex);
+        original = g_presentHook.present1Original;
+        overlay = g_presentHook.overlay.load(std::memory_order_acquire);
+        shouldRender =
+            overlay != nullptr &&
+            original != nullptr &&
+            swapChain == g_presentHook.hookedSwapChain1Ref.Get();
+    }
+
+    static std::atomic<std::uint32_t> traceCount{0};
+    const std::uint32_t trace = traceCount.fetch_add(1, std::memory_order_relaxed);
+    if (trace < 8) {
+        std::ostringstream message;
+        message << "[FrontierD3D] Present1 trace=" << trace
+                << " swapchain=" << static_cast<const void*>(swapChain)
+                << " hooked=" << (shouldRender ? 1 : 0)
+                << " sync=" << syncInterval
+                << " flags=0x" << std::hex << flags
+                << " params=" << static_cast<const void*>(parameters);
+        log_line(message.str());
+    }
+
+    if (shouldRender && overlay != nullptr) {
+        overlay->on_present(reinterpret_cast<IDXGISwapChain*>(swapChain));
+    }
+
+    return original != nullptr
+        ? original(swapChain, syncInterval, flags, parameters)
         : E_FAIL;
 }
 
