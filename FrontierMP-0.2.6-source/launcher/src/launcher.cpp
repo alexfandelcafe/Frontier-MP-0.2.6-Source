@@ -315,7 +315,8 @@ std::vector<wchar_t> Launcher::build_environment(
         pathValue.assign(existingPath, pathLength);
     }
 
-    const auto clientDirectory = options.clientDll.parent_path().wstring();
+    const auto clientDirectory =
+        std::filesystem::path(options.clientDll).parent_path().wstring();
     if (!clientDirectory.empty()) {
         pathValue = clientDirectory + L";" + pathValue;
         entries.erase(
