@@ -122,6 +122,11 @@ constexpr std::uint32_t kIsSimulateStartPress = 0xD8E31D42u;
 constexpr std::uint32_t kIsScriptValid = 0x45F7D589u;
 constexpr std::uint32_t kTerminateScript = 0x60A7FF09u;
 constexpr std::uint32_t kTerminateThisScript = 0x245B6AB6u;
+constexpr std::uint32_t kUiSendEvent = 0xB58825F5u;
+constexpr std::uint32_t kUiExit = 0x2DF89C2Eu;
+constexpr std::uint32_t kHudFadeToLoadingScreen = 0xB0B4296Au;
+constexpr std::uint32_t kHudIsFading = 0xE5CC6F08u;
+constexpr std::uint32_t kNetAuthenticateGamer = 0x8E0D7219u;
 constexpr std::uint32_t kNetEnableMultiplayer = 0x9180FF1Cu;
 constexpr std::uint32_t kNetIsInSession = 0x8CA54980u;
 constexpr std::uint32_t kNetIsSessionClient = 0xFF65A07Cu;
@@ -588,6 +593,27 @@ bool StartupNativeTracer::attach(NativeInvoker& invoker, GameThreadDispatcher& d
             original = nullptr;
         }
     };
+
+    install_optional(kUiSendEvent,
+                     &StartupNativeTracer::ui_send_event_hook,
+                     originalUiSendEvent_,
+                     "UI_SEND_EVENT");
+    install_optional(kUiExit,
+                     &StartupNativeTracer::ui_exit_hook,
+                     originalUiExit_,
+                     "UI_EXIT");
+    install_optional(kHudFadeToLoadingScreen,
+                     &StartupNativeTracer::hud_fade_to_loading_screen_hook,
+                     originalHudFadeToLoadingScreen_,
+                     "HUD_FADE_TO_LOADING_SCREEN");
+    install_optional(kHudIsFading,
+                     &StartupNativeTracer::hud_is_fading_hook,
+                     originalHudIsFading_,
+                     "HUD_IS_FADING");
+    install_optional(kNetAuthenticateGamer,
+                     &StartupNativeTracer::net_authenticate_gamer_hook,
+                     originalNetAuthenticateGamer_,
+                     "NET_AUTHENTICATE_GAMER");
 
     install_optional(kNetEnableMultiplayer,
                      &StartupNativeTracer::net_enable_multiplayer_hook,
@@ -1179,6 +1205,115 @@ void StartupNativeTracer::is_script_valid_hook(void* context) {
                   ownerKnown ? ownerScriptId : 0u);
     std::size_t usedIdentity = std::strlen(buffer);
     append_execution_identity(buffer, sizeof(buffer), usedIdentity, context);
+    log(buffer);
+}
+
+void StartupNativeTracer::ui_send_event_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    char eventName[160]{};
+    const bool eventOk = read_c_string(context, 0, eventName, sizeof(eventName));
+    if (tracer->originalUiSendEvent_) tracer->originalUiSendEvent_(context);
+
+    if (!eventOk) return;
+    if (std::strcmp(eventName, "startScreenExit") != 0 &&
+        std::strcmp(eventName, "net.EnterOnlineForInvite") != 0 &&
+        std::strcmp(eventName, "net.EnterOnline") != 0 &&
+        std::strcmp(eventName, "fileSetForMPLoad") != 0 &&
+        std::strcmp(eventName, "fileStartupChecksComplete") != 0 &&
+        std::strcmp(eventName, "fileStartNewGame") != 0 &&
+        std::strcmp(eventName, "mainMenuExit") != 0) {
+        return;
+    }
+
+    char buffer[384]{};
+    std::snprintf(buffer, sizeof(buffer),
+                  "[FrontierNativeTrace] UI_SEND_EVENT event=%s", eventName);
+    std::size_t used = std::strlen(buffer);
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+void StartupNativeTracer::ui_exit_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    char objectName[160]{};
+    const bool objectOk = read_c_string(context, 0, objectName, sizeof(objectName));
+    if (tracer->originalUiExit_) tracer->originalUiExit_(context);
+
+    if (!objectOk) return;
+    char buffer[384]{};
+    std::snprintf(buffer, sizeof(buffer),
+                  "[FrontierNativeTrace] UI_EXIT object=%s", objectName);
+    std::size_t used = std::strlen(buffer);
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+void StartupNativeTracer::hud_fade_to_loading_screen_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+    if (tracer->originalHudFadeToLoadingScreen_) {
+        tracer->originalHudFadeToLoadingScreen_(context);
+    }
+    char buffer[256]{};
+    std::snprintf(buffer, sizeof(buffer),
+                  "[FrontierNativeTrace] HUD_FADE_TO_LOADING_SCREEN");
+    std::size_t used = std::strlen(buffer);
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+void StartupNativeTracer::hud_is_fading_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+    if (tracer->originalHudIsFading_) tracer->originalHudIsFading_(context);
+
+    std::uint32_t result = 0;
+    bool ok = false;
+    if (context) {
+        const auto* call = reinterpret_cast<const NativeTraceContext*>(context);
+        if (call->returnBuffer) {
+            __try {
+                std::memcpy(&result, call->returnBuffer, sizeof(result));
+                ok = true;
+            } __except (EXCEPTION_EXECUTE_HANDLER) {
+                ok = false;
+            }
+        }
+    }
+    char buffer[288]{};
+    std::snprintf(buffer, sizeof(buffer),
+                  "[FrontierNativeTrace] HUD_IS_FADING=%s%u",
+                  ok ? "" : "?", ok ? result : 0u);
+    std::size_t used = std::strlen(buffer);
+    append_execution_identity(buffer, sizeof(buffer), used, context);
+    log(buffer);
+}
+
+void StartupNativeTracer::net_authenticate_gamer_hook(void* context) {
+    auto* tracer = g_tracer;
+    if (!tracer) return;
+
+    std::int32_t mode = 0;
+    const bool modeOk = read_i32_arg(context, 0, mode);
+    char profile[128]{};
+    const bool profileOk = read_c_string(context, 1, profile, sizeof(profile));
+    if (tracer->originalNetAuthenticateGamer_) tracer->originalNetAuthenticateGamer_(context);
+
+    std::uintptr_t result = 0;
+    (void)read_u64_return(context, result);
+    char buffer[384]{};
+    std::snprintf(buffer, sizeof(buffer),
+                  "[FrontierNativeTrace] NET_AUTHENTICATE_GAMER mode=%s%d profile=%s%s result=0x%llX",
+                  modeOk ? "" : "?", modeOk ? mode : 0,
+                  profileOk ? profile : "<unreadable>",
+                  profileOk ? "" : "",
+                  static_cast<unsigned long long>(result));
+    std::size_t used = std::strlen(buffer);
+    append_execution_identity(buffer, sizeof(buffer), used, context);
     log(buffer);
 }
 
