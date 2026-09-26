@@ -1,5 +1,9 @@
 #include "frontier/client/client_runtime.hpp"
 
+#ifdef FRONTIER_ENABLE_CEF
+#include "frontier/client/cef_overlay.hpp"
+#endif
+
 #include <windows.h>
 
 #include <array>
@@ -13,6 +17,9 @@
 namespace {
 
 frontier::client::ClientRuntime g_runtime;
+#ifdef FRONTIER_ENABLE_CEF
+frontier::client::CefOverlay g_cefOverlay;
+#endif
 
 void write_crash_log(EXCEPTION_POINTERS* exceptionPointers) {
     char localAppData[MAX_PATH]{};
@@ -913,14 +920,26 @@ DWORD WINAPI FrontierClientWorker(LPVOID) {
         log_line("[FrontierDiag] RDR callsite diagnostic disabled");
     }
 
-    signal_bootstrap_ready();
-
     if (!initialized) {
         OutputDebugStringA("[FrontierClient] initialization failed\n");
         return 0;
     }
 
+#ifdef FRONTIER_ENABLE_CEF
+    if (g_cefOverlay.start()) {
+        log_line("[FrontierCEF] overlay startup requested");
+    } else {
+        log_line("[FrontierCEF] overlay startup failed");
+    }
+#endif
+
+    signal_bootstrap_ready();
     g_runtime.run_loop();
+
+#ifdef FRONTIER_ENABLE_CEF
+    g_cefOverlay.stop();
+#endif
+
     return 0;
 }
 
