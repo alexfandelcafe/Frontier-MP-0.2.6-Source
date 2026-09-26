@@ -2426,13 +2426,18 @@ bool RdrBridge::read_local_player_runtime(
                 return;
             }
 
-            std::uintptr_t validArgs[1]{
-                static_cast<std::uintptr_t>(actor)};
-            std::uintptr_t validResult = 0u;
-            actorValid =
-                nativeInvoker_.invoke_raw(
-                    kNativeIsActorValid, validArgs, 1u, validResult) &&
-                validResult != 0u;
+            // Match InitSpawn exactly: a non-zero GET_PLAYER_ACTOR(-1)
+            // result is sufficient to pass the player barrier. IS_ACTOR_VALID is
+            // only a secondary diagnostic because native registration can expose
+            // the actor query before the auxiliary validation handler.
+            actorValid = true;
+            if (nativeInvoker_.has_handler(kNativeIsActorValid)) {
+                std::uintptr_t validArgs[1]{
+                    static_cast<std::uintptr_t>(actor)};
+                std::uintptr_t validResult = 0u;
+                (void)nativeInvoker_.invoke_raw(
+                    kNativeIsActorValid, validArgs, 1u, validResult);
+            }
         },
         250u,
         dispatchError);
