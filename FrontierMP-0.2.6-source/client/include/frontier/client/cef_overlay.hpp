@@ -12,7 +12,7 @@ namespace frontier::client {
 
 class CefOverlay final {
 public:
-    CefOverlay() = default;
+    CefOverlay();
     ~CefOverlay();
 
     CefOverlay(const CefOverlay&) = delete;
