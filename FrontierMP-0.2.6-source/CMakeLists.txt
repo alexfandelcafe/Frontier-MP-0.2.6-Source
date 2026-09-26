@@ -144,7 +144,13 @@ if(WIN32 AND FRONTIER_BUILD_CLIENT)
         ${FRONTIER_CLIENT_SOURCES}
     )
     target_include_directories(frontier_client PRIVATE shared/include client/include game/include)
-    target_link_libraries(frontier_client PRIVATE frontier_shared ws2_32 version)
+    target_link_libraries(frontier_client PRIVATE
+        frontier_shared
+        ws2_32
+        version
+        d3d11
+        dxgi
+        d3dcompiler)
     frontier_enable_warnings(frontier_client)
 
     if(FRONTIER_CEF_OVERLAY_AVAILABLE)
