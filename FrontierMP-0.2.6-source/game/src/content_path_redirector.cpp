@@ -522,29 +522,33 @@ char ContentPathRedirector::invoke_and_redirect(
         self, path, arg3, arg4, arg5, arg6);
 
     const auto callIndex = callLogCount_.fetch_add(1);
-    if (callIndex < 32u) {
+
+    // Route hits are diagnostic-critical even after the generic first-32-call
+    // window has been exhausted. Keep them visible so a late boot.sc lookup
+    // cannot be mistaken for "never read".
+    if (matchedRoute != nullptr && originalPath[0] != '\0') {
         char message[640]{};
-        if (matchedRoute != nullptr && originalPath[0] != '\0') {
-            std::snprintf(
-                message,
-                sizeof(message),
-                "[FrontierContent] fullReadPath call=%u result=%d "
-                "requested=%s redirected=%s",
-                callIndex,
-                static_cast<int>(originalResult),
-                originalPath,
-                matchedRoute->resolved);
-        } else {
-            char preview[256]{};
-            make_path_preview(path, preview, sizeof(preview));
-            std::snprintf(
-                message,
-                sizeof(message),
-                "[FrontierContent] fullReadPath call=%u result=%d path=%s",
-                callIndex,
-                static_cast<int>(originalResult),
-                preview);
-        }
+        std::snprintf(
+            message,
+            sizeof(message),
+            "[FrontierContent] historical route hit call=%u result=%d "
+            "requested=%s redirected=%s",
+            callIndex,
+            static_cast<int>(originalResult),
+            originalPath,
+            matchedRoute->resolved);
+        log_message(message);
+    } else if (callIndex < 32u) {
+        char preview[256]{};
+        make_path_preview(path, preview, sizeof(preview));
+        char message[640]{};
+        std::snprintf(
+            message,
+            sizeof(message),
+            "[FrontierContent] fullReadPath call=%u result=%d path=%s",
+            callIndex,
+            static_cast<int>(originalResult),
+            preview);
         log_message(message);
     }
 
