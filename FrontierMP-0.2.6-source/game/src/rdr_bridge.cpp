@@ -357,63 +357,56 @@ bool RdrBridge::read_pointer(std::uintptr_t address, std::uintptr_t& out) const 
 #endif
 }
 
-std::uintptr_t RdrBridge::historical_wait_hook(
-    void* rcx,
-    void* rdx,
-    void* r8,
-    void* r9) {
+void RdrBridge::historical_wait_hook(void* context) {
     auto* bridge = activeHistoricalScriptTrace_;
-    if (bridge == nullptr) {
-        return 0;
-    }
+    if (bridge == nullptr) return;
 
-    bridge->on_historical_wait(rcx, rdx, r8, r9);
+    bridge->on_historical_wait(context);
 
-    using WaitFn = std::uintptr_t (*)(void*, void*, void*, void*);
+    using WaitFn = void (*)(void*);
     const auto original =
         reinterpret_cast<WaitFn>(bridge->historicalWaitHook_.trampoline());
     if (original != nullptr) {
-        return original(rcx, rdx, r8, r9);
+        original(context);
     }
-
-    return 0;
 }
 
-void RdrBridge::on_historical_wait(
-    void* rcx,
-    void* rdx,
-    void* r8,
-    void* r9) {
+void RdrBridge::on_historical_wait(void* context) {
 #ifdef _WIN32
     const auto traceIndex =
         historicalWaitTraceCount_.fetch_add(1, std::memory_order_relaxed);
     if (traceIndex >= 256) return;
 
+    char scriptName[128]{};
+    const char* scriptNameText = "<native-not-ready>";
+    if (nativeInvoker_.ready()) {
+        std::uintptr_t result = 0;
+        if (nativeInvoker_.invoke_raw(
+                kNativeGetScriptName, nullptr, 0u, result) &&
+            result != 0 &&
+            guarded_read_c_string(result, scriptName, sizeof(scriptName))) {
+            scriptNameText = scriptName;
+        } else {
+            scriptNameText = "<unreadable>";
+        }
+    }
+
     char line[640]{};
     std::snprintf(
         line,
         sizeof(line),
-        "[FrontierScript] historical scrThread::Wait probe trace=%u "
-        "thread=%lu arg0=0x%llX arg1=0x%llX arg2=0x%llX arg3=0x%llX "
-        "return=0x%llX",
+        "[FrontierScript] historical scrThread::Wait trace=%u "
+        "thread=%lu infoBase=0x%llX script=%s return=0x%llX",
         static_cast<unsigned>(traceIndex),
         static_cast<unsigned long>(GetCurrentThreadId()),
         static_cast<unsigned long long>(
-            reinterpret_cast<std::uintptr_t>(rcx)),
-        static_cast<unsigned long long>(
-            reinterpret_cast<std::uintptr_t>(rdx)),
-        static_cast<unsigned long long>(
-            reinterpret_cast<std::uintptr_t>(r8)),
-        static_cast<unsigned long long>(
-            reinterpret_cast<std::uintptr_t>(r9)),
+            reinterpret_cast<std::uintptr_t>(context)),
+        scriptNameText,
         static_cast<unsigned long long>(
             reinterpret_cast<std::uintptr_t>(_ReturnAddress())));
     write_bridge_log_line(line);
 #else
-    (void)rcx;
-    (void)rdx;
-    (void)r8;
-    (void)r9;
+    (void)context;
 #endif
 }
 
@@ -538,19 +531,30 @@ bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild 
 
                 std::string hookError;
                 activeHistoricalScriptTrace_ = this;
-                if (!historicalWaitHook_.install_call_site(
-                        *waitHit,
+                // game-core's PostLoad pattern identifies a CALL site,
+                // but its native hooker resolves the E8 target and patches that
+                // function. n_Wait itself is void(InfoBase*).
+                if (!historicalWaitHook_.install(
+                        historicalWaitTarget_,
                         reinterpret_cast<std::uintptr_t>(&RdrBridge::historical_wait_hook),
+                        16u,
                         "historical scrThread::Wait",
                         hookError)) {
                     activeHistoricalScriptTrace_ = nullptr;
                     std::string message =
-                        "[FrontierScript] historical scrThread::Wait early hook not attached: " +
+                        "[FrontierScript] historical scrThread::Wait target hook not attached: " +
                         hookError;
                     write_bridge_log_line(message.c_str());
                 } else {
-                    write_bridge_log_line(
-                        "[FrontierScript] historical scrThread::Wait early hook attached");
+                    char message[256]{};
+                    std::snprintf(
+                        message,
+                        sizeof(message),
+                        "[FrontierScript] historical scrThread::Wait target hook attached target=0x%llX targetRva=0x%llX",
+                        static_cast<unsigned long long>(historicalWaitTarget_),
+                        static_cast<unsigned long long>(
+                            historicalWaitTarget_ - moduleBase_));
+                    write_bridge_log_line(message);
                 }
             } else {
                 write_bridge_log_line(
