@@ -947,8 +947,11 @@ HRESULT WINAPI frontier_create_device_and_swapchain(
     ID3D11Device** device,
     D3D_FEATURE_LEVEL* featureLevel,
     ID3D11DeviceContext** immediateContext) {
-    std::lock_guard lock(g_presentHook.mutex);
-    const auto original = g_presentHook.createOriginal;
+    PresentHookState::CreateDeviceAndSwapChainProc original = nullptr;
+    {
+        std::lock_guard lock(g_presentHook.mutex);
+        original = g_presentHook.createOriginal;
+    }
     if (original == nullptr) return E_FAIL;
 
     const HRESULT result = original(
