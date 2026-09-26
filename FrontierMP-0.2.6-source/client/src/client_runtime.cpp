@@ -238,11 +238,16 @@ bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, cons
         log_line("[FrontierClient] " + reason);
     });
 
+#ifdef FRONTIER_ENABLE_CEF
+    connected_ = false;
+    log_line("[FrontierClient] CEF frontend-owned mode: waiting for frontend connect command");
+#else
     connected_ = g_network->start(host, port, playerName_, buildId_, buildHash_);
     if (!connected_) {
         log_line("[FrontierClient] network initialization failed");
         return false;
     }
+#endif
     log_line("[FrontierClient] initialized sessionMode=" + sessionMode_);
     return true;
 }
