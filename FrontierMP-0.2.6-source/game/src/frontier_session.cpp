@@ -62,6 +62,8 @@ bool FrontierSession::update(RdrBridge& bridge, std::string& logLine) {
     bool worldLoaded = false;
     bool simulateMp = false;
     bool startPosCommandLine = false;
+    bool multiplayerGameplayStarted = false;
+    bool multiplayerGameplayStartedKnown = false;
     std::string runtimeError;
     bool worldLoadedKnown = false;
     bool simulateMpKnown = false;
@@ -69,6 +71,7 @@ bool FrontierSession::update(RdrBridge& bridge, std::string& logLine) {
     (void)bridge.read_game_runtime(gameState, worldLoaded, worldLoadedKnown,
                                    simulateMp, simulateMpKnown,
                                    startPosCommandLine, startPosCommandLineKnown,
+                                   multiplayerGameplayStarted, multiplayerGameplayStartedKnown,
                                    runtimeError);
 
     next.gameState = gameState;
@@ -108,6 +111,8 @@ bool FrontierSession::update(RdrBridge& bridge, std::string& logLine) {
         next.state = FrontierSessionState::RuntimeQueryFailed;
     } else if (!next.bootstrapComplete) {
         next.state = FrontierSessionState::Frontend;
+    } else if (multiplayerGameplayStartedKnown && !multiplayerGameplayStarted) {
+        next.state = FrontierSessionState::WaitingForWorld;
     } else if (!worldLoadedStable_) {
         next.state = FrontierSessionState::WaitingForWorld;
     } else {
@@ -116,7 +121,9 @@ bool FrontierSession::update(RdrBridge& bridge, std::string& logLine) {
         std::string error;
         if (bridge.read_local_player_state(state, error)) {
             next.localPlayerReady = true;
-            next.state = FrontierSessionState::Active;
+            if (!multiplayerGameplayStartedKnown || multiplayerGameplayStarted) {
+                next.state = FrontierSessionState::Active;
+            }
         }
     }
 
@@ -140,6 +147,8 @@ bool FrontierSession::update(RdrBridge& bridge, std::string& logLine) {
         logLine += " simulateStartMultiplayer=" + std::to_string(runtime_.simulateStartMultiplayer ? 1 : 0);
         logLine += " startPosCommandLine=" + std::to_string(runtime_.startPositionFromCommandLine ? 1 : 0);
         logLine += " bootstrapComplete=" + std::to_string(runtime_.bootstrapComplete ? 1 : 0);
+        logLine += " gameplayStarted=" + std::to_string(
+            multiplayerGameplayStartedKnown ? (multiplayerGameplayStarted ? 1 : 0) : -1);
         logLine += " localPlayer=" + std::to_string(runtime_.localPlayerReady ? 1 : 0);
         if (!runtimeError.empty()) {
             logLine += " nativeError=" + runtimeError;
