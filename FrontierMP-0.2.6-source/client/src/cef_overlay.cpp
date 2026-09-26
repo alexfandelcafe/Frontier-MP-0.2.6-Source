@@ -1590,7 +1590,7 @@ bool CefOverlay::handle_window_message(
                 ? 2
                 : 1;
 
-        host->SendFocusEvent(true);
+        host->SetFocus(true);
         host->SendMouseClickEvent(
             event,
             button,
@@ -1629,7 +1629,8 @@ bool CefOverlay::handle_window_message(
     case WM_SYSKEYUP: {
         CefKeyEvent event{};
         event.windows_key_code = static_cast<int>(wParam);
-        event.native_key_code = static_cast<int>(wParam);
+        event.native_key_code =
+            static_cast<int>(lParam);
         event.is_system_key =
             message == WM_SYSKEYDOWN ||
             message == WM_SYSKEYUP;
@@ -1657,14 +1658,15 @@ bool CefOverlay::handle_window_message(
         event.windows_key_code = static_cast<int>(wParam);
         event.character = static_cast<int>(wParam);
         event.unmodified_character = static_cast<int>(wParam);
-        event.native_key_code = static_cast<int>(wParam);
+        event.native_key_code =
+            static_cast<int>(lParam);
         event.is_system_key = message == WM_SYSCHAR;
         host->SendKeyEvent(event);
         result = 0;
         return true;
     }
     case WM_KILLFOCUS:
-        host->SendFocusEvent(false);
+        host->SetFocus(false);
         return false;
     default:
         break;
