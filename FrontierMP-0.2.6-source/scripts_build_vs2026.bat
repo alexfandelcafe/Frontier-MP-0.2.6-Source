@@ -59,8 +59,8 @@ if not "%CMAKE_RC%"=="0" (
     pause
     exit /b %CMAKE_RC%
 )
-echo Building Release...
-cmake --build --preset windows-vs2026-x64-release > "build\vs2026-x64\cef_build.log" 2>&1
+echo Building Release (all targets)...
+cmake --build --preset windows-vs2026-x64-release --target ALL_BUILD --parallel > "build\vs2026-x64\cef_build.log" 2>&1
 set "BUILD_RC=%ERRORLEVEL%"
 echo.
 echo ===== CMake build output =====
