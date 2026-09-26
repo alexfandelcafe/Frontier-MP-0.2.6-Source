@@ -5,6 +5,10 @@
 #include <thread>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <string>
+#include <vector>
+#include <mutex>
 
 struct IDXGISwapChain;
 
@@ -25,6 +29,11 @@ public:
     bool start(frontier::game::RdrBridge& bridge);
     void stop();
 
+    using FrontendCommandHandler =
+        std::function<void(const std::string&, const std::vector<std::string>&)>;
+
+    void set_frontend_command_handler(FrontendCommandHandler handler);
+
     // Called by the CEF render handler. The buffer is BGRA and owned by CEF.
     void accept_paint(const void* buffer, int width, int height);
 
@@ -41,6 +50,10 @@ public:
         std::intptr_t lParam,
         std::intptr_t& result);
 
+    bool handle_frontend_command(
+        const std::string& command,
+        const std::vector<std::string>& arguments);
+
 private:
     void thread_main();
     bool initialize_on_game_thread();
@@ -54,6 +67,9 @@ private:
     std::thread thread_{};
     frontier::game::RdrBridge* bridge_{};
     std::unique_ptr<State> state_{};
+    std::atomic<bool> frontendConnectRequested_{false};
+    mutable std::mutex frontendCommandMutex_;
+    FrontendCommandHandler frontendCommandHandler_{};
 };
 
 } // namespace frontier::client
