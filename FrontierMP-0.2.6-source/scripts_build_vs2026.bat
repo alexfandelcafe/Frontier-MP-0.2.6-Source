@@ -60,7 +60,9 @@ if not "%CMAKE_RC%"=="0" (
     exit /b %CMAKE_RC%
 )
 echo Building Release (all targets)...
-cmake --build --preset windows-vs2026-x64-release --target ALL_BUILD --parallel > "build\vs2026-x64\cef_build.log" 2>&1
+echo Build progress is shown live below.
+echo A complete MSBuild log is also written to build\vs2026-x64\cef_build.log
+cmake --build --preset windows-vs2026-x64-release --target ALL_BUILD --parallel --verbose -- /flp:LogFile=build\vs2026-x64\cef_build.log;Verbosity=normal
 set "BUILD_RC=%ERRORLEVEL%"
 echo.
 echo ===== CMake build output =====
