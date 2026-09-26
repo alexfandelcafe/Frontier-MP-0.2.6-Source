@@ -10,6 +10,14 @@ if errorlevel 1 (
 echo Using CMake:
 cmake --version
 echo.
+
+if not defined FRONTIER_CEF_PACKAGE_DIR (
+    if exist "C:\cef_binary_154.0.28+g564dd6c+chromium-154.0.8037.58_windows64\include\cef_api_hash.h" (
+        set "FRONTIER_CEF_PACKAGE_DIR=C:\cef_binary_154.0.28+g564dd6c+chromium-154.0.8037.58_windows64"
+        echo Auto-detected CEF SDK: %FRONTIER_CEF_PACKAGE_DIR%
+    )
+)
+
 if defined FRONTIER_CEF_PACKAGE_DIR (
     echo CEF SDK: %FRONTIER_CEF_PACKAGE_DIR%
     if not exist "%FRONTIER_CEF_PACKAGE_DIR%\include\cef_api_hash.h" (
