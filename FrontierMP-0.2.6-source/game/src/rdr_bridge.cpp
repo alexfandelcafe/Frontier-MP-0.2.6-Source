@@ -922,6 +922,17 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
                 std::uintptr_t result = 0u;
 
                 switch (task) {
+                case HistoricalOnlineBootstrapTask::SendStartScreenExit: {
+                    std::uintptr_t args[1]{};
+                    args[0] = reinterpret_cast<std::uintptr_t>("StartScreen1");
+                    ok = nativeInvoker_.invoke_raw(
+                        kNativeUiExit, args, 1u, result);
+                    historicalOnlineBootstrapTaskResult_.store(
+                        static_cast<std::uint32_t>(result),
+                        std::memory_order_release);
+                    break;
+                }
+
                 case HistoricalOnlineBootstrapTask::SendEnterOnlineForInvite: {
                     std::uintptr_t args[1]{};
                     args[0] = reinterpret_cast<std::uintptr_t>(
@@ -948,11 +959,9 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
                     break;
 
                 case HistoricalOnlineBootstrapTask::FinishLoadOnline: {
-                    std::uintptr_t exitArgs[1]{};
-                    exitArgs[0] =
-                        reinterpret_cast<std::uintptr_t>("StartScreen1");
-                    ok = nativeInvoker_.invoke_raw(
-                        kNativeUiExit, exitArgs, 1u, result);
+                    // StartScreen1 is exited by the dedicated bootstrap task,
+                    // matching the historical order before EnterOnlineForInvite.
+                    ok = true;
 
                     if (ok) {
                         std::uintptr_t args[2]{};
