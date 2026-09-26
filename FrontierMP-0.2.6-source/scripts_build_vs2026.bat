@@ -108,3 +108,8 @@ if not exist "build\vs2026-x64\bin\Release\FrontierClient.dll" exit /b 3
 
 echo Build completed successfully.
 exit /b 0
+
+echo.
+echo Build script finished.
+pause
+exit /b 0
