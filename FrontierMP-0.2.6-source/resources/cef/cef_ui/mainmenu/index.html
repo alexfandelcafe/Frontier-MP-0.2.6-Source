@@ -24,54 +24,137 @@
       align-items: center;
       justify-content: center;
       pointer-events: auto;
+      user-select: none;
     }
 
     .panel {
-      width: min(760px, calc(100vw - 80px));
-      padding: 34px 40px;
+      width: min(720px, calc(100vw - 64px));
+      padding: 30px 34px;
       box-sizing: border-box;
-      border: 1px solid rgba(255, 255, 255, 0.18);
+      border: 1px solid rgba(255, 255, 255, 0.16);
       border-radius: 14px;
-      background: rgba(13, 16, 20, 0.90);
-      box-shadow: 0 22px 60px rgba(0, 0, 0, 0.48);
+      background: rgba(13, 16, 20, 0.88);
+      box-shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
       backdrop-filter: blur(5px);
     }
 
     h1 {
-      margin: 0 0 10px;
+      margin: 0 0 8px;
       font-size: 34px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
     }
 
     p {
-      margin: 0 0 12px;
-      color: rgba(255, 255, 255, 0.78);
+      margin: 0 0 20px;
+      color: rgba(255, 255, 255, 0.76);
       line-height: 1.5;
     }
 
-    .status {
-      margin-top: 22px;
-      padding: 12px 14px;
-      border-left: 3px solid rgba(255, 255, 255, 0.62);
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    input {
+      min-width: 0;
+      flex: 1;
+      padding: 11px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 8px;
       background: rgba(255, 255, 255, 0.06);
-      color: rgba(255, 255, 255, 0.90);
+      color: #fff;
+      outline: none;
+    }
+
+    input.port {
+      flex: 0 0 120px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 11px 16px;
+      background: rgba(255, 255, 255, 0.14);
+      color: #fff;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: rgba(255, 255, 255, 0.20);
+    }
+
+    .actions {
+      margin-top: 16px;
+      display: flex;
+      gap: 10px;
+    }
+
+    .status {
+      margin-top: 18px;
+      padding: 11px 13px;
+      border-left: 3px solid rgba(255, 255, 255, 0.62);
+      background: rgba(255, 255, 255, 0.05);
+      color: rgba(255, 255, 255, 0.82);
     }
 
     small {
       display: block;
-      margin-top: 18px;
-      color: rgba(255, 255, 255, 0.46);
+      margin-top: 16px;
+      color: rgba(255, 255, 255, 0.42);
     }
   </style>
 </head>
 <body>
   <main class="panel">
     <h1>FrontierMP</h1>
-    <p>Native RDR Title Screen 3D scene remains underneath this CEF frontend.</p>
-    <p>The browser is rendered off-screen and composited into the game's D3D11 frame.</p>
-    <div class="status">CEF OSR / D3D11 composition path active.</div>
+    <p>The native RDR 3D Title Screen remains visible underneath the transparent Frontier frontend.</p>
+
+    <div class="row">
+      <input id="host" type="text" value="127.0.0.1" aria-label="Server address">
+      <input id="port" class="port" type="number" value="30120" min="1" max="65535" aria-label="Server port">
+    </div>
+
+    <div class="actions">
+      <button id="connect">Enter Frontier</button>
+      <button id="quit">Exit Game</button>
+    </div>
+
+    <div id="status" class="status">Frontend ready. The game will remain on its native 3D scene until a connection is requested.</div>
     <small>cef/cef_ui/mainmenu/index.html</small>
   </main>
+
+  <script>
+    (() => {
+      const host = document.getElementById("host");
+      const port = document.getElementById("port");
+      const status = document.getElementById("status");
+      const connect = document.getElementById("connect");
+      const quit = document.getElementById("quit");
+
+      connect.addEventListener("click", () => {
+        const address = host.value.trim() || "127.0.0.1";
+        const value = Number(port.value);
+        const serverPort = Number.isInteger(value) && value >= 1 && value <= 65535
+          ? value
+          : 30120;
+
+        status.textContent = "Connecting to " + address + ":" + serverPort + " and starting the multiplayer transition...";
+
+        if (window.app && typeof window.app.connect === "function") {
+          window.app.connect(address, serverPort);
+        } else {
+          status.textContent = "CEF application bridge is unavailable.";
+        }
+      });
+
+      quit.addEventListener("click", () => {
+        if (window.app && typeof window.app.quit === "function") {
+          window.app.quit();
+        }
+      });
+    })();
+  </script>
 </body>
 </html>
