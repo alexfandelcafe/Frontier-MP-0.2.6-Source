@@ -1962,3 +1962,54 @@ Antes de tocar RemotePlayerManager o inventar un native de START_GAMEPLAY,
 usar los nuevos trazadores para reconstruir la secuencia exacta de UI y
 determinar si fileStartNewGame/StartScreen transitions preceden directamente
 al teardown y al access violation.
+
+
+============================================================
+53. OBJETIVO CONFIRMADO: CEF SOBRE TITLE SCREEN, SIN INPUT EN UI NATIVA
+============================================================
+
+El último client.log corresponde a una prueba sin tocar botones del Title Screen.
+La ejecución muestra explícitamente que Frontier por sí solo estaba enviando
+eventos a la UI nativa:
+
+- UI_EXIT object=StartScreen1
+- UI_SEND_EVENT event=net.EnterOnlineForInvite
+- HUD_FADE_TO_LOADING_SCREEN
+- UI_SEND_EVENT event=fileSetForMPLoad
+- UI_SEND_EVENT event=fileStartupChecksComplete
+- NET_AUTHENTICATE_GAMER mode=0 profile=Online result=0x0
+- UI_EXIT object=LoadingScreen
+
+Después de eso Frontier creó el actor local y entró en state=active.
+
+Esto confirma que la apariencia de "Title Screen" no debía interpretarse como una
+decisión del usuario: el bootstrap C++ estaba manipulando la máquina de UI sin
+input externo.
+
+Objetivo de producto confirmado por el usuario:
+- NO usar los botones de la UI nativa del Title Screen.
+- Mantener el Title Screen como escena/base visual.
+- Colocar el CEF por encima de esa escena.
+- Las futuras acciones de menú/gameplay deberán venir del frontend CEF, no de
+  StartScreen1/StartScreen2 nativos.
+
+Cambio aplicado:
+- FRONTIER_NATIVE_UI_BOOTSTRAP controla ahora el bootstrap histórico nativo.
+- Por defecto está DESACTIVADO.
+- Solo con FRONTIER_NATIVE_UI_BOOTSTRAP=1 se permite reproducir la secuencia
+  histórica UI_EXIT/UI_SEND_EVENT/HUD_FADE/...
+- En modo por defecto el runtime registra:
+  [FrontierClient] native UI bootstrap disabled (CEF/frontend-owned mode)
+
+Esto evita que Frontier navegue el Title Screen por su cuenta.
+
+Importante:
+El último client.log todavía corresponde a una ejecución anterior a este
+cambio; por eso sí contiene los eventos UI automáticos. La próxima ejecución
+debe mostrar el bootstrap nativo desactivado y no debe contener
+UI_EXIT(StartScreen1), net.EnterOnlineForInvite ni HUD_FADE_TO_LOADING_SCREEN
+provenientes de Frontier.
+
+No se modificó RemotePlayerManager ni se añadió ningún START_GAMEPLAY native.
+El próximo trabajo queda centrado en el overlay CEF y, más adelante, en definir
+un camino de entrada a gameplay controlado desde CEF.
