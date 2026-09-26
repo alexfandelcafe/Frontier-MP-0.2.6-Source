@@ -536,6 +536,15 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
                     logLine =
                         "[FrontierSession] historical LoadOnline "
                         "HUD_FADE_TO_LOADING_SCREEN invoke failed";
+                } else if (
+                    historicalOnlineBootstrapTask_ ==
+                    HistoricalOnlineBootstrapTask::FinishLoadOnline) {
+                    if (historicalOnlineBootstrapAttempts_ == 1 ||
+                        (historicalOnlineBootstrapAttempts_ % 8u) == 0u) {
+                        logLine =
+                            "[FrontierSession] historical LoadOnline "
+                            "finish step invoke failed; retrying";
+                    }
                 } else {
                     logLine =
                         "[FrontierSession] historical LoadOnline "
