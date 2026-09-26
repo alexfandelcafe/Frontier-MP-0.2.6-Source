@@ -2404,17 +2404,6 @@ bool RdrBridge::read_local_player_runtime(
         error = buffer;
     }
 
-    if (!outReady) {
-        char buffer[384]{};
-        std::snprintf(
-            buffer, sizeof(buffer),
-            "local-player contract pending sm_LocalPlayer=%u actor=0x%08X actorValid=%u",
-            localPlayerObject ? 1u : 0u,
-            actor,
-            actorValid ? 1u : 0u);
-        error = buffer;
-    }
-
     return true;
 }
 
