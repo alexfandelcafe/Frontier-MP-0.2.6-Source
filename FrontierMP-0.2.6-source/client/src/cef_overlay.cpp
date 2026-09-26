@@ -934,7 +934,7 @@ bool install_render_path(CefOverlay* overlay) {
             error)) {
         g_presentHook.createOriginal =
             reinterpret_cast<PresentHookState::CreateDeviceAndSwapChainProc>(
-                d3dOriginal = g_presentHook.createImport.original);
+                g_presentHook.createImport.original);
         anyHookInstalled = true;
         log_line("[FrontierD3D] D3D11CreateDeviceAndSwapChain IAT hook installed");
     } else {
