@@ -552,6 +552,24 @@ std::string RdrBridge::local_player_chain_diagnostic() const {
     return localPlayerChainDiagnostic_;
 }
 
+void RdrBridge::reset_historical_online_bootstrap() {
+    std::lock_guard lock(historicalOnlineBootstrapMutex_);
+    historicalOnlineBootstrapStage_ = HistoricalOnlineBootstrapStage::NotStarted;
+    historicalOnlineBootstrapTask_ = HistoricalOnlineBootstrapTask::None;
+    historicalOnlineBootstrapEventCompleted_ = false;
+    historicalOnlineBootstrapAttempts_ = 0;
+    historicalOnlineBootstrapTaskPending_.store(false, std::memory_order_release);
+    historicalOnlineBootstrapTaskDone_.store(false, std::memory_order_release);
+    historicalOnlineBootstrapTaskFailed_.store(false, std::memory_order_release);
+    historicalOnlineBootstrapTaskResult_.store(0u, std::memory_order_release);
+    historicalOnlineBootstrapAuthResult_.store(0u, std::memory_order_release);
+}
+
+bool RdrBridge::historical_online_bootstrap_complete() const {
+    std::lock_guard lock(historicalOnlineBootstrapMutex_);
+    return historicalOnlineBootstrapStage_ == HistoricalOnlineBootstrapStage::Complete;
+}
+
 bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild build) {
     initialized_ = false;
     build_ = build;
@@ -566,8 +584,11 @@ bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild 
     if (activeHistoricalScriptTrace_ == this) {
         activeHistoricalScriptTrace_ = nullptr;
     }
-    historicalOnlineBootstrapStage_ = HistoricalOnlineBootstrapStage::NotStarted;
-    historicalOnlineBootstrapTask_ = HistoricalOnlineBootstrapTask::None;
+    {
+        std::lock_guard lock(historicalOnlineBootstrapMutex_);
+        historicalOnlineBootstrapStage_ = HistoricalOnlineBootstrapStage::NotStarted;
+        historicalOnlineBootstrapTask_ = HistoricalOnlineBootstrapTask::None;
+    }
     historicalOnlineBootstrapEventCompleted_ = false;
     historicalOnlineBootstrapAttempts_ = 0;
     historicalOnlineBootstrapTaskPending_.store(false, std::memory_order_release);
@@ -919,6 +940,8 @@ bool RdrBridge::try_initialize_game_thread_dispatcher() {
 
 bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
     logLine.clear();
+
+    std::lock_guard bootstrapLock(historicalOnlineBootstrapMutex_);
 
     if (!initialized_ || !nativeInvoker_.ready() ||
         !gameThreadDispatcher_.attached()) {
