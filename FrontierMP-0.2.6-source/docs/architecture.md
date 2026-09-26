@@ -28,6 +28,25 @@ Dedicated Server
 
 ## Frontend ownership
 
-The RDR Title Screen 3D scene remains the visual base. FrontierClient does not drive the native Title Screen menu by default. The historical native UI bootstrap is opt-in via FRONTIER_NATIVE_UI_BOOTSTRAP=1.
+The RDR Title Screen 3D scene remains the visual base. Native Title Screen button input is not the primary control path.
 
-When built with a CEF SDK, the client can host the Frontier HTML frontend as a child window over the RDR window. The current CEF milestone only establishes browser hosting and page loading; JavaScript-to-native commands and CEF-owned frontend-to-gameplay transition remain subsequent work.
+The CEF frontend is windowless/off-screen. Its BGRA frames are composited into the game's D3D11 swapchain. The renderer subprocess exposes app.connect(host, port) and app.quit(); browser-side handlers translate those commands into Frontier runtime actions.
+
+FRONTIER_NATIVE_UI_BOOTSTRAP is retained only as an explicit legacy diagnostic path. It is not part of the normal CEF-owned startup sequence.
+
+## Session ownership
+
+Frontend visibility, world loading, local-player readiness and gameplay activation are independent signals.
+
+The session state machine is:
+
+    Booting
+      -> native invoker ready
+      -> game-thread dispatcher ready
+      -> Frontend
+      -> explicit historical online bootstrap requested
+      -> WaitingForWorld
+      -> WaitingForLocalPlayer
+      -> Active
+
+worldLoaded alone never transitions the session to Active.
