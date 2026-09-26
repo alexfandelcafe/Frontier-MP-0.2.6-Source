@@ -14,10 +14,14 @@ bool NetworkClient::start(const std::string& host, std::uint16_t port, const std
     buildHash_ = buildHash;
     sessionToken_ = sessionToken;
     connectionId_ = make_connection_id();
+    playerId_ = 0;
     state_ = ConnectionState::Handshaking;
     lastReceiveMs_ = 0;
     lastHelloMs_ = 0;
     lastHeartbeatMs_ = 0;
+    nextSequence_ = 1;
+    receiveHistory_ = {};
+    reliability_ = {};
     const auto now = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
     send_hello(now);
     return true;
@@ -90,6 +94,14 @@ void NetworkClient::handle_packet(const std::vector<std::uint8_t>& bytes, std::u
     protocol::PacketHeader header{};
     protocol::Message message{};
     if (!protocol::decode_packet(bytes, header, message)) return;
+    // Before Welcome the server owns the connection id in its response. Once
+    // connected, every non-Welcome packet must carry the server-issued id.
+    if (state_ == ConnectionState::Connected &&
+        message.type != protocol::MessageType::Welcome &&
+        header.connectionId != connectionId_) {
+        return;
+    }
+
     reliability_.acknowledge(header.ack, header.ackBits);
     if (!receiveHistory_.accept(header.sequence)) return;
     lastReceiveMs_ = nowMs;
