@@ -1,3 +1,8 @@
+## 0.2.72
+- Disable the full actor/player lifecycle native hook set during initial startup after the 0xC0000005 run still showed IS_LOCAL_PLAYER_VALID being intercepted.
+- Keep deferred startup actor tracing limited to GET_PLAYER_ACTOR(-1) until the remaining actor lifecycle ABIs are validated from real game calls.
+- Preserve the existing GET_PLAYER_ACTOR observation model and avoid reintroducing synthetic native polling.
+
 ## 0.2.71
 - Stop synthesizing GET_PLAYER_ACTOR(-1) through NativeInvoker during startup.
 - Consume the game's own GET_PLAYER_ACTOR(-1) result from the native tracer so InitSpawn remains the producer of the local-player readiness signal.
