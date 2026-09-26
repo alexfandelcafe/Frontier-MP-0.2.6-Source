@@ -1,3 +1,17 @@
+# Changelog
+
+## 0.2.42 — session/CEF bootstrap stabilization
+
+- Reworked DXGI factory interception to use per-interface shadow vtables and preserve the original COM vtable addresses.
+- Fixed a factory-interface ordering issue that could over-read an IDXGIFactory shadow table while resolving IDXGIFactory2.
+- Restored swapchain/factory shadow vtables before renderer shutdown and kept the hooked swapchain alive for the lifetime of the hook.
+- Made game-thread task timeouts lifetime-safe when a queued task has already started executing.
+- Made FrontierSession::Active depend on explicit historical multiplayer bootstrap completion plus stable world and readable local-player state.
+- Added CEF window.app.connect(host, port) and window.app.quit() bindings in the renderer subprocess.
+- Connected CEF commands to the Frontier client runtime and serialized server reconnection requests.
+- Reset client/server packet sequencing and connection identity state on reconnect.
+- Kept DLL attach work minimal and moved diagnostic handler registration out of DllMain.
+- Updated runtime architecture documentation and ignored generated build/log artifacts.
 ## 0.2.69
 - Rework native registration discovery to match the documented RDRMP/Frontier 0.2.6 validation: scan all matching registration patterns, wait for an initialized table, require the historical `0xA0AE0C98` sentinel, and require at least one known RDR native before binding the storage.
 - Do not permanently select an early registration object whose table is still zeroed during RDR startup.
