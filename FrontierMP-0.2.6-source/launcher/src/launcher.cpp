@@ -4,6 +4,8 @@
 #include "frontier/launcher/launcher.hpp"
 #include "frontier/game/build_fingerprint.hpp"
 
+#include <algorithm>
+#include <array>
 #include <filesystem>
 #include <iostream>
 #include <sstream>
@@ -301,6 +303,31 @@ std::vector<wchar_t> Launcher::build_environment(
 
     entries.push_back(L"FRONTIER_SESSION_MODE=freeroam");
 
+    // CEF is loaded inside RDR.exe. Prepend the FrontierClient directory to
+    // PATH so the Windows loader can resolve CEF side-by-side dependencies
+    // such as chrome_elf.dll when LoadLibraryW runs in the game process.
+    std::wstring pathValue;
+    for (const auto& entry : entries) {
+        if (entry.rfind(L"PATH=", 0) == 0) {
+            pathValue = entry.substr(5);
+            break;
+        }
+    }
+
+    const auto clientDirectory = options.clientDll.parent_path().wstring();
+    if (!clientDirectory.empty()) {
+        pathValue = clientDirectory + L";" + pathValue;
+        entries.erase(
+            std::remove_if(
+                entries.begin(),
+                entries.end(),
+                [](const std::wstring& entry) {
+                    return entry.rfind(L"PATH=", 0) == 0;
+                }),
+            entries.end());
+        entries.push_back(L"PATH=" + pathValue);
+    }
+
     entries.push_back(
         L"FRONTIER_BOOTSTRAP_EVENT=" +
         bootstrapEventName);
@@ -338,6 +365,23 @@ int Launcher::run(const LaunchOptions& options) const {
             << options.clientDll
             << L"\n";
         return 2;
+    }
+
+    const std::array<std::filesystem::path, 4> cefRuntimeFiles = {
+        dllPath.parent_path() / L"libcef.dll",
+        dllPath.parent_path() / L"chrome_elf.dll",
+        dllPath.parent_path() / L"icudtl.dat",
+        dllPath.parent_path() / L"v8_context_snapshot.bin",
+    };
+
+    for (const auto& cefFile : cefRuntimeFiles) {
+        if (!std::filesystem::exists(cefFile)) {
+            std::wcerr
+                << L"Required CEF runtime file is missing: "
+                << cefFile.wstring()
+                << L"\n";
+            return 2;
+        }
     }
 
     if (!verify_game(gamePath.wstring())) {
@@ -422,7 +466,8 @@ int Launcher::run(const LaunchOptions& options) const {
     }
 
     std::cout
-        << "FrontierClient.dll loaded successfully.\n";
+        << "FrontierClient.dll loaded successfully.\n"
+        << "  CEF runtime directory=" << dllPath.parent_path().string() << "\n";
 
     if (!wait_for_bootstrap_ready(
             bootstrapEventName,
