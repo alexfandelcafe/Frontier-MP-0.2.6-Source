@@ -218,12 +218,17 @@ void position_browser_window(
     HWND browserWindow = browser->GetHost()->GetWindowHandle();
     if (browserWindow == nullptr) return;
 
-    const RECT rect = overlay_rect(gameWindow);
+    // Use screen coordinates because the CEF browser is an owned popup,
+    // not a WS_CHILD. This keeps it above the game's native render surface.
+    RECT rect = overlay_rect(gameWindow);
+    POINT topLeft{rect.left, rect.top};
+    if (!ClientToScreen(gameWindow, &topLeft)) return;
+
     SetWindowPos(
         browserWindow,
         HWND_TOP,
-        rect.left,
-        rect.top,
+        topLeft.x,
+        topLeft.y,
         rect.right - rect.left,
         rect.bottom - rect.top,
         SWP_NOACTIVATE | SWP_SHOWWINDOW);
@@ -444,14 +449,12 @@ bool CefOverlay::initialize_on_game_thread() {
     }
 
     const RECT rect = overlay_rect(state.gameWindow);
-    const CefRect cefRect(
-        rect.left,
-        rect.top,
-        rect.right - rect.left,
-        rect.bottom - rect.top);
 
     CefWindowInfo windowInfo;
-    windowInfo.SetAsChild(state.gameWindow, cefRect);
+    // A WS_CHILD browser can be composited underneath a game's Direct3D
+    // presentation surface. Use an owned popup so Windows keeps the CEF
+    // surface above the RDR window while still tying its lifetime to RDR.
+    windowInfo.SetAsPopup(state.gameWindow, "FrontierMP");
 
     CefBrowserSettings browserSettings;
     state.client = new FrontierCefClient();
@@ -478,7 +481,38 @@ bool CefOverlay::initialize_on_game_thread() {
     const HWND browserWindow =
         state.browser->GetHost()->GetWindowHandle();
     if (browserWindow != nullptr) {
-        ShowWindow(browserWindow, SW_SHOW);
+        RECT screenRect = rect;
+        POINT topLeft{rect.left, rect.top};
+        if (ClientToScreen(state.gameWindow, &topLeft)) {
+            screenRect.left = topLeft.x;
+            screenRect.top = topLeft.y;
+            screenRect.right =
+                topLeft.x + (rect.right - rect.left);
+            screenRect.bottom =
+                topLeft.y + (rect.bottom - rect.top);
+        }
+
+        const LONG_PTR style = GetWindowLongPtrA(
+            browserWindow, GWL_STYLE);
+        SetWindowLongPtrA(
+            browserWindow,
+            GWL_STYLE,
+            style | WS_POPUP | WS_VISIBLE);
+
+        SetWindowPos(
+            browserWindow,
+            HWND_TOP,
+            screenRect.left,
+            screenRect.top,
+            screenRect.right - screenRect.left,
+            screenRect.bottom - screenRect.top,
+            SWP_NOACTIVATE | SWP_SHOWWINDOW);
+
+        log_line(
+            "[FrontierCEF] overlay window shown hwnd=0x" +
+            std::to_string(reinterpret_cast<std::uintptr_t>(browserWindow)) +
+            " parent=0x" +
+            std::to_string(reinterpret_cast<std::uintptr_t>(state.gameWindow)));
     }
 
     state.initialized = true;
