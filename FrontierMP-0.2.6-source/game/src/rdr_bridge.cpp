@@ -1257,20 +1257,20 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
                 HistoricalOnlineBootstrapTask::FinishLoadOnline) {
                 historicalOnlineBootstrapEventCompleted_ = true;
                 historicalOnlineBootstrapStage_ =
-                    HistoricalOnlineBootstrapStage::WaitingForPlayerActor;
+                    HistoricalOnlineBootstrapStage::Complete;
 
                 char message[256]{};
                 std::snprintf(
                     message,
                     sizeof(message),
-                    "[FrontierSession] historical LoadOnline stage=2 complete "
+                    "[FrontierSession] historical LoadOnline bootstrap complete "
                     "StartScreen2 transition active, file events sent, "
                     "NET_AUTHENTICATE_GAMER result=0x%llX",
                     static_cast<unsigned long long>(
                         historicalOnlineBootstrapAuthResult_.load(
                             std::memory_order_acquire)));
                 logLine = message;
-                return false;
+                return true;
             }
 
             if (historicalOnlineBootstrapTask_ ==
@@ -1346,72 +1346,11 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
         return false;
     }
 
-    case HistoricalOnlineBootstrapStage::WaitingForPlayerActor: {
-        if (historicalOnlineBootstrapTaskPending_.load(
-                std::memory_order_acquire)) {
-            return false;
-        }
-
-        if (historicalOnlineBootstrapTaskDone_.exchange(
-                false, std::memory_order_acq_rel)) {
-            const auto completedTask = historicalOnlineBootstrapTask_;
-            const bool failed =
-                historicalOnlineBootstrapTaskFailed_.load(
-                    std::memory_order_acquire);
-
-            if (completedTask ==
-                       HistoricalOnlineBootstrapTask::QueryPlayerActor) {
-                if (failed) {
-                    if (historicalOnlineBootstrapAttempts_ == 1 ||
-                        (historicalOnlineBootstrapAttempts_ % 8u) == 0u) {
-                        logLine =
-                            "[FrontierSession] historical boot.sc "
-                            "GET_PLAYER_ACTOR invoke failed; retrying";
-                    }
-                } else {
-                    const auto actor =
-                        historicalOnlineBootstrapTaskResult_.load(
-                            std::memory_order_acquire);
-
-                    if (actor != 0u) {
-                        historicalOnlineBootstrapStage_ =
-                            HistoricalOnlineBootstrapStage::Complete;
-
-                        char message[256]{};
-                        std::snprintf(
-                            message,
-                            sizeof(message),
-                            "[FrontierSession] historical InitSpawn "
-                            "player actor ready actor=0x%08X",
-                            static_cast<unsigned>(actor));
-                        logLine = message;
-                        return true;
-                    }
-                }
-            }
-        }
-
-        if (!historicalOnlineBootstrapEventCompleted_) {
-            return false;
-        }
-
-        if (!historicalOnlineBootstrapTaskPending_.load(
-                std::memory_order_acquire)) {
-            ++historicalOnlineBootstrapAttempts_;
-            std::string error;
-            if (!submitTask(
-                    HistoricalOnlineBootstrapTask::QueryPlayerActor,
-                    error) &&
-                (historicalOnlineBootstrapAttempts_ == 1 ||
-                 (historicalOnlineBootstrapAttempts_ % 8u) == 0u)) {
-                logLine =
-                    "[FrontierSession] historical boot.sc "
-                    "GET_PLAYER_ACTOR queue delayed: " + error;
-            }
-        }
-
-        return false;
-    }
+    case HistoricalOnlineBootstrapStage::WaitingForPlayerActor:
+        // Kept for state compatibility with older diagnostics. Player creation
+        // is now handled by ClientRuntime after the gameplay bootstrap completes.
+        historicalOnlineBootstrapStage_ = HistoricalOnlineBootstrapStage::Complete;
+        return true;
 
     case HistoricalOnlineBootstrapStage::Complete:
         return true;
