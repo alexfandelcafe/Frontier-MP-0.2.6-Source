@@ -2,7 +2,6 @@
 #include "frontier/game/rdr_bridge.hpp"
 
 #include <windows.h>
-#include <windowsx.h>
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <dxgi.h>
@@ -27,6 +26,8 @@
 #include "include/cef_browser.h"
 #include "include/cef_client.h"
 #include "include/cef_render_handler.h"
+
+#include <windowsx.h>
 
 namespace frontier::client {
 
@@ -189,7 +190,9 @@ class FrontierCefClient final
     , public CefLifeSpanHandler
     , public CefLoadHandler {
 public:
-    FrontierCefClient(CefOverlay* owner, RenderHandler* renderHandler)
+    FrontierCefClient(
+        CefOverlay* owner,
+        CefRefPtr<RenderHandler> renderHandler)
         : owner_(owner),
           renderHandler_(renderHandler) {}
 
