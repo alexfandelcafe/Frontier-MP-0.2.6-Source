@@ -1302,67 +1302,44 @@ bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
     }
 
     case HistoricalOnlineBootstrapStage::WaitingForPlayerActor: {
-        if (historicalOnlineBootstrapTaskPending_.load(
-                std::memory_order_acquire)) {
-            return false;
-        }
+        // InitSpawn itself performs GET_PLAYER_ACTOR(-1) on the game thread.
+        // Consume the observed result instead of issuing a second synthetic
+        // native invocation from Frontier's worker/dispatcher path.
+        std::uint32_t actor = 0u;
+        const bool actorObserved =
+            startupNativeTracer_.observed_local_player_actor(actor);
 
-        if (historicalOnlineBootstrapTaskDone_.exchange(
-                false, std::memory_order_acq_rel)) {
-            const auto completedTask = historicalOnlineBootstrapTask_;
-            const bool failed =
-                historicalOnlineBootstrapTaskFailed_.load(
-                    std::memory_order_acquire);
+        if (actorObserved && actor != 0u) {
+            historicalOnlineBootstrapStage_ =
+                HistoricalOnlineBootstrapStage::Complete;
 
-            if (completedTask ==
-                       HistoricalOnlineBootstrapTask::QueryPlayerActor) {
-                if (failed) {
-                    if (historicalOnlineBootstrapAttempts_ == 1 ||
-                        (historicalOnlineBootstrapAttempts_ % 8u) == 0u) {
-                        logLine =
-                            "[FrontierSession] historical boot.sc "
-                            "GET_PLAYER_ACTOR invoke failed; retrying";
-                    }
-                } else {
-                    const auto actor =
-                        historicalOnlineBootstrapTaskResult_.load(
-                            std::memory_order_acquire);
-
-                    if (actor != 0u) {
-                        historicalOnlineBootstrapStage_ =
-                            HistoricalOnlineBootstrapStage::Complete;
-
-                        char message[256]{};
-                        std::snprintf(
-                            message,
-                            sizeof(message),
-                            "[FrontierSession] historical InitSpawn "
-                            "player actor ready actor=0x%08X",
-                            static_cast<unsigned>(actor));
-                        logLine = message;
-                        return true;
-                    }
-                }
-            }
+            char message[256]{};
+            std::snprintf(
+                message,
+                sizeof(message),
+                "[FrontierSession] historical InitSpawn "
+                "player actor ready actor=0x%08X",
+                static_cast<unsigned>(actor));
+            logLine = message;
+            return true;
         }
 
         if (!historicalOnlineBootstrapEventCompleted_) {
             return false;
         }
 
-        if (!historicalOnlineBootstrapTaskPending_.load(
-                std::memory_order_acquire)) {
-            ++historicalOnlineBootstrapAttempts_;
-            std::string error;
-            if (!submitTask(
-                    HistoricalOnlineBootstrapTask::QueryPlayerActor,
-                    error) &&
-                (historicalOnlineBootstrapAttempts_ == 1 ||
-                 (historicalOnlineBootstrapAttempts_ % 8u) == 0u)) {
-                logLine =
-                    "[FrontierSession] historical boot.sc "
-                    "GET_PLAYER_ACTOR queue delayed: " + error;
-            }
+        ++historicalOnlineBootstrapAttempts_;
+        if (actorObserved &&
+            historicalOnlineBootstrapAttempts_ <= 2u) {
+            logLine =
+                "[FrontierSession] historical InitSpawn "
+                "GET_PLAYER_ACTOR(-1) observed actor=0; waiting for player lifecycle";
+        } else if (!actorObserved &&
+                   (historicalOnlineBootstrapAttempts_ == 1u ||
+                    (historicalOnlineBootstrapAttempts_ % 16u) == 0u)) {
+            logLine =
+                "[FrontierSession] historical InitSpawn "
+                "waiting for game's GET_PLAYER_ACTOR(-1) observation";
         }
 
         return false;
