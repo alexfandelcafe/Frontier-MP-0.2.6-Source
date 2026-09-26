@@ -1,3 +1,7 @@
+## 0.2.73
+- Log when GET_PLAYER_ACTOR is still absent from the native registration table during deferred tracer retries.
+- Make the next runtime distinguish a missing native handler from a native call that occurs without being observed.
+
 ## 0.2.72
 - Disable the full actor/player lifecycle native hook set during initial startup after the 0xC0000005 run still showed IS_LOCAL_PLAYER_VALID being intercepted.
 - Keep deferred startup actor tracing limited to GET_PLAYER_ACTOR(-1) until the remaining actor lifecycle ABIs are validated from real game calls.
