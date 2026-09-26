@@ -724,6 +724,9 @@ struct CefOverlay::State final {
     ComPtr<ID3D11DeviceContext> d3dContext{};
     ComPtr<ID3D11Texture2D> uiTexture{};
     ComPtr<ID3D11ShaderResourceView> uiTextureView{};
+    ComPtr<ID3D11Texture2D> backBuffer{};
+    ComPtr<ID3D11RenderTargetView> backBufferView{};
+    ComPtr<ID3D11Buffer> vertexBuffer{};
     ComPtr<ID3D11VertexShader> vertexShader{};
     ComPtr<ID3D11PixelShader> pixelShader{};
     ComPtr<ID3D11InputLayout> inputLayout{};
@@ -1044,6 +1047,9 @@ bool create_d3d_resources(
         state.d3dContext.Reset();
         state.uiTexture.Reset();
         state.uiTextureView.Reset();
+        state.backBuffer.Reset();
+        state.backBufferView.Reset();
+        state.vertexBuffer.Reset();
         state.vertexShader.Reset();
         state.pixelShader.Reset();
         state.inputLayout.Reset();
@@ -1253,13 +1259,18 @@ bool upload_and_draw(
         return false;
     }
 
-    ComPtr<ID3D11RenderTargetView> renderTarget;
-    if (FAILED(state.d3dDevice->CreateRenderTargetView(
-            backBuffer.Get(),
-            nullptr,
-            &renderTarget))) {
-        log_line("[FrontierD3D] CreateRenderTargetView failed");
-        return false;
+    if (state.backBuffer.Get() != backBuffer.Get()) {
+        state.backBuffer = backBuffer;
+        state.backBufferView.Reset();
+
+        if (FAILED(state.d3dDevice->CreateRenderTargetView(
+                state.backBuffer.Get(),
+                nullptr,
+                &state.backBufferView))) {
+            log_line("[FrontierD3D] CreateRenderTargetView failed");
+            state.backBuffer.Reset();
+            return false;
+        }
     }
 
     if (generation != state.uploadedGeneration) {
@@ -1303,7 +1314,7 @@ bool upload_and_draw(
 
     state.d3dContext->OMSetRenderTargets(
         1,
-        renderTarget.GetAddressOf(),
+        state.backBufferView.GetAddressOf(),
         nullptr);
     state.d3dContext->RSSetViewports(1, &viewport);
     state.d3dContext->RSSetState(state.rasterizerState.Get());
@@ -1322,27 +1333,28 @@ bool upload_and_draw(
         { 3.0f, -1.0f, 0.0f, 2.0f, 1.0f}
     };
 
-    ComPtr<ID3D11Buffer> vertexBuffer;
-    D3D11_BUFFER_DESC bufferDesc{};
-    bufferDesc.ByteWidth = sizeof(vertices);
-    bufferDesc.Usage = D3D11_USAGE_IMMUTABLE;
-    bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    if (state.vertexBuffer == nullptr) {
+        D3D11_BUFFER_DESC bufferDesc{};
+        bufferDesc.ByteWidth = sizeof(vertices);
+        bufferDesc.Usage = D3D11_USAGE_IMMUTABLE;
+        bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 
-    D3D11_SUBRESOURCE_DATA bufferData{};
-    bufferData.pSysMem = vertices;
+        D3D11_SUBRESOURCE_DATA bufferData{};
+        bufferData.pSysMem = vertices;
 
-    if (FAILED(state.d3dDevice->CreateBuffer(
-            &bufferDesc,
-            &bufferData,
-            &vertexBuffer))) {
-        log_line("[FrontierD3D] vertex buffer creation failed");
-        return false;
+        if (FAILED(state.d3dDevice->CreateBuffer(
+                &bufferDesc,
+                &bufferData,
+                &state.vertexBuffer))) {
+            log_line("[FrontierD3D] vertex buffer creation failed");
+            return false;
+        }
     }
 
     UINT stride = sizeof(Vertex);
     UINT offset = 0;
     ID3D11Buffer* vertexBuffers[]{
-        vertexBuffer.Get()
+        state.vertexBuffer.Get()
     };
     state.d3dContext->IASetVertexBuffers(
         0,
@@ -1730,6 +1742,9 @@ void CefOverlay::shutdown_on_game_thread() {
     state_->d3dDevice.Reset();
     state_->uiTexture.Reset();
     state_->uiTextureView.Reset();
+    state_->backBuffer.Reset();
+    state_->backBufferView.Reset();
+    state_->vertexBuffer.Reset();
     state_->vertexShader.Reset();
     state_->pixelShader.Reset();
     state_->inputLayout.Reset();
