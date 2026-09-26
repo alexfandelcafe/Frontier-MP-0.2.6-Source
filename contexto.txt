@@ -1809,3 +1809,67 @@ Próximo diagnóstico prioritario:
 
 NO usar NET_SESSION_START_GAMEPLAY como solución por defecto mientras no exista
 evidencia de que ese native pertenece al flujo correcto de este build.
+
+
+============================================================
+51. CLIENT.LOG POST-INSTRUMENTACIÓN: RESULTADO DECISIVO
+============================================================
+
+El client.log de este branch fue actualizado por el commit:
+d530259959022acb2593c855293cf47c4d41629b
+
+Su padre es:
+998f55b9961765758f00e053611f30c0b5f51b7c
+
+Esto confirma que la ejecución usa el código que ya contiene el diagnóstico
+persistente de ContentPathRedirector para "historical route hit".
+
+Resultado observado:
+- client.log contiene 972 líneas.
+- No contiene ninguna línea:
+  [FrontierContent] historical route hit ...
+- Por tanto, durante esta ejecución NO se observó una solicitud que
+  path_contains_route() identificara como ninguna de las rutas históricas,
+  incluyendo content/ui/boot.sc.
+- Las primeras 32 llamadas de fullReadPath siguen siendo los recursos RPF
+  generales; después tampoco aparece ninguna coincidencia histórica.
+- El hook de fullReadPath estaba instalado antes de la señal de bootstrap y
+  antes del mensaje:
+  [FrontierLauncher] RDR.exe resumed; waiting for process exit
+
+Interpretación:
+1. Ya no es correcto atribuir la ausencia de boot.sc al antiguo límite de
+   32 llamadas.
+2. En esta ejecución, el Title Screen no está demostrando cargar
+   content/ui/boot.sc a través de este fullReadPath hook.
+3. Esto abre dos posibilidades principales:
+   A) boot.sc ya fue cargado/resuelto antes de que este hook quedara activo;
+   B) el sistema que arranca la UI/script usa otro mecanismo de resolución,
+      no este fullReadPath.
+4. El log tampoco muestra LAUNCH_NEW_SCRIPT ni
+   LAUNCH_NEW_SCRIPT_WITH_ARGS después de la inicialización del tracer.
+   El primer Wait observable ocurre antes de native invoker initialized,
+   por lo que los scripts iniciales ya pueden estar vivos antes del tracer.
+
+Evidencia de runtime:
+- gameState pasa 5 -> 3.
+- Después worldLoaded=1.
+- CREATE_PLAYER_ACTOR_IN_LAYOUT crea 0x102.
+- IS_ACTOR_VALID=1.
+- IS_ACTOR_PLAYER=1.
+- IS_ACTOR_LOCAL_PLAYER=1.
+- GET_PLAYER_ACTOR(-1)=0x102.
+- state=active aparece tanto con gameState=3 como posteriormente con
+  gameState=4.
+
+Conclusión de esta ejecución:
+El actor local está creado, pero la cadena de transición del Title Screen sigue
+sin estar demostrada. El siguiente diagnóstico debe salir del resolver
+fullReadPath y concentrarse en:
+- lifecycle real de scripts ya existentes;
+- identificación del script que posee la UI/cámara de StartScreen;
+- mecanismo real que carga/compila boot.sc en este build;
+- eventos UI efectivos y transición a LoadingScreen.
+
+No introducir todavía cambios de gameplay ni asumir que
+NET_SESSION_START_GAMEPLAY es la solución.
