@@ -51,8 +51,8 @@ public:
         auto context = CefV8Context::GetCurrentContext();
         if (context != nullptr) {
             auto frame = context->GetFrame();
-            if (frame != nullptr &&
-                frame->SendProcessMessage(PID_BROWSER, message)) {
+            if (frame != nullptr) {
+                frame->SendProcessMessage(PID_BROWSER, message);
                 retval = CefV8Value::CreateBool(true);
             }
         }
