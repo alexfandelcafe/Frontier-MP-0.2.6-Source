@@ -953,7 +953,10 @@ bool CefOverlay::initialize_on_game_thread() {
     state.client = new FrontierCefClient(this, state.renderHandler);
 
     CefWindowInfo windowInfo;
-    windowInfo.SetAsWindowless(state.gameWindow, true);
+    // CEF 151+ enables transparent painting by default for windowless
+    // browsers. The transparent page background lets the native RDR scene
+    // remain visible beneath the HTML controls.
+    windowInfo.SetAsWindowless(state.gameWindow);
 
     CefBrowserSettings browserSettings;
     browserSettings.background_color = CefColorSetARGB(0, 0, 0, 0);
