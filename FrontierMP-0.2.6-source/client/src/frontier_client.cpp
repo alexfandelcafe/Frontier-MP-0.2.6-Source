@@ -902,6 +902,11 @@ void signal_bootstrap_ready() {
 } // namespace
 
 DWORD WINAPI FrontierClientWorker(LPVOID) {
+    g_frontierVectoredHandler = AddVectoredExceptionHandler(
+        1,
+        frontier_vectored_exception_handler);
+    SetUnhandledExceptionFilter(frontier_unhandled_exception_filter);
+
     log_line("[FrontierClient] worker starting");
     const bool initialized =
         g_runtime.initialize_from_process_command_line();
@@ -980,16 +985,17 @@ extern "C" __declspec(dllexport)
 void FrontierClient_Shutdown() { g_runtime.shutdown(); }
 
 BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID reserved) {
-    (void)module;
     (void)reserved;
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(module);
-        g_frontierVectoredHandler = AddVectoredExceptionHandler(
-            1,
-            frontier_vectored_exception_handler);
-        SetUnhandledExceptionFilter(frontier_unhandled_exception_filter);
+
+        // Keep DLL_PROCESS_ATTACH minimal. The worker performs exception-handler
+        // registration and all CEF/game/network initialization after the loader
+        // lock has been released.
         HANDLE worker = CreateThread(nullptr, 0, FrontierClientWorker, nullptr, 0, nullptr);
-        if (worker) CloseHandle(worker);
+        if (worker) {
+            CloseHandle(worker);
+        }
     } else if (reason == DLL_PROCESS_DETACH) {
         if (g_frontierVectoredHandler != nullptr) {
             RemoveVectoredExceptionHandler(g_frontierVectoredHandler);
