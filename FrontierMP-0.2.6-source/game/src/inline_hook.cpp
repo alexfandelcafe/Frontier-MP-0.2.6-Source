@@ -21,6 +21,9 @@ namespace {
 // return (for example, when a call in the stolen prologue produced a value
 // consumed by the following instruction).
 constexpr std::size_t kAbsoluteJumpSize = 14;
+constexpr std::size_t kRelaySize = kAbsoluteJumpSize;
+constexpr std::uintptr_t kAllocationGranularity = 0x10000ull;
+constexpr std::uintptr_t kRelaySearchStep = 0x1000000ull;
 
 void write_absolute_jump(std::uint8_t* destination, std::uintptr_t target) {
     destination[0] = 0xFF; // jmp qword ptr [rip+0]
@@ -30,6 +33,48 @@ void write_absolute_jump(std::uint8_t* destination, std::uintptr_t target) {
     destination[4] = 0x00;
     destination[5] = 0x00;
     std::memcpy(destination + 6, &target, sizeof(target));
+}
+
+bool rel32_reachable(std::uintptr_t nextInstruction, std::uintptr_t target) {
+    const auto delta =
+        static_cast<std::intptr_t>(target) - static_cast<std::intptr_t>(nextInstruction);
+    return delta >= static_cast<std::intptr_t>(std::numeric_limits<std::int32_t>::min()) &&
+           delta <= static_cast<std::intptr_t>(std::numeric_limits<std::int32_t>::max());
+}
+
+void* allocate_near(std::uintptr_t nearAddress) {
+    const auto aligned = nearAddress & ~(kAllocationGranularity - 1ull);
+    constexpr std::uintptr_t kMaxDistance =
+        static_cast<std::uintptr_t>(std::numeric_limits<std::int32_t>::max());
+
+    for (std::uintptr_t distance = 0; distance <= kMaxDistance; distance += kRelaySearchStep) {
+        const std::uintptr_t candidates[] = {
+            aligned + distance,
+            distance <= aligned ? aligned - distance : 0
+        };
+
+        for (const auto candidate : candidates) {
+            if (candidate == 0 || !rel32_reachable(nearAddress + 5u, candidate)) continue;
+
+            void* allocation = VirtualAlloc(
+                reinterpret_cast<void*>(candidate),
+                kRelaySize,
+                MEM_COMMIT | MEM_RESERVE,
+                PAGE_EXECUTE_READWRITE);
+            if (!allocation) continue;
+
+            const auto address = reinterpret_cast<std::uintptr_t>(allocation);
+            if (rel32_reachable(nearAddress + 5u, address)) {
+                return allocation;
+            }
+
+            VirtualFree(allocation, 0, MEM_RELEASE);
+        }
+
+        if (distance > kMaxDistance - kRelaySearchStep) break;
+    }
+
+    return nullptr;
 }
 
 bool executable_region(std::uintptr_t address, std::size_t size) {
@@ -222,13 +267,28 @@ bool InlineHook::install_call_site(std::uintptr_t callSite,
     }
 
     const auto nextInstruction = callSite + kCallInstructionSize;
-    const auto replacementDelta =
-        static_cast<std::intptr_t>(replacement) - static_cast<std::intptr_t>(nextInstruction);
-    if (replacementDelta < static_cast<std::intptr_t>(std::numeric_limits<std::int32_t>::min()) ||
-        replacementDelta > static_cast<std::intptr_t>(std::numeric_limits<std::int32_t>::max())) {
-        error = name + ": replacement is outside E8 rel32 range";
-        return false;
+    std::uintptr_t callTarget = replacement;
+    void* relay = nullptr;
+
+    if (!rel32_reachable(nextInstruction, replacement)) {
+        relay = allocate_near(callSite);
+        if (!relay) {
+            error = name + ": replacement is outside E8 rel32 range and nearby relay allocation failed";
+            return false;
+        }
+
+        callTarget = reinterpret_cast<std::uintptr_t>(relay);
+        write_absolute_jump(
+            static_cast<std::uint8_t*>(relay),
+            replacement);
+        FlushInstructionCache(
+            GetCurrentProcess(),
+            relay,
+            kRelaySize);
     }
+
+    const auto replacementDelta =
+        static_cast<std::intptr_t>(callTarget) - static_cast<std::intptr_t>(nextInstruction);
 
     originalBytes_.assign(original, original + kCallInstructionSize);
 
@@ -246,6 +306,8 @@ bool InlineHook::install_call_site(std::uintptr_t callSite,
     trampoline_ = originalTarget;
     patchSize_ = kCallInstructionSize;
     ownsTrampoline_ = false;
+    relay_ = reinterpret_cast<std::uintptr_t>(relay);
+    ownsRelay_ = relay != nullptr;
     return true;
 #else
     (void)callSite;
@@ -264,12 +326,17 @@ void InlineHook::reset() {
     if (trampoline_ != 0 && ownsTrampoline_) {
         VirtualFree(reinterpret_cast<void*>(trampoline_), 0, MEM_RELEASE);
     }
+    if (relay_ != 0 && ownsRelay_) {
+        VirtualFree(reinterpret_cast<void*>(relay_), 0, MEM_RELEASE);
+    }
 #endif
 
     target_ = 0;
     trampoline_ = 0;
     patchSize_ = 0;
     ownsTrampoline_ = false;
+    relay_ = 0;
+    ownsRelay_ = false;
     originalBytes_.clear();
 }
 

@@ -1580,9 +1580,14 @@ void StartupNativeTracer::get_player_actor_hook(void* context) {
     if (!tracer) return;
 
     const auto traceIndex = gGetPlayerActorTraceCount++;
+    const auto prePlayerRaw = read_u64_arg_value(context, 0);
+    const auto prePlayer = static_cast<std::int32_t>(
+        static_cast<std::uint32_t>(prePlayerRaw));
+
     if (tracer->originalGetPlayerActor_) {
         tracer->originalGetPlayerActor_(context);
     }
+
     if (traceIndex >= 64) return;
 
     std::uintptr_t result = 0;
@@ -1591,16 +1596,18 @@ void StartupNativeTracer::get_player_actor_hook(void* context) {
 #else
     const bool resultOk = false;
 #endif
-    std::int32_t player = 0;
-    const bool playerOk = read_i32_arg(context, 0, player);
+    std::int32_t postPlayer = 0;
+    const bool postPlayerOk = read_i32_arg(context, 0, postPlayer);
 
-    char buffer[288]{};
+    char buffer[320]{};
     std::size_t used = static_cast<std::size_t>(std::snprintf(
         buffer, sizeof(buffer),
-        "[FrontierNativeTrace] GET_PLAYER_ACTOR trace=%u player=%s%d result=%s0x%llX",
+        "[FrontierNativeTrace] GET_PLAYER_ACTOR trace=%u "
+        "playerPre=%d playerPost=%s%d result=%s0x%llX",
         traceIndex,
-        playerOk ? "" : "?",
-        playerOk ? player : 0,
+        prePlayer,
+        postPlayerOk ? "" : "?",
+        postPlayerOk ? postPlayer : 0,
         resultOk ? "" : "?",
         static_cast<unsigned long long>(result)));
     append_execution_identity(buffer, sizeof(buffer), used, context);

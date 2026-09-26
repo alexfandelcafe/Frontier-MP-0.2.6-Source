@@ -40,6 +40,8 @@ private:
     std::size_t patchSize_{};
     bool ownsTrampoline_{};
     std::vector<std::uint8_t> originalBytes_{};
+    std::uintptr_t relay_{};
+    bool ownsRelay_{};
 };
 
 } // namespace frontier::game
