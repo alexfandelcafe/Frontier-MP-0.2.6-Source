@@ -56,8 +56,8 @@ public:
     bool actor_manager_symbol_resolved() const { return actorManagerSlotsStorage_ != 0; }
 
 private:
-    static void historical_wait_hook(void* context);
-    void on_historical_wait(void* context);
+    static std::uintptr_t historical_wait_hook(void* rcx, void* rdx, void* r8, void* r9);
+    void on_historical_wait(void* rcx, void* rdx, void* r8, void* r9);
 
     std::uintptr_t resolve_rip_target(std::uintptr_t instruction) const;
     bool readable(std::uintptr_t address, std::size_t size) const;

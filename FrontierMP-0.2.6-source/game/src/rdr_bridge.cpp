@@ -252,6 +252,55 @@ void log_historical_script_resolution(
         static_cast<unsigned long long>(target - moduleBase));
     write_bridge_log_line(line);
 }
+void log_code_window(
+    const char* label,
+    std::uintptr_t address,
+    std::uintptr_t moduleBase,
+    std::size_t before,
+    std::size_t after) {
+#ifdef _WIN32
+    if (label == nullptr || address == 0 || moduleBase == 0 || address < before) {
+        return;
+    }
+
+    std::ostringstream stream;
+    stream << "[FrontierScript] code-window " << label
+           << " address=0x" << std::hex << std::uppercase << address
+           << " rva=0x" << (address - moduleBase) << " bytes=";
+
+    const auto start = address - before;
+    const auto count = before + after;
+    for (std::size_t i = 0; i < count; ++i) {
+        std::uint8_t byte = 0;
+        const auto current = start + i;
+        bool ok = false;
+        __try {
+            byte = *reinterpret_cast<const std::uint8_t*>(current);
+            ok = true;
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            ok = false;
+        }
+
+        if (!ok) {
+            stream << "??";
+        } else {
+            constexpr char hex[] = "0123456789ABCDEF";
+            stream << hex[(byte >> 4u) & 0x0Fu]
+                   << hex[byte & 0x0Fu];
+        }
+        if (i + 1 < count) stream << ' ';
+    }
+
+    write_bridge_log_line(stream.str().c_str());
+#else
+    (void)label;
+    (void)address;
+    (void)moduleBase;
+    (void)before;
+    (void)after;
+#endif
+}
+
 
 } // namespace
 
@@ -302,56 +351,62 @@ bool RdrBridge::read_pointer(std::uintptr_t address, std::uintptr_t& out) const 
 #endif
 }
 
-void RdrBridge::historical_wait_hook(void* context) {
+std::uintptr_t RdrBridge::historical_wait_hook(
+    void* rcx,
+    void* rdx,
+    void* r8,
+    void* r9) {
     auto* bridge = activeHistoricalScriptTrace_;
-    if (bridge == nullptr) return;
+    if (bridge == nullptr) {
+        return 0;
+    }
 
-    bridge->on_historical_wait(context);
+    bridge->on_historical_wait(rcx, rdx, r8, r9);
 
-    using WaitFn = void (*)(void*);
+    using WaitFn = std::uintptr_t (*)(void*, void*, void*, void*);
     const auto original =
         reinterpret_cast<WaitFn>(bridge->historicalWaitHook_.trampoline());
     if (original != nullptr) {
-        original(context);
+        return original(rcx, rdx, r8, r9);
     }
+
+    return 0;
 }
 
-void RdrBridge::on_historical_wait(void* context) {
+void RdrBridge::on_historical_wait(
+    void* rcx,
+    void* rdx,
+    void* r8,
+    void* r9) {
 #ifdef _WIN32
     const auto traceIndex =
         historicalWaitTraceCount_.fetch_add(1, std::memory_order_relaxed);
     if (traceIndex >= 256) return;
 
-    char scriptName[128]{};
-    const char* scriptNameText = "<native-not-ready>";
-    if (nativeInvoker_.ready()) {
-        std::uintptr_t result = 0;
-        if (nativeInvoker_.invoke_raw(
-                kNativeGetScriptName, nullptr, 0u, result) &&
-            result != 0 &&
-            guarded_read_c_string(result, scriptName, sizeof(scriptName))) {
-            scriptNameText = scriptName;
-        } else {
-            scriptNameText = "<unreadable>";
-        }
-    }
-
-    char line[448]{};
+    char line[640]{};
     std::snprintf(
         line,
         sizeof(line),
-        "[FrontierScript] early Wait trace=%u context=0x%llX thread=%lu "
-        "script=%s return=0x%llX",
+        "[FrontierScript] historical scrThread::Wait probe trace=%u "
+        "thread=%lu arg0=0x%llX arg1=0x%llX arg2=0x%llX arg3=0x%llX "
+        "return=0x%llX",
         static_cast<unsigned>(traceIndex),
-        static_cast<unsigned long long>(
-            reinterpret_cast<std::uintptr_t>(context)),
         static_cast<unsigned long>(GetCurrentThreadId()),
-        scriptNameText,
         static_cast<unsigned long long>(
-            reinterpret_cast<std::uintptr_t>(_ReturnAddress())));
+            reinterpret_cast<std::uintptr_t>(rcx)),
+        static_cast<unsigned long long>(
+            reinterpret_cast<std::uintptr_t>(rdx)),
+        static_cast<unsigned long long>(
+            reinterpret_cast<std::uintptr_t>(r8)),
+        static_cast<unsigned long long>(
+            reinterpret_cast<std::uintptr_t>(r9)),
+        static_cast<unsigned long long>(_ReturnAddress()));
     write_bridge_log_line(line);
 #else
-    (void)context;
+    (void)rcx;
+    (void)rdx;
+    (void)r8;
+    (void)r9;
 #endif
 }
 
@@ -471,6 +526,8 @@ bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild 
             if (historicalWaitTarget_ != 0) {
                 log_historical_script_resolution(
                     "scrThread::Wait", *waitHit, historicalWaitTarget_, moduleBase_);
+                log_code_window("scrThread::Wait callsite", *waitHit, moduleBase_, 24u, 64u);
+                log_code_window("scrThread::Wait target", historicalWaitTarget_, moduleBase_, 16u, 64u);
 
                 std::string hookError;
                 activeHistoricalScriptTrace_ = this;
@@ -512,6 +569,8 @@ bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild 
                     *hit,
                     historicalRdrStartNewScriptTarget_,
                     moduleBase_);
+                log_code_window("sagCoreScript::RDRStartNewScript callsite", *hit, moduleBase_, 24u, 64u);
+                log_code_window("sagCoreScript::RDRStartNewScript target", historicalRdrStartNewScriptTarget_, moduleBase_, 16u, 64u);
             }
         }
         if (historicalRdrStartNewScriptTarget_ == 0) {
@@ -534,6 +593,8 @@ bool RdrBridge::initialize(const ExecutableFingerprint& fingerprint, KnownBuild 
                     *hit,
                     historicalStartNewThreadOverrideTarget_,
                     moduleBase_);
+                log_code_window("rage::scrThread::StartNewThreadOverride callsite", *hit, moduleBase_, 24u, 64u);
+                log_code_window("rage::scrThread::StartNewThreadOverride target", historicalStartNewThreadOverrideTarget_, moduleBase_, 16u, 64u);
             }
         }
         if (historicalStartNewThreadOverrideTarget_ == 0) {
