@@ -685,6 +685,8 @@ bool patch_vtable_slot(
 void hook_factory(PresentHookState& state, IDXGIFactory* factory) {
     if (factory == nullptr) return;
 
+    std::lock_guard lock(state.mutex);
+
     void*** baseVtable = reinterpret_cast<void***>(factory);
     if (baseVtable == nullptr || *baseVtable == nullptr) return;
 
@@ -747,7 +749,10 @@ void hook_factory(PresentHookState& state, IDXGIFactory* factory) {
     log_line("[FrontierD3D] IDXGIFactory::CreateSwapChain shadow-vtable hook installed");
 }
 void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
-    if (swapChain == nullptr || state.swapchainHooked) return;
+    if (swapChain == nullptr) return;
+
+    std::lock_guard lock(state.mutex);
+    if (state.swapchainHooked) return;
 
     void*** vtable =
         reinterpret_cast<void***>(swapChain);
