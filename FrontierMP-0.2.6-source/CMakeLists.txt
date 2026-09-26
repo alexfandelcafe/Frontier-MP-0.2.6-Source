@@ -71,8 +71,61 @@ if(WIN32 AND FRONTIER_BUILD_TOOLS)
     frontier_enable_warnings(frontier_build_probe)
 endif()
 
+if(WIN32 AND FRONTIER_CEF_PACKAGE_DIR)
+    if(NOT EXISTS "${FRONTIER_CEF_PACKAGE_DIR}/include/cef_api_hash.h")
+        message(FATAL_ERROR
+            "FRONTIER_CEF_PACKAGE_DIR must point to a CEF distribution containing include/")
+    endif()
+
+    if(NOT EXISTS "${FRONTIER_CEF_PACKAGE_DIR}/libcef_dll_wrapper/CMakeLists.txt")
+        message(FATAL_ERROR
+            "FRONTIER_CEF_PACKAGE_DIR must include libcef_dll_wrapper/ from the CEF binary distribution")
+    endif()
+
+    find_library(FRONTIER_CEF_LIBRARY
+        NAMES libcef
+        PATHS
+            "${FRONTIER_CEF_PACKAGE_DIR}/Release"
+            "${FRONTIER_CEF_PACKAGE_DIR}/Debug"
+        NO_DEFAULT_PATH
+    )
+
+    if(NOT FRONTIER_CEF_LIBRARY)
+        message(FATAL_ERROR
+            "Unable to find libcef.lib under FRONTIER_CEF_PACKAGE_DIR/Release or /Debug")
+    endif()
+
+    add_subdirectory(
+        "${FRONTIER_CEF_PACKAGE_DIR}/libcef_dll_wrapper"
+        "${CMAKE_CURRENT_BINARY_DIR}/frontier_cef_dll_wrapper"
+        EXCLUDE_FROM_ALL
+    )
+
+    add_executable(frontier_cef_subprocess WIN32
+        tools/cef_subprocess/main.cpp
+    )
+    target_include_directories(frontier_cef_subprocess PRIVATE
+        "${FRONTIER_CEF_PACKAGE_DIR}"
+    )
+    target_link_libraries(frontier_cef_subprocess PRIVATE
+        libcef_dll_wrapper
+        "${FRONTIER_CEF_LIBRARY}"
+    )
+    frontier_enable_warnings(frontier_cef_subprocess)
+    set_target_properties(frontier_cef_subprocess PROPERTIES
+        OUTPUT_NAME "FrontierCefSubprocess"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}"
+        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}"
+    )
+
+    set(FRONTIER_CEF_OVERLAY_AVAILABLE ON)
+else()
+    set(FRONTIER_CEF_OVERLAY_AVAILABLE OFF)
+endif()
+
 if(WIN32 AND FRONTIER_BUILD_CLIENT)
-    add_library(frontier_client SHARED
+    set(FRONTIER_CLIENT_SOURCES
         client/src/frontier_client.cpp
         client/src/client_runtime.cpp
         client/src/network_client.cpp
@@ -89,9 +142,34 @@ if(WIN32 AND FRONTIER_BUILD_CLIENT)
         game/src/startup_native_tracer.cpp
         game/src/frontier_session.cpp
     )
+
+    if(FRONTIER_CEF_OVERLAY_AVAILABLE)
+        list(APPEND FRONTIER_CLIENT_SOURCES
+            client/src/cef_overlay.cpp
+        )
+    endif()
+
+    add_library(frontier_client SHARED
+        ${FRONTIER_CLIENT_SOURCES}
+    )
     target_include_directories(frontier_client PRIVATE shared/include client/include game/include)
     target_link_libraries(frontier_client PRIVATE frontier_shared ws2_32 version)
     frontier_enable_warnings(frontier_client)
+
+    if(FRONTIER_CEF_OVERLAY_AVAILABLE)
+        target_include_directories(frontier_client PRIVATE
+            "${FRONTIER_CEF_PACKAGE_DIR}"
+        )
+        target_link_libraries(frontier_client PRIVATE
+            libcef_dll_wrapper
+            "${FRONTIER_CEF_LIBRARY}"
+        )
+        target_compile_definitions(frontier_client PRIVATE
+            FRONTIER_ENABLE_CEF=1
+        )
+        add_dependencies(frontier_client frontier_cef_subprocess)
+    endif()
+
     set_target_properties(frontier_client PROPERTIES
         OUTPUT_NAME "FrontierClient"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
