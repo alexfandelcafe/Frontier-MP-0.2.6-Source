@@ -77,6 +77,51 @@ if not "%BUILD_RC%"=="0" (
 )
 
 echo.
+echo ===== Staging FrontierMP runtime =====
+set "TARGET_DIR=%CD%\build\vs2026-x64\bin\Release"
+
+echo Staging game content...
+robocopy "%CD%\resources\game\content" "%TARGET_DIR%\game\content" /E /NFL /NDL /NJH /NJS /NP
+set "STAGE_RC=%ERRORLEVEL%"
+if %STAGE_RC% GEQ 8 (
+    echo ERROR: game content staging failed with robocopy code %STAGE_RC%.
+    exit /b %STAGE_RC%
+)
+
+echo Staging FrontierMP CEF frontend...
+robocopy "%CD%\resources\cef" "%TARGET_DIR%\cef" /E /NFL /NDL /NJH /NJS /NP
+set "STAGE_RC=%ERRORLEVEL%"
+if %STAGE_RC% GEQ 8 (
+    echo ERROR: FrontierMP CEF frontend staging failed with robocopy code %STAGE_RC%.
+    exit /b %STAGE_RC%
+)
+
+if defined FRONTIER_CEF_PACKAGE_DIR (
+    echo Staging CEF Release runtime...
+    robocopy "%FRONTIER_CEF_PACKAGE_DIR%\Release" "%TARGET_DIR%" /E /NFL /NDL /NJH /NJS /NP
+    set "STAGE_RC=%ERRORLEVEL%"
+    if %STAGE_RC% GEQ 8 (
+        echo ERROR: CEF Release staging failed with robocopy code %STAGE_RC%.
+        exit /b %STAGE_RC%
+    )
+
+    echo Staging CEF Resources...
+    robocopy "%FRONTIER_CEF_PACKAGE_DIR%\Resources" "%TARGET_DIR%\cef\Resources" /E /NFL /NDL /NJH /NJS /NP
+    set "STAGE_RC=%ERRORLEVEL%"
+    if %STAGE_RC% GEQ 8 (
+        echo ERROR: CEF Resources staging failed with robocopy code %STAGE_RC%.
+        exit /b %STAGE_RC%
+    )
+
+    echo Staging CEF locales...
+    robocopy "%FRONTIER_CEF_PACKAGE_DIR%\Release\locales" "%TARGET_DIR%\cef\locales" /E /NFL /NDL /NJH /NJS /NP
+    set "STAGE_RC=%ERRORLEVEL%"
+    if %STAGE_RC% GEQ 8 (
+        echo ERROR: CEF locales staging failed with robocopy code %STAGE_RC%.
+        exit /b %STAGE_RC%
+    )
+)
+echo Runtime staging completed.
 echo.
 echo ===== Generated executables =====
 for /r "build\vs2026-x64" %%F in (*.exe) do echo   %%F
