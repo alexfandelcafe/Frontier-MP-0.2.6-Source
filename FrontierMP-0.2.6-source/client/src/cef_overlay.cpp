@@ -105,6 +105,24 @@ std::string file_url(const std::filesystem::path& path) {
 
 class FrontierCefApp final : public CefApp {
 public:
+    void OnBeforeCommandLineProcessing(
+        const CefString& processType,
+        CefRefPtr<CefCommandLine> commandLine) override {
+        // Chromium's AutoDeElevate can relaunch an elevated browser process
+        // and make CefInitialize return CEF_RESULT_CODE_NORMAL_EXIT_AUTO_DE_ELEVATED
+        // (38 / 0x26). That flow is incompatible with an injected CEF host
+        // running inside RDR.exe because the current process cannot hand off
+        // ownership to a replacement browser process.
+        if (commandLine != nullptr) {
+            commandLine->AppendSwitch("do-not-de-elevate");
+        }
+
+        log_line(
+            "[FrontierCEF] command line hook processType=" +
+            processType.ToString() +
+            " switch=do-not-de-elevate");
+    }
+
     IMPLEMENT_REFCOUNTING(FrontierCefApp);
 };
 
