@@ -2,7 +2,7 @@
 
 Independent multiplayer framework prototype for Red Dead Redemption 1 PC.
 
-## Current milestone — 0.1.9
+## Current milestone — 0.2.6
 
 This version adds the first standalone client-launch path and the first build-gated RDR1 game bridge:
 
@@ -72,7 +72,15 @@ The dedicated server now accepts the first real local-player transform as a boot
 
 ## CEF frontend overlay
 
-The native RDR Title Screen is left in place as the visual scene. FrontierClient does not drive Title Screen UI events by default. When FRONTIER_CEF_PACKAGE_DIR points to a full CEF Windows distribution, the client builds a CEF host and displays cef/cef_ui/mainmenu/index.html in a child window over the RDR window.
+The native RDR Title Screen 3D scene remains the visual base. FrontierClient does not depend on native Title Screen button input by default.
+
+When FRONTIER_CEF_PACKAGE_DIR points to a full CEF Windows distribution, the client creates a windowless/off-screen browser. CEF paints into memory and FrontierClient composites the latest frame into the RDR D3D11 swapchain. The HTML page is transparent outside its own controls.
+
+The renderer subprocess exposes a small JavaScript bridge:
+- app.connect(host, port)
+- app.quit()
+
+app.connect requests a Frontier server connection and then starts the historical RDR online transition through the game-thread dispatcher. app.quit posts a native window-close request through the game thread.
 
 The CEF package used for the build must contain at least:
 
@@ -95,4 +103,8 @@ Without FRONTIER_CEF_PACKAGE_DIR, the client continues to build without CEF supp
 
 ## Game session bootstrap
 
-FrontierMP 0.2.3 adds a build-gated native invoker and a read-only FrontierSession state machine. It observes the game frontend/world transition before any mutation is attempted. The launcher passes `FRONTIER_SESSION_MODE=freeroam`.
+FrontierSession keeps the native frontend, world loading and multiplayer gameplay as separate states. A loaded world or a readable local Actor is not sufficient to enter Active.
+
+The normal CEF frontend is the owner of the multiplayer transition. A frontend connect request triggers the build-gated historical boot.sc sequence through the game-thread dispatcher. FrontierSession enters Active only after that explicit bootstrap reports completion, the world has stabilized, and the local player state is readable.
+
+FRONTIER_NATIVE_UI_BOOTSTRAP remains an opt-in legacy diagnostic path and is not required by the CEF-owned frontend.
