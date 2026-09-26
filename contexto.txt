@@ -1455,3 +1455,146 @@ Próximo trabajo:
 
 No inventar una segunda arquitectura.
 La intención es reproducir la cadena histórica de RDRMP con la mínima divergencia necesaria para el protocolo de Frontier.
+
+
+============================================================
+41. ACTUALIZACIÓN 2026-09-26 — LOCAL PLAYER SPAWN VALIDADO EN RUNTIME
+============================================================
+
+El client.log más reciente cambia el estado de la investigación:
+la ejecución observada sí consiguió crear y asociar un local player real.
+
+Evidencia de la ejecución:
+- Cerca de tick 1050:
+  worldLoaded=1
+  stableWorldLoaded=1
+  localPlayer=0
+  GET_PLAYER_ACTOR(-1)=0
+- PlayerLayout:
+  FIND_NAMED_LAYOUT("PlayerLayout") -> 0
+  CREATE_LAYOUT("PlayerLayout") -> 0x00000101
+  IS_LAYOUTREF_VALID -> 1
+- CREATE_PLAYER_ACTOR_IN_LAYOUT 0x6A307D5F:
+  layout=0x101
+  actorName="player"
+  model=837
+  result=0x102
+- IS_ACTOR_VALID(0x102) -> 1
+- [FrontierLocalPlayer] ready:
+  playerId=1
+  actor=0x00000102
+  layout=0x00000101
+  model=837
+  spawn=(0,0,0)
+  yaw=0
+- La cadena de memoria del local player también quedó legible:
+  local=0x14F935710
+  manager=0x14EF6CB10
+  guid=0x00000002
+  slot=0x14EF6CB30
+  actor=0x150A6C240
+  component=0x1512A25D0
+  transform=0x15124C830
+- Después del spawn:
+  GET_PLAYER_ACTOR(-1) -> 0x102
+  session -> state=active
+  localPlayer=1
+- El proceso terminó con:
+  RDR.exe exitCode=0x0
+
+Conclusión:
+El problema "crear el local player" ya no es el cuello de botella en la ejecución observada.
+La secuencia PlayerLayout -> request/wait model -> CREATE_PLAYER_ACTOR_IN_LAYOUT -> actor válido -> GetLocalPlayer/GetPlayerActor está funcionando.
+
+Importante:
+Esto valida el runtime de la build usada para ese client.log; no debe confundirse con una garantía para otras builds.
+
+============================================================
+42. ACTUALIZACIÓN — SIGUIENTE PRUEBA: ASOCIACIÓN/CÁMARA/CONTROL
+============================================================
+
+Se añadió instrumentación en RdrBridge::ensure_local_player para verificar,
+sin cambiar el camino histórico de creación:
+
+- IS_ACTOR_VALID
+- IS_ACTOR_PLAYER
+- IS_ACTOR_LOCAL_PLAYER
+- GET_ACTOR_SLOT
+- GET_LOCAL_SLOT
+- SET_CAMERA_FOLLOW_ACTOR
+- SET_PLAYER_CONTROL
+- GET_PLAYER_ACTOR(-1) y comparación con el actor recién creado
+
+La readiness final sigue basada en:
+IS_ACTOR_VALID + GET_PLAYER_ACTOR(-1) == actor
+
+Esto evita convertir una falla de un native diagnóstico opcional en una falsa
+regresión del local-player lifecycle.
+
+Commit:
+55a3350cf6b41b4a41fa1c1129225431eda08812
+"Instrument local player setup and association checks"
+
+Aún falta ejecutar la build después de este commit para obtener la línea:
+[FrontierLocalPlayer] setup actor=...
+y confirmar los resultados reales de cámara/control/asociación.
+
+============================================================
+43. ESTADO DEL SISTEMA REMOTO
+============================================================
+
+RemotePlayerManager y el camino:
+snapshot
+  ->
+RemotePlayerManager
+  ->
+spawn_remote_actor
+  ->
+CREATE_ACTOR_IN_LAYOUT 0x8D67F397
+
+no fueron modificados en el commit anterior.
+
+El client.log sigue mostrando el actor remoto 0x10B como válido,
+pero su posición leída permanece en (0,0,0) mientras el target cambia.
+Ese problema pertenece a la locomoción/actualización del remote actor y debe
+investigarse por separado, sin mezclarlo con el local-player lifecycle.
+
+============================================================
+44. PRÓXIMO ORDEN DE TRABAJO
+============================================================
+
+1. Ejecutar la build correspondiente al commit 55a3350c y capturar:
+   [FrontierLocalPlayer] setup ...
+2. Confirmar que:
+   isPlayer=1
+   isLocalPlayer=1
+   GET_PLAYER_ACTOR match=1
+   cameraFollow no falla
+   playerControl no falla
+3. Confirmar gameplay/input real del local player.
+4. Después, si hace falta, continuar con:
+   - packet 6/7/8/9 histórico
+   - escritura de GameClient +0x110
+   - comparación de hooks históricos
+   - CEF separado del actor lifecycle
+5. No cambiar RemotePlayerManager mientras no haya un bug aislado y reproducible.
+
+============================================================
+45. REGLA DE LECTURA DEL LOG ACTUAL
+============================================================
+
+No volver a interpretar:
+STREAMING_IS_WORLD_LOADED=1
+
+como "player-ready".
+
+Player-ready, para esta investigación, debe apoyarse en evidencia de:
+GetLocalPlayer
++
+GetPlayerActor
++
+actor válido
++
+asociación al local player
+
+según corresponda al test concreto.
