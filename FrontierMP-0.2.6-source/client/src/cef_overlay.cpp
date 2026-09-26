@@ -19,7 +19,8 @@
 #include <memory>
 #include <mutex>
 #include <sstream>
-#include <string>#include <thread>
+#include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -635,6 +636,137 @@ void restore_import(ImportPatch& patch) {
     patch = {};
 }
 
+struct FrontierDelayImportDescriptor final {
+    DWORD attributes{};
+    DWORD dllNameRva{};
+    DWORD moduleHandleRva{};
+    DWORD iatRva{};
+    DWORD intRva{};
+    DWORD boundIatRva{};
+    DWORD unloadIatRva{};
+    DWORD timeDateStamp{};
+};
+
+bool find_and_patch_delay_import(
+    HMODULE module,
+    const char* importedModule,
+    const char* importedName,
+    void* replacement,
+    ImportPatch& outPatch,
+    void*& resolvedOriginal,
+    std::string& error) {
+    error.clear();
+    outPatch = {};
+    resolvedOriginal = nullptr;
+
+    if (module == nullptr) {
+        error = "null module";
+        return false;
+    }
+
+    const auto base = reinterpret_cast<std::uintptr_t>(module);
+    const auto* dos =
+        reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+    if (dos->e_magic != IMAGE_DOS_SIGNATURE) {
+        error = "invalid DOS header";
+        return false;
+    }
+
+    const auto* nt =
+        reinterpret_cast<const IMAGE_NT_HEADERS64*>(
+            base + dos->e_lfanew);
+    if (nt->Signature != IMAGE_NT_SIGNATURE ||
+        nt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC) {
+        error = "invalid PE64 header";
+        return false;
+    }
+
+    const auto& directory =
+        nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT];
+    if (directory.VirtualAddress == 0 || directory.Size < sizeof(FrontierDelayImportDescriptor)) {
+        error = "no delay-import directory";
+        return false;
+    }
+
+    const auto* descriptors =
+        reinterpret_cast<const FrontierDelayImportDescriptor*>(
+            base + directory.VirtualAddress);
+
+    for (const auto* descriptor = descriptors;
+         descriptor->dllNameRva != 0;
+         ++descriptor) {
+        if ((descriptor->attributes & 1u) == 0u) {
+            error = "delay-import descriptor uses VA form";
+            return false;
+        }
+
+        const char* moduleName =
+            reinterpret_cast<const char*>(base + descriptor->dllNameRva);
+        if (_stricmp(moduleName, importedModule) != 0) continue;
+
+        if (descriptor->iatRva == 0 || descriptor->intRva == 0) {
+            error = "delay-import IAT/INT unavailable";
+            return false;
+        }
+
+        auto* lookup =
+            reinterpret_cast<const IMAGE_THUNK_DATA64*>(
+                base + descriptor->intRva);
+        auto* iat =
+            reinterpret_cast<IMAGE_THUNK_DATA64*>(
+                base + descriptor->iatRva);
+
+        for (std::size_t index = 0;
+             lookup[index].u1.AddressOfData != 0;
+             ++index) {
+            if (IMAGE_SNAP_BY_ORDINAL64(lookup[index].u1.Ordinal)) continue;
+
+            const auto* byName =
+                reinterpret_cast<const IMAGE_IMPORT_BY_NAME*>(
+                    base + lookup[index].u1.AddressOfData);
+            if (std::strcmp(
+                    reinterpret_cast<const char*>(byName->Name),
+                    importedName) != 0) {
+                continue;
+            }
+
+            HMODULE importedHandle = GetModuleHandleA(importedModule);
+            if (importedHandle == nullptr) {
+                importedHandle = LoadLibraryA(importedModule);
+            }
+            if (importedHandle == nullptr) {
+                error = "unable to load delay-import module";
+                return false;
+            }
+
+            resolvedOriginal =
+                reinterpret_cast<void*>(
+                    GetProcAddress(importedHandle, importedName));
+            if (resolvedOriginal == nullptr) {
+                error = "GetProcAddress failed for delay-import";
+                return false;
+            }
+
+            void** slot =
+                reinterpret_cast<void**>(&iat[index].u1.Function);
+            if (!replace_pointer(
+                    slot,
+                    replacement,
+                    outPatch.original,
+                    error)) {
+                resolvedOriginal = nullptr;
+                return false;
+            }
+
+            outPatch.slot = slot;
+            return true;
+        }
+    }
+
+    error = "delay import not found";
+    return false;
+}
+
 HRESULT STDMETHODCALLTYPE frontier_factory_create_swap_chain(
     IDXGIFactory* factory,
     IUnknown* device,
@@ -1120,9 +1252,28 @@ bool install_render_path(CefOverlay* overlay) {
         anyHookInstalled = true;
         log_line("[FrontierD3D] D3D11CreateDeviceAndSwapChain IAT hook installed");
     } else {
-        log_line(
-            "[FrontierD3D] D3D11CreateDeviceAndSwapChain IAT hook unavailable: " +
-            error);
+        void* delayOriginal = nullptr;
+        std::string delayError;
+        if (find_and_patch_delay_import(
+                g_presentHook.rdrModule,
+                "d3d11.dll",
+                "D3D11CreateDeviceAndSwapChain",
+                reinterpret_cast<void*>(&frontier_create_device_and_swapchain),
+                g_presentHook.createImport,
+                delayOriginal,
+                delayError)) {
+            g_presentHook.createOriginal =
+                reinterpret_cast<PresentHookState::CreateDeviceAndSwapChainProc>(
+                    delayOriginal);
+            anyHookInstalled = true;
+            log_line("[FrontierD3D] D3D11CreateDeviceAndSwapChain delay-IAT hook installed");
+        } else {
+            log_line(
+                "[FrontierD3D] D3D11CreateDeviceAndSwapChain IAT hook unavailable: " +
+                error +
+                " delay=" +
+                delayError);
+        }
     }
 
     const char* factoryNames[] = {
@@ -1139,6 +1290,7 @@ bool install_render_path(CefOverlay* overlay) {
     for (std::size_t i = 0; i < std::size(factoryNames); ++i) {
         ImportPatch patch{};
         std::string factoryError;
+        void* resolvedFactory = nullptr;
         if (!find_and_patch_import(
                 g_presentHook.rdrModule,
                 "dxgi.dll",
@@ -1146,29 +1298,44 @@ bool install_render_path(CefOverlay* overlay) {
                 factoryReplacements[i],
                 patch,
                 factoryError)) {
-            continue;
+            std::string delayFactoryError;
+            if (!find_and_patch_delay_import(
+                    g_presentHook.rdrModule,
+                    "dxgi.dll",
+                    factoryNames[i],
+                    factoryReplacements[i],
+                    patch,
+                    resolvedFactory,
+                    delayFactoryError)) {
+                continue;
+            }
         }
 
         g_presentHook.factoryImports[g_presentHook.factoryImportCount++] = patch;
+        void* factoryOriginal = resolvedFactory != nullptr
+            ? resolvedFactory
+            : patch.original;
         if (i == 0) {
             g_presentHook.createFactoryOriginal =
                 reinterpret_cast<PresentHookState::CreateDXGIFactoryProc>(
-                    patch.original);
+                    factoryOriginal);
         } else if (i == 1) {
             g_presentHook.createFactory1Original =
                 reinterpret_cast<PresentHookState::CreateDXGIFactoryProc>(
-                    patch.original);
+                    factoryOriginal);
         } else {
             g_presentHook.createFactory2Original =
                 reinterpret_cast<PresentHookState::CreateDXGIFactory2Proc>(
-                    patch.original);
+                    factoryOriginal);
         }
 
         anyHookInstalled = true;
         log_line(
             std::string("[FrontierD3D] ") +
             factoryNames[i] +
-            " IAT hook installed");
+            (resolvedFactory != nullptr
+                ? " delay-IAT hook installed"
+                : " IAT hook installed"));
     }
 
     if (!anyHookInstalled) {
