@@ -1,3 +1,11 @@
+## 0.2.70
+- Align the local-player readiness barrier with historical RDRMP: wait for GET_PLAYER_ACTOR(-1) before treating STREAMING_IS_WORLD_LOADED as the next gate.
+- Keep the historical online bootstrap running while the Frontier session is in WaitingForLocalPlayer instead of stopping at the Frontend state.
+- Route StartScreen1 -> StartScreen2 through the historical startScreenExit UI event so the stock boot.sc transition performs the stack handoff.
+- Fix the bootstrap state-machine task that previously advanced startScreenExit without invoking any native/UI operation.
+- Use the native local player actor and GET_POSITION as the primary local-state source, retaining the legacy memory chain as a fallback.
+- Keep IS_ACTOR_VALID diagnostic-only so it cannot incorrectly block the historical GET_PLAYER_ACTOR readiness contract.
+
 ## 0.2.69
 - Rework native registration discovery to match the documented RDRMP/Frontier 0.2.6 validation: scan all matching registration patterns, wait for an initialized table, require the historical `0xA0AE0C98` sentinel, and require at least one known RDR native before binding the storage.
 - Do not permanently select an early registration object whose table is still zeroed during RDR startup.
