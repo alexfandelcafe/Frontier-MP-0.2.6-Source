@@ -2013,3 +2013,21 @@ provenientes de Frontier.
 No se modificó RemotePlayerManager ni se añadió ningún START_GAMEPLAY native.
 El próximo trabajo queda centrado en el overlay CEF y, más adelante, en definir
 un camino de entrada a gameplay controlado desde CEF.
+
+
+ADENDA 53 — PROTECCIÓN DEL TITLE SCREEN
+
+Además de hacer opt-in el bootstrap nativo, el spawn del jugador local ahora
+requiere:
+- worldLoadedStable=1
+- gameState != 5
+
+La razón es empírica: en la ejecución pasiva, gameState=5 aparece antes de que
+Frontier emita UI_EXIT(StartScreen1); por lo tanto se usa como señal observada
+del frontend inicial.
+
+Esto evita que el actor local sea creado mientras el juego permanece en el
+Title Screen para el modo CEF/frontend-owned.
+
+Commit de esta protección:
+5a47ff9d92a06632fbf971044c021d036b305cc5
