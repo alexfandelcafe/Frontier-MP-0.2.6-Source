@@ -169,50 +169,9 @@ if(WIN32 AND FRONTIER_BUILD_CLIENT)
         ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}"
     )
 
-    # Match the historical RDRMP distribution layout: the client package owns a
-    # sibling ./game/content tree next to its DLL. FrontierClient's
-    # fiAssetManager::fullReadPath hook resolves the historical content routes
-    # into this external tree without modifying the user's RDR installation or
-    # changing RDR.exe's working directory.
-    add_custom_command(TARGET frontier_client POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory
-                "$<TARGET_FILE_DIR:frontier_client>/game/content"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${CMAKE_CURRENT_SOURCE_DIR}/resources/game/content"
-                "$<TARGET_FILE_DIR:frontier_client>/game/content"
-        VERBATIM
-    )
-    
-    # Historical RDRMP-compatible CEF package boundary. The UI source ships
-    # with FrontierMP; an externally supplied CEF runtime is staged separately
-    # so the development SDK itself is never copied into the game package.
-    add_custom_command(TARGET frontier_client POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory
-                "$<TARGET_FILE_DIR:frontier_client>/cef"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${CMAKE_CURRENT_SOURCE_DIR}/resources/cef"
-                "$<TARGET_FILE_DIR:frontier_client>/cef"
-        VERBATIM
-    )
-
-    if(FRONTIER_CEF_PACKAGE_DIR)
-        add_custom_command(TARGET frontier_client POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                    "${FRONTIER_CEF_PACKAGE_DIR}/Release"
-                    "$<TARGET_FILE_DIR:frontier_client>"
-            COMMAND ${CMAKE_COMMAND} -E make_directory
-                    "$<TARGET_FILE_DIR:frontier_client>/cef/Resources"
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                    "${FRONTIER_CEF_PACKAGE_DIR}/Resources"
-                    "$<TARGET_FILE_DIR:frontier_client>/cef/Resources"
-            COMMAND ${CMAKE_COMMAND} -E make_directory
-                    "$<TARGET_FILE_DIR:frontier_client>/cef/locales"
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                    "${FRONTIER_CEF_PACKAGE_DIR}/Release/locales"
-                    "$<TARGET_FILE_DIR:frontier_client>/cef/locales"
-            VERBATIM
-        )
-    endif()
+    # Runtime packaging is performed by scripts_build_vs2026.bat after the
+    # complete build. Keeping file copies outside this POST_BUILD avoids making
+    # the C++ target fail solely because a staging copy was interrupted.
 endif()
 
 # The launcher and client are separate targets, but the launcher must never
