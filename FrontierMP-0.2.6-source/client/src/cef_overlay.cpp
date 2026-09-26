@@ -664,25 +664,6 @@ HRESULT STDMETHODCALLTYPE frontier_present(
 
 void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain);
 
-bool patch_vtable_slot(
-    void** vtable,
-    std::size_t index,
-    void* replacement,
-    void*& original,
-    std::string& error) {
-    if (vtable == nullptr || replacement == nullptr) {
-        error = "invalid vtable slot/replacement";
-        return false;
-    }
-
-    void** slot = &vtable[index];
-    if (!replace_pointer(slot, replacement, original, error)) {
-        return false;
-    }
-
-    return true;
-}
-
 void hook_factory(PresentHookState& state, IDXGIFactory* factory) {
     if (factory == nullptr) return;
 
