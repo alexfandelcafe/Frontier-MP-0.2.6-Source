@@ -1,0 +1,2049 @@
+Análisis De Hooks Históricos
+
+User: Anonymous
+Created: 9/25/2026 22:54:58
+Updated: 9/26/2026 0:07:24
+Exported: 9/26/2026 0:08:43
+Link: https://chatgpt.com/c/6ab725f2-2cb0-83e9-afab-3143183110fc
+
+## Prompt:
+25/9/2026, 22:54:58
+
+Quiero continuar exactamente este trabajo de reverse engineering/modding de Red Dead Redemption 1. Toma el siguiente contexto como estado actual del proyecto y no vuelvas a empezar desde cero.
+
+Objetivo
+
+Estoy desarrollando Frontier-MP, un cliente/mod multijugador para RDR1, intentando reproducir el flujo histórico de RDRMP y conseguir una transición real desde el title screen/frontend hasta gameplay, con jugador local y jugadores remotos.
+Repositorio principal:
+alexfandelcafe/Frontier-MP-0.2.6-Source
+Branch:
+game-thread/remote-actor-spawn-test-0.2.41
+Repositorio histórico/descompilado:
+alexfandelcafe/DLL-descomprimidos-
+Cliente histórico:
+alexfandelcafe/client-rdrmp2
+
+Estado funcional actual
+
+Ya está funcionando:
+
+El launcher inicia RDR.exe.
+
+FrontierClient.dll se carga.
+
+La IPC de bootstrap funciona.
+
+El cliente conecta.
+
+Los snapshots muestran:
+players=2 remoteEntities=1
+
+El actor remoto sintético 65000 funciona.
+
+La locomoción/interpolación remota funciona.
+
+La transición inicial que antes dejaba el title screen está siendo saltada: ahora empieza la carga.
+
+Después de terminar la carga, RDR vuelve a mostrar el mundo 3D del title screen con la UI encima.
+
+Esto último es importante: el problema actual ya no es simplemente el menú/UI inicial.
+La observación clave es que el title screen de RDR1 tiene un mundo 3D detrás de la interfaz. Por eso, cuando la UI desaparece/cambia, puede parecer que estamos en gameplay aunque en realidad seguimos en el escenario del frontend.
+La imagen de ejemplo está en:
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/imagen_2026-09-25_212112558.png
+Log actual:
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.log
+
+Hallazgo conceptual importante
+
+El mundo visible después de la carga probablemente no significa que el loading haya fallado. El title screen de RDR1 utiliza un mundo 3D real como background y una UI por encima.
+El problema que hay que resolver ahora es:
+cómo reproducir la transición histórica de frontend -> online/gameplay real, incluyendo la creación/activación del player actor y el cambio de estado del juego, en lugar de simplemente quitar/saltar la UI.
+
+Flujo histórico encontrado en RDRMP
+
+En el game-core.dll histórico se encontraron hooks para:
+
+rage::scrThread::Wait
+
+sagCoreScript::RDRStartNewScript
+
+rage::scrThread::StartNewThreadOverride
+
+rage::fiAssetManager::fullReadPath
+
+QuitGame
+
+Patrones históricos identificados:
+
+Wait
+
+E8 ? ? ? ? 8D 56 10
+
+RDRStartNewScript
+
+E8 ? ? ? ? 48 8B 0B 8B 44 24 40 89 01 48 83 C4 30 5B C3 CC 40 53
+
+StartNewThreadOverride
+
+E8 ? ? ? ? 48 8B D8 85 FF 74 16
+
+fullReadPath
+
+48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 57 41 54 41 55 41 56 41 57 48 83 EC 30 48 8B 05 ? ? ? ? 33 ED
+
+El fullReadPath histórico redirigía:
+
+content/ui/boot.sc
+    -> content/ui/boot.sc.xml
+
+content/ui/pausemenu/pausemenuscene.sc
+    -> content/ui/pausemenu/pausemenuscene.sc.xml
+
+content/ui/pausemenu/savegame.sc
+    -> content/ui/pausemenu/savegame.sc.xml
+
+content/ui/net/profileeditor/main.sc
+    -> content/ui/net/profileeditor/main.sc.xml
+
+La redirección ya está implementada en Frontier.
+
+Estado del content redirector
+
+Target observado actualmente:
+
+0x1400C8E60
+rva=0xC8E60
+
+Patch size:
+
+15
+
+La lógica ya fue corregida para redirigir antes de llamar al resolver original.
+El árbol de recursos se copia a:
+
+bin/<config>/game/content
+
+Los logs confirman que las rutas están preparadas, por ejemplo:
+
+[FrontierContent] route prepared source=content/ui/boot.sc
+resolved=...\game\content/ui/boot.sc.xml bytes=171
+
+Pero anteriormente no aparecían llamadas reales a boot.sc en fullReadPath, mientras sí aparecían RPF/assets. Eso llevó a la conclusión de que el arranque de scripts probablemente ocurre por otra ruta.
+
+Boot script histórico
+
+boot.sc.xml histórico y el actual son esencialmente equivalentes en la parte relevante.
+Transition:
+
+<transition event="net.EnterOnlineForInvite">
+    <action expr="SendEvent('startScreenExit')"></action>
+    <action expr="SendEvent('net.EnterOnlineForInvite')"></action>
+</transition>
+
+startScreenExit:
+
+PlaySound('HUD_MENU_SELECT_MASTER')
+SendEvent('fileCheckSignedIn')
+Exit(StartScreen1)
+StackPush(StartScreen2)
+
+En StartScreen2:
+
+<transition event="net.EnterOnlineForInvite">
+    <action expr="SendEvent('fileSetForMPLoad')"></action>
+    <action expr="NetMachine.SetMultiplayerModeToLaunch('JoinWish')"></action>
+    <action expr="UIGame.ValidateNormalMode()"></action>
+    <action expr="SendEvent('mainMenuExit')"></action>
+    <action expr="Enter(LoadingScreen)"></action>
+    <action expr="Enter(waitforInTransition)"></action>
+</transition>
+
+Por lo tanto, boot.sc.xml no parece ser la pieza principal que falta.
+
+Flujo histórico de client-main.dll
+
+Funciones identificadas:
+
+RVA 0x2CA0 = LoadOnline
+RVA 0x2F50 = InitSpawn
+RVA 0x5AD0 = LoadMainMenu
+
+LoadMainMenu:
+
+CEF set_loading_screen = mainmenu
+
+agenda LoadOnline
+
+agenda InitSpawn
+
+LoadOnline:
+
+0xB0B4296A
+HUD_FADE_TO_LOADING_SCREEN()
+
+poll 0xE5CC6F08
+HUD_IS_FADING()
+
+0x2DF89C2E
+UI_EXIT("StartScreen1")
+
+0xB58825F5
+UI_SEND_EVENT("fileSetForMPLoad")
+
+0xB58825F5
+UI_SEND_EVENT("fileStartupChecksComplete")
+
+0x8E0D7219
+NET_AUTHENTICATE_GAMER(0,"Online")
+
+config/name
+
+InitSpawn:
+
+cierra browsers CEF
+
+configura chat
+
+ResourcesManager::LoadAllResources
+
+espera resources
+
+espera 1000 ms
+
+ClientSend::ClientWelcome(...)
+
+espera GET_PLAYER_ACTOR(-1) = 0xE8CFDD53
+
+espera STREAMING_IS_WORLD_LOADED = 0x87B74064
+
+ejecuta HUD_FADE_IN_NOW = 0x7E4A92CF
+
+continúa con configuración del jugador/HUD.
+
+IMPORTANTE:
+InitSpawn espera a que exista el actor; no es la función que claramente lo crea en ese punto.
+
+Cambios recientes de Frontier
+
+HEAD conocido:
+
+0f6f75d2191612aebbc666b23dec8d5681bbd68b
+
+Commit:
+
+Retry failed historical LoadOnline finish task
+
+Antes se había hecho:
+
+bf99182500c15fdfec530bcb4c6c01abbce06667
+Restore historical LoadOnline frontend transition sequence
+
+Ese cambio reprodujo en Frontier:
+
+HUD_FADE_TO_LOADING_SCREEN
+HUD_IS_FADING
+UI_EXIT("StartScreen1")
+UI_SEND_EVENT("fileSetForMPLoad")
+UI_SEND_EVENT("fileStartupChecksComplete")
+NET_AUTHENTICATE_GAMER(0,"Online")
+
+El task runner usa ejecución asíncrona sobre el game thread porque submit_and_wait provocaba timeouts.
+La secuencia de bootstrap actual es conceptualmente:
+
+NotStarted
+ -> FadeToLoadingScreen
+ -> WaitingForFade
+ -> QueryFade
+ -> FinishLoadOnline
+ -> WaitingForPlayerActor
+ -> QueryPlayerActor
+ -> Complete / retry
+
+historicalOnlineBootstrapEventCompleted_ ahora se marca al terminar FinishLoadOnline.
+
+Problema actual del jugador local
+
+El actor local sigue sin aparecer en los diagnósticos:
+
+GET_PLAYER_ACTOR(-1) -> 0x0
+
+Mientras tanto:
+
+STREAMING_IS_WORLD_LOADED = 1
+
+Incluso se llegó a:
+
+worldLoaded=1
+stableWorldLoaded=1
+
+pero:
+
+localPlayer=0
+
+El estado de Frontier entonces llega a:
+
+WaitingForLocalPlayer
+
+y luego puede observarse gameState=4 sin player local válido.
+
+Native hashes ya conocidos
+
+HUD_FADE_TO_LOADING_SCREEN      0xB0B4296A
+HUD_IS_FADING                   0xE5CC6F08
+UI_EXIT                         0x2DF89C2E
+UI_SEND_EVENT                   0xB58825F5
+NET_AUTHENTICATE_GAMER          0x8E0D7219
+GET_PLAYER_ACTOR                0xE8CFDD53
+STREAMING_IS_WORLD_LOADED       0x87B74064
+HUD_FADE_IN_NOW                 0x7E4A92CF
+
+IS_SIMULATE_START_MULTIPLAYER  0x9A73C2CD
+IS_START_POS_IN_COMMAND_LINE   0x814D97E8
+
+CREATE_PLAYER_ACTOR_IN_LAYOUT  0x6A307D5F
+CREATE_ACTOR_IN_LAYOUT          0x8D67F397
+STREAMING_REQUEST_ACTOR         0xB0A79FEE
+STREAMING_IS_ACTOR_LOADED       0x7DF72579
+
+IS_ACTOR_VALID                  0xBA6C3E92
+GET_ACTOR_ENUM                  0x0B28E9EC
+IS_ACTOR_LOCAL_PLAYER           0x6542CF26
+
+Los natives siguientes actualmente no están en la tabla del tracer:
+
+NET_ENABLE_MULTIPLAYER          0x9180FF1C
+NET_IS_IN_SESSION               0x8CA54980
+NET_SESSION_QUICK_JOIN_NATIVE   0x8DF05A4F
+NET_SESSION_START_GAMEPLAY      0x86FF3A9B
+NET_SESSION_END_GAMEPLAY        0x81FD9851
+NET_SESSION_IS_GAMEPLAY_STARTED 0xDC88B308
+NET_IS_SESSION_CLIENT           0xFF65A07C
+
+El mensaje “optional hook unavailable” significa que no están en nuestra tabla actual; no asumir automáticamente que los hashes estén equivocados.
+
+Hook system actual
+
+inline_hook soporta salto absoluto indirecto de 14 bytes:
+
+FF 25 00 00 00 00 <8-byte address>
+
+Para un E8 conocido en el desplazamiento 4, el trampoline lo relocaliza como:
+
+mov r11, imm64
+call r11
+
+para evitar destruir RAX.
+Los problemas anteriores del trampoline/crash ya fueron corregidos.
+
+Repo histórico client-rdrmp2
+
+Se reorganizó para reflejar el layout histórico:
+
+RDRMP.exe
+data/
+
+Dentro de data están:
+
+data/cef/
+data/client-http.dll
+data/client-luascripting.dll
+data/client-main.dll
+data/client-networking.dll
+data/client-shared.dll
+data/client-webrenderer.dll
+data/game-core.dll
+data/game/content/...
+...
+
+Commit:
+
+898f2d1c5f3f6030d234e51d96b06c7449bdb04a
+Restore historical data directory layout
+
+Además, el PDB histórico de game-core.dll contiene:
+
+C:\Users\K3rhos\Documents\Visual Studio 2022\Projects\RDRMP\build\Release\data\game-core.pdb
+
+Esto refuerza que el layout data/ era parte del diseño histórico.
+
+Otra evidencia histórica importante
+
+client-main.dll contiene referencias a:
+
+client-http.dll
+client-luascripting.dll
+client-networking.dll
+client-webrenderer.dll
+client-shared.dll
+game-core.dll
+discord-rpc.dll
+libcef.dll
+
+También contiene:
+
+auto_load_plugins
+
+y usa GetModuleFileNameA para resolver paths relativos al módulo.
+
+Lo que quiero que hagas ahora
+
+NO vuelvas a sugerir simplemente más eventos de UI ni des por hecho que STREAMING_IS_WORLD_LOADED=1 significa gameplay.
+El siguiente paso debe centrarse en reproducir/observar la transición real del runtime:
+
+Revisar en el repo histórico el código exacto donde game-core.dll instala los hooks:
+sagCoreScript::RDRStartNewScript
+
+rage::scrThread::StartNewThreadOverride
+
+rage::scrThread::Wait
+
+fullReadPath
+
+Compararlo con nuestro inline_hook y sistema actual.
+
+Implementar primero tracing de:
+qué scripts se inician,
+
+qué nombre/path reciben,
+
+qué thread/resultado devuelven,
+
+cuándo aparece boot.sc,
+
+si existe un script de online/gameplay responsable de crear el local player.
+
+Especialmente determinar por qué:
+la UI inicial ahora se salta,
+
+se carga el mundo,
+
+pero GET_PLAYER_ACTOR(-1) sigue en 0,
+
+y luego vuelve a verse el mundo 3D del frontend.
+
+Si el histórico muestra que RDRStartNewScript o StartNewThreadOverride son necesarios para activar el modo online, reproducir esa infraestructura de forma fiel.
+
+No inventar una solución basada únicamente en CREATE_PLAYER_ACTOR_IN_LAYOUT hasta entender cómo el cliente histórico entra realmente en gameplay, porque crear manualmente un actor no necesariamente lo convierte en sm_LocalPlayer.
+
+Regla de trabajo
+
+Quiero cambios reales en GitHub, no solamente recomendaciones conceptuales.
+Antes de modificar un archivo:
+
+obtener su contenido actual,
+
+obtener su SHA,
+
+modificarlo sobre la versión actual,
+
+hacer commit sobre:
+game-thread/remote-actor-spawn-test-0.2.41
+
+Cuando encuentres evidencia suficiente, implementa el cambio directamente y dime:
+
+qué archivo cambiaste,
+
+qué comportamiento histórico reproduce,
+
+qué commit generaste,
+
+y qué debería aparecer en el próximo client.log.
+
+Empieza inspeccionando el código histórico de instalación de hooks de RDRStartNewScript y StartNewThreadOverride, porque ese es el punto de investigación más importante ahora.
+
+NO USES LA TOOL DE DATA ANALYSIS
+
+## Response:
+25/9/2026, 22:55:00
+
+Voy a seguir el estado actual y empezar por game-core.dll: localizaré la instalación histórica de esos cuatro hooks, compararé la mecánica con Frontier y, con evidencia concreta, aplicaré el siguiente cambio directamente en la branch indicada.
+
+El árbol confirma que el histórico conserva un volcado/decompilación específico de game-core.dll; los símbolos que buscamos no están indexados como texto, así que voy a trabajar sobre esos artefactos de análisis directamente.
+
+Hay una señal útil: fullReadPath y las rutas de boot.sc apuntan a PostLoad (RVA 0x8070), mientras Wait aparece como n_Wait (0x71E0). Ahora voy a extraer del decompilado las funciones completas y sus llamadas de instalación.
+
+Investigó hooks históricos, símbolos y árboles de repositorios públicos de GitHub
+
+Rastreando el código relevante
+
+Estoy buscando referencias a las funciones de carga y creación de scripts para localizar dónde se instala el hook. También estoy comprobando si existen fuentes históricas o únicamente DLL y PDB asociados.
+
+Rastreado el código relevante
+
+Inspeccionó archivos game-core, hooks, DLL y símbolos históricos
+
+Inspeccionando secciones de decomp_all por funciones clave
+
+Inspeccioné secciones de decomp_all por funciones clave
+
+Analizando la instalación
+
+Estoy siguiendo el flujo posterior a PostLoad y las referencias a RDRStartNewScript. Si los nombres no aparecen directamente, tendré que inferir las variables globales y las funciones lambda desde el código descompilado.
+
+Analizó la instalación
+
+Analizados hooks, patrones, binarios y referencias históricas de RDR2
+
+Inspeccionó vtables, binarios del juego y mejoró decodificación Base64
+
+Inspeccionadas funciones, referencias, exports y hooks globales de game-core.dll
+
+Buscando funciones de client-main mediante cadenas conocidas
+
+Analizadas transiciones de gameplay y referencias del módulo Lua
+
+Buscó nombres mangled y funciones Thread/Fiber en el cliente rdrmp2
+
+Buscando fuentes adicionales
+
+Estoy valorando si existe material histórico más completo que permita confirmar las direcciones y el comportamiento del hook. Si no aparece, mantendré las conclusiones como inferencias del desensamblado, no como hechos plenamente verificados.
+
+Buscaste fuentes adicionales
+
+Buscando en la web
+
+Inspeccionó código histórico, cabeceras y binarios para rastrear scripts
+
+Continuando el análisis histórico
+
+Estoy centrando la investigación en los hooks y el flujo de scripts del cliente antiguo, comparándolos con la implementación actual. Cualquier cambio deberá basarse en evidencia del código y quedar registrado en la rama indicada.
+
+Continué el análisis histórico
+
+Inspeccionadas trazas, hooks e inicialización del cliente nativo
+
+Verificadas referencias históricas y uso de base del módulo PE
+
+Investigados scripts históricos, arranque multijugador y hooks nativos pendientes
+
+Actualizaste hooks nativos, mutaste código y sincronizaste ramas de prueba
+
+Verificó el commit y el estado de CI
+
+Ha pensado durante 10m 9s
+
+He continuado desde el estado actual y ya hay una conclusión importante del análisis histórico.
+
+Qué hace realmente game-core.dll histórico
+
+En sagPlayerMgr::PostLoad histórico, game-core.dll:
+
+busca scrThread::Wait
+
+busca sagCoreScript::RDRStartNewScript
+
+busca rage::scrThread::StartNewThreadOverride
+
+busca fiAssetManager::fullReadPath
+
+busca QuitGame
+
+Pero sólo instala hooks reales para:
+
+Wait
+
+fullReadPath
+
+QuitGame
+
+RDRStartNewScript y StartNewThreadOverride únicamente se resuelven y se guardan en los exports s_StartNewScript y s_StartNewThreadOverride.
+
+Además, el resolver histórico usa GetModuleHandleW(NULL), por lo que esos patrones se buscan en el RDR.exe principal, no en game-core.dll.
+
+Eso explica los targets que vimos fuera del rango del propio PE de game-core. También explica por qué no he añadido un hook directo a esos targets: son helpers de contexto/fibra muy bajos y envolverlos con un callback C++ normal puede destruir registros que el helper necesita para restaurar el contexto.
+
+El hallazgo más útil en Frontier
+
+El branch actual ya contiene los hooks de:
+
+NET_ENABLE_MULTIPLAYER
+NET_IS_IN_SESSION
+NET_IS_SESSION_CLIENT
+NET_SESSION_QUICK_JOIN_NATIVE
+NET_SESSION_START_GAMEPLAY
+NET_SESSION_END_GAMEPLAY
+NET_SESSION_IS_GAMEPLAY_STARTED
+
+El problema es otro: StartupNativeTracer::attach() los intenta enganchar una única vez. Cuando NativeInvoker::has_handler() no encuentra todavía esos hashes en la tabla de registros nativos, quedan sin hook.
+
+Por eso el mensaje:
+
+optional hook unavailable
+
+no demuestra que el hash sea incorrecto. Sólo demuestra que en ese momento no existía un handler para ese hash en la tabla que está viendo NativeInvoker.
+
+Cambio realizado
+
+He añadido un reintento durante cada pasada de advance_historical_online_bootstrap().
+
+Archivos modificados:
+
+FrontierMP-0.2.6-source/game/include/frontier/game/startup_native_tracer.hpp
+FrontierMP-0.2.6-source/game/src/startup_native_tracer.cpp
+FrontierMP-0.2.6-source/game/src/rdr_bridge.cpp
+
+El comportamiento ahora es:
+
+native table inicial
+      |
+      +-- NET_* todavía ausentes --> seguir arrancando
+      |
+      +-- NET_* aparecen después --> engancharlos inmediatamente
+                                      |
+                                      +--> registrar sus llamadas reales
+
+No se ha añadido CREATE_PLAYER_ACTOR_IN_LAYOUT, no se ha forzado sm_LocalPlayer, y no se ha modificado la transición UI.
+
+Commit
+
+b9af30e0370b17c5c5526f8c38b00ccce454c96f
+Retry deferred multiplayer native tracing hooks
+
+Padre:
+
+c6f6ed4b3b7c3d04242dd28237f2817361e72934
+
+El commit quedó aplicado directamente sobre:
+
+game-thread/remote-actor-spawn-test-0.2.41
+
+Qué debería aparecer en el próximo client.log
+
+Si esos natives se registran más tarde, debería aparecer algo como:
+
+[FrontierNativeTrace] deferred optional hook attached NET_ENABLE_MULTIPLAYER hash=0x9180FF1C
+[FrontierNativeTrace] deferred optional hook attached NET_IS_IN_SESSION hash=0x8CA54980
+[FrontierNativeTrace] deferred optional hook attached NET_IS_SESSION_CLIENT hash=0xFF65A07C
+[FrontierNativeTrace] deferred optional hook attached NET_SESSION_QUICK_JOIN_NATIVE hash=0x8DF05A4F
+[FrontierNativeTrace] deferred optional hook attached NET_SESSION_START_GAMEPLAY hash=0x86FF3A9B
+[FrontierNativeTrace] deferred optional hook attached NET_SESSION_END_GAMEPLAY hash=0x81FD9851
+[FrontierNativeTrace] deferred optional hook attached NET_SESSION_IS_GAMEPLAY_STARTED hash=0xDC88B308
+
+Y, más importante, después las ejecuciones reales:
+
+[FrontierNativeTrace] NET_ENABLE_MULTIPLAYER ...
+[FrontierNativeTrace] NET_SESSION_QUICK_JOIN_NATIVE ...
+[FrontierNativeTrace] NET_SESSION_START_GAMEPLAY ...
+[FrontierNativeTrace] NET_SESSION_IS_GAMEPLAY_STARTED ...
+
+El dato decisivo será cuál de esos natives aparece antes de que GET_PLAYER_ACTOR(-1) empiece a devolver 0x0, y si NET_SESSION_START_GAMEPLAY llega a ejecutarse. Si ninguno aparece durante toda la transición, eso también es evidencia: indica que debemos seguir la ruta que los registra/invoca, no crear manualmente el actor.
+
+No he ejecutado RDR desde aquí, así que el commit es un cambio de tracing validado estáticamente, no una afirmación de que el juego ya haya entrado en gameplay.
+
+## Prompt:
+25/9/2026, 23:10:52
+
+Hay alguna diferencia importante entre frontier y el cliente historico como para poder entender porque el mundo del historico carga bien y el mio carga el mundo del title screen?
+
+## Response:
+25/9/2026, 23:10:57
+
+Sí. Hay varias diferencias estructurales, y una de ellas encaja muy bien con el síntoma “mundo del title screen detrás de la UI”: Frontier reproduce el handoff visual, pero todavía no reproduce toda la maquinaria que cambia el runtime de frontend a multiplayer.
+
+Y hay otra diferencia más profunda: el histórico no sólo tiene más natives; game-core.dll altera la infraestructura de scripting antes de que client-main.dll haga su LoadOnline/InitSpawn. Eso puede ser la pieza que mantiene al juego dentro del runtime correcto.
+
+Analizando diferencias clave
+
+Estoy comparando la inicialización histórica con Frontier. La diferencia central parece estar en que el cliente antiguo conectaba la sesión con la creación real del jugador mediante scripts y hooks adicionales, mientras Frontier modifica principalmente la transición visual.
+
+Analizadas las diferencias clave
+
+Comparó arquitecturas históricas y actuales, inspeccionando repositorio, CMake y parches nativos
+
+Comparando infraestructura PostLoad y callbacks históricos actuales
+
+Ha pensado durante 1m 2s
+
+Sí. Viendo ahora los dos lados en conjunto, hay una diferencia estructural bastante importante que encaja con el síntoma actual.
+
+La diferencia no parece ser “qué mundo carga RDR”, sino quién hace que ese mundo deje de ser el frontend y pase a estar gobernado por el runtime de multiplayer.
+
+1. Histórico: client-main.dll + game-core.dll forman una arquitectura de runtime
+
+El cliente histórico no era simplemente un DLL que llamaba natives. client-main.dll importaba directamente infraestructura de game-core.dll, entre ella:
+
+PreLoad
+PostLoad
+sagPlayerMgr
+sagActorManager
+scrThread
+RegisterCallback
+GetLocalPlayer
+
+y tiene explícitamente estos callbacks:
+
+OnPressStartScriptRunning
+OnMainScriptRunning
+OnUpdatePerTick
+OnUpdatePerFrame
+OnQuitGame
+
+Eso es una diferencia grande.
+
+En Frontier tenemos:
+
+FrontierClient.dll
+    -> NativeInvoker
+    -> GameThreadDispatcher
+    -> RdrBridge
+
+pero no tenemos el equivalente real de:
+
+game-core
+    -> scrThread lifecycle
+    -> callbacks de scripts
+    -> integración PreLoad/PostLoad
+    -> client-main reaccionando a esos callbacks
+
+Actualmente incluso hemos dejado el callback histórico como:
+
+[FrontierScript] historical callback candidate OnMainScriptRunning ...
+[FrontierScript] historical callback candidate OnPressStartScriptRunning ...
+
+Es decir: lo observamos, pero no lo reproducimos.
+
+Y eso es precisamente sospechoso para tu caso.
+
+2. El histórico no considera “world loaded” como “ya estoy en gameplay”
+
+Esto es especialmente importante.
+
+En el histórico, InitSpawn hace:
+
+LoadOnline
+    ↓
+...
+InitSpawn
+    ↓
+espera GET_PLAYER_ACTOR(-1)
+    ↓
+espera STREAMING_IS_WORLD_LOADED
+    ↓
+HUD_FADE_IN_NOW
+
+Eso significa que GET_PLAYER_ACTOR(-1) es una condición posterior al cambio de runtime.
+
+No parece que InitSpawn sea quien crea el jugador.
+
+La lectura más coherente del flujo es:
+
+frontend
+   ↓
+LoadOnline
+   ↓
+se activa la maquinaria online
+   ↓
+scripts/runtimes del juego empiezan a crear/configurar el jugador
+   ↓
+sm_LocalPlayer aparece
+   ↓
+InitSpawn lo detecta
+   ↓
+gameplay
+
+Mientras que Frontier actualmente está más cerca de:
+
+frontend
+   ↓
+UI_EXIT
+   ↓
+UI_SEND_EVENT
+   ↓
+NET_AUTHENTICATE_GAMER
+   ↓
+worldLoaded = 1
+   ↓
+GET_PLAYER_ACTOR = 0
+   ↓
+nos quedamos esperando
+
+Y RDR vuelve a enseñarte el mundo 3D del frontend.
+
+Esto explica bastante bien el comportamiento observado.
+
+3. game-core.dll histórico modifica el runtime de scripts, no sólo la UI
+
+El scrThread::PostLoad() histórico hace esto:
+
+scrThread::sm_CommandsRegistration
+scrThread::Wait
+sagCoreScript::RDRStartNewScript
+scrThread::StartNewThreadOverride
+fiAssetManager::fullReadPath
+QuitGame
+
+Pero hay una distinción importante.
+
+Realmente instala hooks para:
+
+Wait
+fullReadPath
+QuitGame
+
+mientras que:
+
+RDRStartNewScript
+StartNewThreadOverride
+
+se resuelven y se guardan como:
+
+s_StartNewScript
+s_StartNewThreadOverride
+
+Es decir, el histórico prepara una infraestructura de scripting compartida.
+
+Y además game-core expone:
+
+StaticCallbacksHandler<scrThread>::RegisterCallback
+StaticCallbacksHandler<scrThread>::ExecuteCallback
+
+Esto es muy significativo porque client-main.dll contiene precisamente:
+
+OnPressStartScriptRunning
+OnMainScriptRunning
+RegisterCallback
+
+La cadena histórica probable queda así:
+
+RDR crea/inicia script
+        ↓
+scrThread
+        ↓
+game-core intercepta lifecycle
+        ↓
+callback handler
+        ↓
+client-main recibe OnPressStartScriptRunning / OnMainScriptRunning
+        ↓
+client-main continúa su lógica online/spawn
+
+Frontier todavía no tiene esa cadena completa.
+
+4. Frontier está simulando el resultado, no reproduciendo el productor del player
+
+Esta es probablemente la diferencia más importante.
+
+Tenemos actualmente:
+
+HUD_FADE_TO_LOADING_SCREEN
+HUD_IS_FADING
+UI_EXIT("StartScreen1")
+UI_SEND_EVENT("fileSetForMPLoad")
+UI_SEND_EVENT("fileStartupChecksComplete")
+NET_AUTHENTICATE_GAMER(0,"Online")
+
+Es una reproducción bastante fiel de LoadOnline.
+
+Pero después estamos intentando comprobar:
+
+GET_PLAYER_ACTOR(-1)
+
+sin haber demostrado todavía qué evento/runtime produce el sm_LocalPlayer.
+
+Por eso:
+
+STREAMING_IS_WORLD_LOADED = 1
+localPlayer = 0
+
+no es una contradicción.
+
+Puede perfectamente ocurrir:
+
+RDR ha cargado el mapa/streaming
++
+RDR sigue ejecutando el runtime del frontend
++
+todavía no existe sm_LocalPlayer
+
+que es prácticamente exactamente lo que estás viendo.
+
+5. El histórico además hace cosas que Frontier aún no hace después del registro nativo
+
+Hay otro detalle que encontré en game-core.dll.
+
+Después de esperar a que aparezca la tabla de natives, el histórico reemplaza algunos handlers:
+
+0xA0AE0C98 = ADDSHADER
+0xFD25473E = LOG_WARNING
+0x906C42FD = LOG_ERROR
+0xECF8EB5F = PRINTSTRING
+
+por una rutina común (FUN_180007EF0).
+
+No tengo evidencia suficiente para decir que esto sea la causa del problema del player; de hecho parece más relacionado con el runtime de scripting/logging/debug. Lo considero secundario por ahora.
+
+La diferencia que considero más sospechosa
+
+La separación conceptual sería ésta:
+
+Histórico
+Frontier actual
+game-core.dll integrado en el lifecycle del juego
+FrontierClient.dll inyectado directamente
+client-main.dll consume infraestructura de game-core
+Frontier reproduce su lógica en C++
+scrThread lifecycle real
+sólo tracing/dispatcher alrededor de Wait
+OnPressStartScriptRunning
+sólo lo detectamos como “candidate”
+OnMainScriptRunning
+sólo lo detectamos como “candidate”
+RegisterCallback real
+no está reproducido
+RDRStartNewScript / StartNewThreadOverride disponibles como infraestructura
+sólo resolvemos sus targets
+PreLoad / PostLoad históricos
+no reproducidos como arquitectura de módulos
+player aparece como consecuencia del runtime online
+Frontier todavía no ha encontrado al productor de sm_LocalPlayer
+
+Por eso yo no atacaría ahora CREATE_PLAYER_ACTOR_IN_LAYOUT.
+
+La pregunta más importante ya no es:
+
+“¿cómo creo un actor?”
+
+sino:
+
+“¿qué script/thread/evento del runtime histórico es el que, después de LoadOnline, hace que sagPlayer::sm_LocalPlayer pase de NULL a válido?”
+
+Hay una pista especialmente fuerte
+
+Los nombres:
+
+OnPressStartScriptRunning
+OnMainScriptRunning
+
+no aparecen por casualidad en el cliente histórico.
+
+Y nuestro Wait actual ya está en una posición perfecta para comprobarlo.
+
+Ahora mismo Frontier hace:
+
+scrThread::Wait
+    ↓
+on_historical_wait()
+    ↓
+identifica script
+    ↓
+loguea candidate
+
+Lo que necesitamos averiguar es si el histórico hacía:
+
+scrThread::Wait
+    ↓
+detecta script
+    ↓
+StaticCallbacksHandler::ExecuteCallback(...)
+    ↓
+client-main callback
+    ↓
+LoadOnline / spawn / multiplayer initialization
+
+Si eso resulta ser cierto, entonces tendríamos una explicación muy directa de por qué el histórico entra correctamente al mundo multiplayer mientras Frontier vuelve al mundo 3D del title screen.
+
+Y esto cambia el próximo paso
+
+El commit b9af30e... que acabamos de hacer para reintentar los NET_* sigue siendo útil, pero no es la pieza que esperaría que por sí sola solucione el problema.
+
+La siguiente investigación que haría es reconstruir exactamente la cadena:
+
+game-core PostLoad
+    → scrThread::Wait
+    → StaticCallbacksHandler
+    → OnPressStartScriptRunning
+    → OnMainScriptRunning
+    → client-main
+    → creación/activación de sm_LocalPlayer
+
+porque ahí tenemos por primera vez una ruta histórica que conecta directamente frontend → scripts → player local → gameplay, en lugar de frontend → natives UI.
+
+Y esa diferencia sí puede explicar el síntoma que tienes ahora.
+
+## Prompt:
+25/9/2026, 23:14:21
+
+hay algo que te falte para poder analizar mejor todo?
+
+## Response:
+25/9/2026, 23:14:28
+
+Sí. Ya tenemos suficiente para sostener la hipótesis general, pero todavía faltan algunas piezas para pasar de “la causa probablemente está aquí” a “esta es exactamente la función que activa el jugador y esta es la diferencia que hay que reproducir”.
+
+Lo que más falta
+
+1. Descompilación de client-main.dll alrededor de RegisterCallback
+
+Tenemos confirmado que el histórico importa:
+
+StaticCallbacksHandler::RegisterCallback
+
+scrThread
+
+sagPlayerMgr
+
+sagActorManager
+
+GetLocalPlayer
+
+PreLoad / PostLoad
+
+Wait
+
+Y además aparecen:
+
+OnPressStartScriptRunning
+
+OnMainScriptRunning
+
+OnUpdatePerTick
+
+OnUpdatePerFrame
+
+Pero todavía no tenemos el cuerpo de las funciones que conectan esas piezas.
+
+Lo ideal sería identificar:
+
+RegisterCallback(...)
+  ↓
+callback guardado
+  ↓
+OnPressStartScriptRunning(...)
+  ↓
+OnMainScriptRunning(...)
+  ↓
+¿qué función termina creando/activando al jugador?
+
+Ese punto es probablemente la pieza que más nos falta.
+
+2. sagPlayerMgr::PostLoad y sagActorManager::PostLoad completos
+
+Sabemos que existen:
+
+sagPlayerMgr::PostLoad RVA 0xBE90
+
+sagActorManager::PostLoad RVA 0xB630
+
+Pero necesitamos ver qué inicializan realmente.
+
+Especialmente queremos buscar cosas como:
+
+sm_LocalPlayer
+CreatePlayer...
+GetLocalPlayer
+CreateActor...
+Start...
+Spawn...
+layout...
+multiplayer...
+
+Esto podría decirnos si el jugador se crea automáticamente al inicializar el sistema multiplayer o si otro script/callback lo solicita después.
+
+3. StaticCallbacksHandler::ExecuteCallback completo
+
+Tenemos:
+
+ClearCallbacks 0x43F0
+
+ExecuteCallback 0x4400
+
+RegisterCallback 0x4490
+
+La pieza crítica es saber cómo se dispara un callback.
+
+Por ejemplo, necesitamos distinguir entre:
+
+RegisterCallback("OnMainScriptRunning", fn)
+
+y posteriormente:
+
+ExecuteCallback("OnMainScriptRunning")
+
+o algo equivalente.
+
+Si encontramos quién llama ExecuteCallback, podremos reconstruir el flujo temporal con mucha más precisión.
+
+4. Saber qué scripts/hilos están realmente ejecutándose en ambos casos
+
+Este es probablemente el segundo dato más valioso después de la descompilación.
+
+Necesitamos comparar:
+
+Histórico
+
+arranca RDRMP
+→ sale del StartScreen
+→ carga mundo
+→ aparece jugador
+
+contra
+
+Frontier
+
+arranca RDR
+→ sale del StartScreen
+→ carga mundo
+→ GET_PLAYER_ACTOR(-1) = 0
+
+Y registrar, en ambos casos, cosas como:
+
+script name
+script id
+thread id
+Wait
+GetLocalPlayer
+GetPlayerActor
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+NET_ENABLE_MULTIPLAYER
+NET_SESSION_*
+
+La gran pregunta es:
+
+¿Qué thread/script está vivo en el histórico justo cuando aparece el player y cuál falta en Frontier?
+
+Ahora mismo tenemos muchas piezas estáticas, pero nos falta esa correlación temporal.
+
+5. El flujo exacto de creación del actor histórico
+
+No quiero asumir que sea:
+
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+
+porque eso podría ser simplemente una función secundaria.
+
+Hay que encontrar quién la llama, o encontrar otra ruta que termine modificando sm_LocalPlayer.
+
+La evidencia que buscamos es algo como:
+
+función X
+ → función Y
+ → CREATE_PLAYER_ACTOR_IN_LAYOUT
+ → sagPlayerMgr::sm_LocalPlayer = ...
+
+o:
+
+script/thread X
+ → native Y
+ → local player initialization
+
+Ese caller es mucho más importante que el hash aislado.
+
+6. La diferencia de inicialización entre game-core.dll histórico y Frontier
+
+Aquí ya tenemos una pista muy fuerte.
+
+El histórico hace más que resolver natives. Tiene lógica alrededor de:
+
+scrThread::PostLoad
+Wait hook
+fullReadPath hook
+QuitGame hook
+RDRStartNewScript
+StartNewThreadOverride
+StaticCallbacksHandler
+
+Frontier actualmente tiene una buena parte del acceso nativo y del Wait hook, pero no hemos demostrado todavía que reproduzca:
+
+callback registration
+callback execution
+script lifecycle
+start-new-script path
+
+Necesitamos localizar exactamente qué funciones históricas son invocadas en cada etapa y cuáles no están ocurriendo en Frontier.
+
+También hay un dato que sería extremadamente útil
+
+El RDR.exe exacto que estás ejecutando.
+
+Idealmente:
+
+SHA-256 de RDR.exe
+tamaño
+versión/build si aparece
+
+Porque todo el trabajo de RVA, patrones y llamadas supone que histórico y Frontier están ejecutándose sobre el mismo binario/base.
+
+No necesito que recompiles nada para esto; con el hash del ejecutable ya podemos fijar esa parte.
+
+Qué considero que ya tenemos suficientemente demostrado
+
+Ya no creo que el problema principal sea simplemente:
+
+“no cargaste los assets”
+
+porque Frontier ya llega a:
+
+STREAMING_IS_WORLD_LOADED = 1
+
+y además ves el mundo 3D.
+
+El dato verdaderamente anómalo es:
+
+mundo cargado
++
+GET_PLAYER_ACTOR(-1) = 0
+
+Eso apunta mucho más a estado de runtime/gameplay no activado que a streaming.
+
+La comparación que nos falta cerrar es:
+
+HISTÓRICO
+
+frontend
+  ↓
+LoadOnline
+  ↓
+game-core/script lifecycle
+  ↓
+callback(s)
+  ↓
+multiplayer/player initialization
+  ↓
+local actor
+  ↓
+InitSpawn continúa
+  ↓
+gameplay
+
+frente a:
+
+FRONTIER
+
+frontend
+  ↓
+LoadOnline reproducido
+  ↓
+streaming
+  ↓
+mundo 3D
+  ↓
+NO local actor
+  ↓
+InitSpawn queda esperando / estado incorrecto
+
+Así que, en orden de prioridad, yo buscaría RegisterCallback → ExecuteCallback → OnMainScriptRunning/OnPressStartScriptRunning → sagPlayerMgr → caller que genera sm_LocalPlayer.
+
+Eso es lo que nos permitiría dejar de hacer cambios “a ciegas” y localizar la transición exacta que Frontier todavía no reproduce.
+
+## Prompt:
+25/9/2026, 23:32:30
+
+https://github.com/alexfandelcafe/DLL-descomprimidos-/tree/main/evidence%202.0
+
+## Response:
+25/9/2026, 23:32:42
+
+Анализируя фрагмент кода
+
+Я проверяю, где именно реализованы лямбды и их операторы, поскольку декомпиляция показывает виртуальные таблицы, но не раскрывает отдельные функции. Затем сопоставлю ссылки и граф вызовов, чтобы восстановить поведение без выдуманных имён.
+
+Analizó un fragmento de código
+
+Analizó descompilaciones, funciones, rangos RVA y callbacks PostLoad del juego
+
+Decodificando los sufijos de nombre de script
+
+Decodificados los sufijos de nombres de scripts
+
+Analizada la inicialización de scripts y eventos
+
+Ha pensado durante 2m 22s
+
+Sí. Esta carpeta evidence 2.0 cambia bastante el nivel de certeza. Nos acaba de proporcionar una pieza que antes faltaba: el vínculo comprobado entre el runtime de scripts del juego y los callbacks que registra client-main.dll.
+
+Lo importante que acabamos de confirmar
+
+En el histórico, client-main.dll registra explícitamente:
+
+OnPressStartScriptRunning
+OnMainScriptRunning
+OnUpdatePerTick
+OnUpdatePerFrame
+OnQuitGame
+
+mediante:
+
+StaticCallbacksHandler<rage::scrThread>::RegisterCallback(...)
+
+Y ahora sabemos exactamente quién los dispara.
+
+game-core.dll modifica scrThread::n_Wait (RVA 0x71E0). Antes de llamar al o_Wait original, inspecciona el script actual y puede ejecutar:
+
+script == ...sc_challenge_init
+    → OnUpdatePerTick
+
+cambio de frame
+    → OnUpdatePerFrame
+
+script termina en "pressstart"
+    → OnPressStartScriptRunning
+
+script contiene "/content/main"
+    → OnMainScriptRunning
+
+Esto ya no es una hipótesis. Está directamente en la descompilación de n_Wait.
+
+El flujo histórico queda mucho más claro:
+
+RDR
+ ↓
+game-core / scrThread
+ ↓
+scrThread::n_Wait
+ ↓
+identifica el script que está ejecutándose
+ ↓
+OnPressStartScriptRunning / OnMainScriptRunning
+ ↓
+callback registrado por client-main.dll
+ ↓
+lambda correspondiente de Application::__MainThread
+ ↓
+continúa la lógica histórica del cliente
+
+Y hay otro dato muy importante
+
+También verificamos que:
+
+sagPlayerMgr::PostLoad
+
+no crea al jugador.
+
+Solo resuelve la dirección de:
+
+rage::sagPlayer::sm_LocalPlayer
+
+con:
+
+48 89 15 ? ? ? ? E9 ? ? ? ?
+
+y GetLocalPlayer() simplemente hace:
+
+if (s_LocalPlayer == nullptr)
+    return nullptr;
+
+return *s_LocalPlayer;
+
+Lo mismo con sagActorManager::PostLoad: solo resuelve sm_ManagerSlots.
+
+Por tanto, podemos descartar una explicación anterior:
+
+PostLoad de sagPlayerMgr
+    → crea jugador
+
+No ocurre eso.
+
+El dato que todavía falta
+
+Hay una pieza concreta que todavía no conseguimos recuperar:
+
+Application::__MainThread lambda_6
+Application::__MainThread lambda_7
+
+Ya sabemos qué representan:
+
+lambda_6 → OnPressStartScriptRunning
+lambda_7 → OnMainScriptRunning
+
+pero aún no tenemos el cuerpo de sus operator().
+
+Eso es exactamente lo que necesitamos para responder:
+
+¿Qué hace el histórico cuando pressstart o /content/main aparecen?
+
+Puede resultar en algo como:
+
+OnMainScriptRunning
+ ↓
+NET/session
+ ↓
+start script
+ ↓
+player creation
+
+o en una cadena distinta.
+
+No debemos inventarla.
+
+Hay una segunda pieza que ahora merece atención
+
+game-core::n_Wait obtiene el identificador/nombre del script mediante FUN_180008a40().
+
+Esa función consulta el native:
+
+0x0BC52445
+
+y devuelve una estructura que n_Wait trata como nombre/ruta de script.
+
+Eso significa que para reproducir el flujo en Frontier no basta con decir:
+
+"ejecutemos OnMainScriptRunning"
+
+Tenemos que conseguir que el runtime histórico vea algo equivalente a:
+
+/content/main...
+
+y que el mecanismo de callbacks se ejecute en el punto correcto.
+
+Lo que buscaría ahora
+
+La investigación ya se puede reducir muchísimo:
+
+client-main.dll
+    Application::__MainThread
+        lambda_6
+        lambda_7
+             ↓
+game-core.dll
+    n_Wait
+        OnPressStartScriptRunning
+        OnMainScriptRunning
+             ↓
+        ¿qué estado/native cambia?
+             ↓
+        sm_LocalPlayer
+             ↓
+        GET_PLAYER_ACTOR(-1)
+
+Y hay una ventaja: evidence 2.0 tiene 03_functions_all.tsv, 04_symbols.txt, 08_callgraph.tsv y 09_function_xrefs.txt, así que podemos intentar recuperar esas lambdas sin tocar Frontier todavía.
+
+En este punto no me falta información conceptual; me falta localizar esas dos funciones concretas dentro de client-main.dll. Esa sería mi siguiente investigación antes de hacer otro cambio de código.
+
+## Prompt:
+25/9/2026, 23:36:46
+
+Con esto no podes hacer un nuevo cambio de codigo?
+
+## Response:
+25/9/2026, 23:36:52
+
+Sí. Con evidence 2.0 ya hay una modificación que podemos hacer con evidencia directa: reproducir en Frontier la parte verificable del lifecycle de scrThread, sin inventar todavía la creación del actor. Primero voy a revisar el código actual y sus SHAs para aplicar el cambio sobre la versión vigente.
+
+Encontré algo adicional antes de tocar código: el cambio más seguro ahora es usar el Wait histórico para ejecutar un dispatcher de lifecycle real, pero quiero verificar primero si las lambdas históricas contienen llamadas nativas concretas que podamos reproducir literalmente.
+
+El log actual también confirma algo útil: el hook histórico de Wait sí se instala, pero el primer Wait ocurre antes de que el NativeInvoker esté listo; por eso el primer nombre sale como <native-not-ready>. Voy a aprovechar el mecanismo de reintento existente para cubrir también los natives de actor/player y así capturar la creación real cuando aparezca.
+
+Analizando el código
+
+Estoy intentando entender cómo se ejecutan las funciones asociadas a esas expresiones lambda y dónde aparecen sus cuerpos en la evidencia disponible. También estoy comprobando si están integradas en la función principal o aparecen como funciones separadas.
+
+Analicé el código
+
+Inspeccionados archivos y ciclo de vida del puente RDR en el repositorio
+
+Trazando scripts históricos
+
+Estoy replanteando el cambio: como aún no puedo demostrar qué hacen esas funciones anónimas, añadiré instrumentación sobre las transiciones de scripts para observar cuándo se inicia el flujo relevante sin alterar su comportamiento.
+
+Trazó scripts históricos
+
+Analizadas callbacks y trazas de transición en client-main.dll
+
+Implementó y verificó reintentos de hooks de actores y reinicio del tracer
+
+Implementados reintentos, hooks y trazas nativas para actores remotos
+
+Verificada la compilación y la adición del método fetch
+
+Ha pensado durante 2m 11s
+
+Sí. Hice un cambio real en la rama activa.
+
+Commit: c47561a5c591e6c2b44d9a5a1d228ac8df7d2fcd
+Ver commit en GitHub
+
+El cambio afecta a:
+
+startup_native_tracer.hpp
+
+startup_native_tracer.cpp
+
+rdr_bridge.cpp
+
+Qué hace
+
+Hasta ahora Frontier intentaba enganchar los natives actor/player solamente durante la inicialización. Cuando alguno todavía no existía en la tabla de natives, quedaba registrado como:
+
+optional hook unavailable
+
+y no se volvía a intentar.
+
+Ahora agregué retry_actor_optional_hooks() y se ejecuta junto al retry de networking en cada pasada de advance_historical_online_bootstrap().
+
+Reintenta:
+
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+GET_PLAYER_ACTOR
+CREATE_ACTOR_IN_LAYOUT
+GET_ACTOR_ENUM
+IS_ACTOR_INITED
+IS_ACTOR_VALID
+IS_ACTOR_PLAYER
+IS_ACTOR_LOCAL_PLAYER
+IS_LOCAL_PLAYER_VALID
+RESPAWN_PLAYER_ACTOR_IN_LAYOUT
+SWITCH_PLAYER_TO_ENUM
+INIT_NATIVE_ACTORENUM_PLAYER
+GET_ACTOR_SLOT
+GET_SLOT_ACTOR
+GET_LOCAL_SLOT
+IS_SLOT_VALID
+CREATE_LAYOUT
+FIND_NAMED_LAYOUT
+IS_LAYOUTREF_VALID
+
+Eso es importante porque ahora podemos distinguir entre dos situaciones:
+
+A)
+el native nunca aparece
+
+o:
+
+B)
+aparece después del arranque
+→ Frontier ahora lo engancha
+→ vemos quién lo llama y con qué argumentos
+
+Por qué este cambio está directamente relacionado con evidence 2.0
+
+El histórico muestra que scrThread::PostLoad y el resto del runtime se inicializan de forma diferida alrededor de la tabla de comandos/natives. Además, client-main.dll depende de ese runtime para la secuencia OnPressStartScriptRunning / OnMainScriptRunning.
+
+Por eso no sería correcto concluir todavía que CREATE_PLAYER_ACTOR_IN_LAYOUT es la solución. El cambio permite capturar la ruta real que usa el juego, que es exactamente lo que necesitamos antes de tocar la creación del player.
+
+También dejé fuera STREAMING_IS_ACTOR_LOADED del retry porque actualmente no existe un hook dedicado equivalente en StartupNativeTracer; no quería asociar ese hash a una función incorrecta.
+
+No compilé el DLL en este entorno, así que el siguiente paso es ejecutar esta versión y mirar especialmente si aparecen:
+
+[FrontierNativeTrace] deferred optional hook attached CREATE_PLAYER_ACTOR_IN_LAYOUT ...
+[FrontierNativeTrace] deferred optional hook attached GET_PLAYER_ACTOR ...
+[FrontierNativeTrace] CREATE_PLAYER_ACTOR_IN_LAYOUT ...
+[FrontierNativeTrace] GET_PLAYER_ACTOR ...
+
+La información que salga de ahí puede decirnos ya si el player está siendo creado por el runtime y, sobre todo, qué camino exacto está faltando en Frontier.
+
+## Prompt:
+25/9/2026, 23:44:18
+
+https://github.com/alexfandelcafe/Frontier-MP-0.2.6-Source/blob/game-thread/remote-actor-spawn-test-0.2.41/client.logno hagas otro cambio, lee y da tu analisis
+
+## Response:
+25/9/2026, 23:44:24
+
+Voy a leer exactamente el client.log de esa rama y cruzarlo con el flujo histórico que ya tenemos. No haré ningún cambio en el repositorio.
+
+Ya aparece un dato importante en el log: el flujo sí alcanza startScreenExit → net.EnterOnlineForInvite → StartScreen2, pero sigue sin materializar el jugador local. Voy a aislar las trazas de actor/script para no confundir síntoma con causa.
+
+Analizado el registro de cliente remoto
+
+Analizando ciclo de vida de actores y scripts
+
+Analizado el ciclo de vida de actores y scripts
+
+Analizando los registros
+
+Estoy comparando el registro con la implementación actual para determinar si corresponde a la versión más reciente. La ausencia de ciertos mensajes podría indicar un registro antiguo o que algunos ganchos se activan antes de la inicialización visible.
+
+Analizados los registros
+
+Analizado el registro del cliente y las trazas de ejecuciones, hooks y actores
+
+Ha pensado durante 51s
+
+Leí el client.log de esa rama. No hice ningún cambio.
+
+Lo que demuestra el log
+
+El bloqueo está bastante bien delimitado:
+
+frontend gameState=5 worldLoaded=0 localPlayer=0
+historical boot.sc startScreenExit queued
+frontend gameState=3 worldLoaded=0 localPlayer=0
+historical boot.sc net.EnterOnlineForInvite queued
+historical boot.sc StartScreen2 online transition complete; HUD_FADE_TO_LOADING_SCREEN queued
+historical LoadOnline stage=2 complete ... NET_AUTHENTICATE_GAMER result=0x0
+frontend gameState=3 worldLoaded=1 localPlayer=0
+waiting-local-player gameState=3 worldLoaded=1 localPlayer=0
+
+Eso significa que nuestro bootstrap sí atraviesa la parte de frontend → online lógico → carga del mundo, pero no llega a tener un actor local.
+
+Y esto es especialmente importante:
+
+[FrontierNativeTrace] GET_PLAYER_ACTOR trace=0 playerPre=-1 playerPost=0 result=0x0
+
+GET_PLAYER_ACTOR(-1) devuelve 0. Por tanto, el estado en el que queda InitSpawn es coherente con la investigación histórica: está esperando un jugador que nunca aparece.
+
+La pista más fuerte: CREATE_LAYOUT
+
+Hay una llamada real:
+
+[FrontierNativeTrace] CREATE_LAYOUT name=?<unreadable> result=0x000000F6
+
+y ocurre desde:
+
+ret=0x1401E4355
+
+Es decir, el runtime de scripts sí está ejecutando código que crea un layout. No estamos ante un proceso completamente detenido antes de entrar en ese subsistema.
+
+Pero no aparece ninguna llamada equivalente a:
+
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+CREATE_ACTOR_IN_LAYOUT
+RESPAWN_PLAYER_ACTOR_IN_LAYOUT
+SWITCH_PLAYER_TO_ENUM
+INIT_NATIVE_ACTORENUM_PLAYER
+
+Tampoco aparece una cadena observable de:
+
+GET_ACTOR_ENUM
+GET_ACTOR_SLOT
+GET_SLOT_ACTOR
+GET_LOCAL_SLOT
+
+Esto es mucho más útil que simplemente saber que GET_PLAYER_ACTOR da cero: el layout existe, pero no vemos el paso posterior que convierte ese runtime en un jugador local.
+
+Hay otro detalle importante: este client.log no parece ser de c47561a5
+
+El código actual de c47561a5 ya incluye el retry de hooks de actor. En ese código, cuando un handler aparece después del arranque, debería poder aparecer:
+
+[FrontierNativeTrace] deferred optional hook attached ...
+
+En este client.log no aparece ninguno de esos mensajes.
+
+En cambio sí aparecen solamente los mensajes antiguos de:
+
+optional hook unavailable NET_ENABLE_MULTIPLAYER
+optional hook unavailable NET_IS_IN_SESSION
+...
+
+Por eso no usaría este log para juzgar si el último cambio de retry de actor funcionó. El archivo parece corresponder a una ejecución generada antes de ese cambio, o al menos a una build que no contenía todavía esa lógica.
+
+Eso es importante porque evita sacar una conclusión falsa del tipo “el retry no encontró CREATE_PLAYER_ACTOR_IN_LAYOUT”. Este log no demuestra eso.
+
+Sobre scrThread::Wait
+
+Aparece:
+
+script=<native-not-ready>
+pressstart=0
+mainScript=0
+
+pero solamente en las primeras trazas de Wait, que ocurren alrededor de:
+
+[FrontierSession] native invoker initialized
+
+Por ejemplo, en la primera ejecución el Wait trace está antes de native invoker initialized.
+
+Así que no considero demostrado todavía que el nombre del script no pueda obtenerse. Lo que sí demuestra el log es que el primer tramo de Wait fue interceptado demasiado pronto para que esa información fuese utilizable.
+
+Esto también significa que todavía no podemos concluir desde este log que OnMainScriptRunning o OnPressStartScriptRunning jamás se ejecutaron.
+
+La parte de boot.sc tampoco prueba que el juego haya ejecutado boot.sc
+
+Las líneas:
+
+historical boot.sc startScreenExit queued
+historical boot.sc net.EnterOnlineForInvite queued
+historical boot.sc StartScreen2 online transition complete
+
+son trazas del bootstrap de Frontier. Demuestran que Frontier está reproduciendo esa secuencia lógica.
+
+No demuestran por sí mismas que el boot.sc.xml redirigido haya sido cargado y ejecutado por el motor de scripts.
+
+De hecho, en el fullReadPath que aparece en el log vemos:
+
+animationres.rpf
+act.rpf
+fragments.rpf
+...
+content.rpf
+...
+
+pero no vemos una lectura de:
+
+content/ui/boot.sc
+
+Eso mantiene abierta una hipótesis importante: la secuencia que estamos simulando puede ser correcta conceptualmente, pero no necesariamente está pasando por el mismo mecanismo de ejecución de scripts que utilizaba RDRMP histórico.
+
+Lo que queda fuera de duda
+
+El punto de bloqueo actual es:
+
+WORLD LOADED = 1
+GET_PLAYER_ACTOR(-1) = 0
+LOCAL PLAYER = 0
+
+No es un problema de streaming del mundo.
+
+No es un problema de conexión con el servidor: tenemos players=2 y remoteEntities=1.
+
+No es un crash: RDR.exe exitCode=0x0.
+
+No parece ser ya el simple problema de “la pantalla inicial no sale”.
+
+El problema está entre “ya tenemos el mundo cargado” y “el runtime crea/activa el sagPlayer + actor local”.
+
+Mi lectura del flujo actual
+
+La cadena que tenemos ahora es efectivamente:
+
+Frontend
+   ↓
+startScreenExit
+   ↓
+net.EnterOnlineForInvite
+   ↓
+StartScreen2
+   ↓
+HUD fade/loading
+   ↓
+NET_AUTHENTICATE_GAMER = OK
+   ↓
+WORLD LOADED = 1
+   ↓
+GET_PLAYER_ACTOR(-1) = 0
+   ↓
+STALL
+
+Mientras que históricamente necesitamos algo conceptualmente más cercano a:
+
+Frontend
+   ↓
+Online transition
+   ↓
+runtime/script lifecycle
+   ↓
+algún código crea/activa player actor
+   ↓
+sagPlayer::sm_LocalPlayer queda establecido
+   ↓
+GET_PLAYER_ACTOR(-1) devuelve actor válido
+   ↓
+InitSpawn continúa
+   ↓
+HUD fade-in / gameplay
+
+Y la evidencia previa de game-core.dll sigue encajando: sagPlayerMgr::PostLoad y sagActorManager::PostLoad no crean al jugador; simplemente resuelven sus globales. Por tanto, modificar esas rutas no sería atacar la causa.
+
+Conclusión
+
+Este client.log refuerza una conclusión bastante concreta:
+
+el siguiente objetivo no es InitSpawn ni GET_PLAYER_ACTOR; es encontrar quién, en el flujo histórico, establece realmente el actor/player local.
+
+Y hay dos candidatos de investigación especialmente relevantes:
+
+el código asociado a OnMainScriptRunning / OnPressStartScriptRunning en client-main.dll;
+
+el script/runtime histórico que, después de la transición online, termina llamando a la cadena de creación/activación del actor.
+
+Además, no tomaría todavía ninguna decisión sobre CREATE_PLAYER_ACTOR_IN_LAYOUT ni lo invocaría artificialmente. El log aún no nos da sus argumentos, layout correcto ni contexto de creación.
+
+El hallazgo más limpio de este log es: CREATE_LAYOUT sí ocurre; la creación/activación del player actor no aparece; GET_PLAYER_ACTOR(-1) confirma el hueco exacto.
+
+## Prompt:
+26/9/2026, 0:02:25
+
+agregue mas cosas en https://github.com/alexfandelcafe/DLL-descomprimidos-
+
+## Response:
+26/9/2026, 0:02:33
+
+Voy a revisar qué agregaste en DLL-descomprimidos-, empezando por los commits y archivos nuevos, y luego voy a cruzarlo con el punto de bloqueo del actor local. No modificaré ese repositorio.
+
+Encontré algo más relevante que client-main: en los uploads anteriores agregaste análisis de client-luascripting.dll y client-shared.dll. Eso puede contener precisamente la pieza que no aparece en client-main.
+
+La nueva evidencia cambia el foco: client-main sigue sin mostrar la creación, pero client-luascripting.dll sí expone un cargador explícito de scripts de cliente. Voy a comprobar qué carga y desde dónde.
+
+Analizaste commits y evidencias nuevas de client-main y game-core
+
+Revisando el repositorio
+
+Estoy comprobando si existen más módulos o archivos relacionados con la red y el scripting, porque los resultados actuales parecen incompletos. También estoy contrastando el historial reciente para localizar componentes que aún no haya analizado.
+
+Revisado el repositorio
+
+Analizada la lógica Lua, networking y creación de jugadores del cliente
+
+Inspeccionó funciones, scripts Lua y carga de recursos del cliente
+
+Buscando en la web
+
+Buscando en la web
+
+Analicé las funciones de __LoadClientScripts
+
+Probando acceso a decomp_all.c por GitHub
+
+Probado el acceso a decomp_all.c mediante GitHub
+
+Continuando el análisis
+
+Estoy manteniendo el estado actual y evitando cambios en los repositorios. Ahora estoy priorizando evidencia del proyecto principal y documentación histórica para reconstruir el flujo frontend–online–jugabilidad sin inventar mecanismos no confirmados.
+
+Correlacionando el arranque
+
+Estoy comparando el flujo histórico con Frontier: la carga online prepara la interfaz y la autenticación, mientras InitSpawn espera recursos, actor local y mundo cargado. La evidencia disponible aún no demuestra qué rutina crea directamente al jugador.
+
+Identificando callbacks
+
+Estoy centrando la investigación en los callbacks de ejecución principal y en el módulo de scripting de recursos. La prioridad es localizar qué rutina activa o crea el actor local tras completar frontend, autenticación y carga del mundo.
+
+Priorizando el scripting
+
+La nueva evidencia desplaza el foco hacia los recursos Lua: las funciones nativas parecen ser enlaces, no llamadas de gameplay. Estoy buscando cómo se cargan los scripts cliente y dónde podría inicializarse el actor local.
+
+Continuó el análisis, correlacionó el arranque e identificó callbacks
+
+Analizó funciones, scripts, lambdas y evidencias del cliente descompilado
+
+Analizados hallazgos, archivos, rutas sintácticas, funciones y metadatos del paquete
+
+Ha pensado durante 4m 6s
+
+Sí. Revisé lo nuevo que agregaste en DLL-descomprimidos- y hay una pieza bastante más importante de la que teníamos antes.
+
+Hallazgo principal: client-luascripting.dll
+
+Lo nuevo no es sólo más desensamblado. Ahora tenemos evidencia de que el cliente histórico tenía un sistema de recursos/scripts propio, y ese sistema está conectado directamente con el flujo que estamos intentando reproducir.
+
+En client-luascripting.dll aparecen:
+
+Resource::Preload                  RVA 0x1A6270
+Resource::__LoadClientScripts     RVA 0x1A6DF0
+Resource::Load                    RVA 0x1A7270
+
+ResourcesManager::LoadAllResources
+                                  RVA 0x2019E0
+ResourcesManager::DoesAllResourcesAreLoaded
+                                  RVA 0x201AD0
+
+Y la parte crítica de Resource::Load es:
+
+CreateThread(..., __LoadClientScripts, this, ...)
+
+O sea: cargar un recurso crea un hilo que termina cargando y ejecutando sus client scripts.
+
+Eso conecta muy bien con lo que ya vimos en InitSpawn, donde RDRMP histórico hace:
+
+ResourcesManager::LoadAllResources()
+→ espera a que los recursos estén cargados
+→ sigue con ClientWelcome()
+→ espera GET_PLAYER_ACTOR(-1)
+
+Por tanto, el sistema de recursos no parece algo periférico. Forma parte del camino de entrada a gameplay.
+
+Y __LoadClientScripts es especialmente revelador
+
+La función 0x1A6DF0 no está simplemente leyendo archivos arbitrarios.
+
+Hace esto:
+
+manifest.toml
+       ↓
+client_scripts
+       ↓
+resuelve los paths
+       ↓
+los carga
+       ↓
+arranca el recurso
+       ↓
+core:on_resource_start
+
+Además, el DLL contiene literalmente las strings:
+
+manifest.toml
+client_scripts
+core:on_resource_start
+core:on_resource_stop
+CURRENT_RESOURCE_NAME
+Started resource '%s'
+
+Eso nos permite establecer una arquitectura bastante concreta:
+
+ResourcesManager
+      ↓
+Resource::Load
+      ↓
+Resource::__LoadClientScripts
+      ↓
+manifest.toml
+      ↓
+client_scripts
+      ↓
+Lua/client scripts
+      ↓
+natives del juego
+
+Y los natives que puede invocar ese scripting son exactamente los que nos interesan
+
+En la tabla de bindings de client-luascripting.dll aparecen:
+
+get_player_actor
+is_local_player
+is_local_player_valid
+
+create_actor_in_layout
+create_player_actor_in_layout
+respawn_player_actor_in_layout
+
+init_native_actorenum_player
+switch_player_to_enum
+
+get_actor_enum
+get_actor_slot
+get_slot_actor
+get_local_slot
+
+Eso cambia bastante la interpretación del problema.
+
+Antes teníamos:
+
+InitSpawn
+  ↓
+GET_PLAYER_ACTOR(-1)
+  ↓
+0
+  ↓
+espera indefinidamente
+
+Ahora tenemos un mecanismo histórico plausible y técnicamente respaldado:
+
+InitSpawn
+  ↓
+LoadAllResources
+  ↓
+Resource::Load
+  ↓
+manifest.toml / client_scripts
+  ↓
+script de cliente
+  ↓
+CREATE_PLAYER_ACTOR_IN_LAYOUT / etc.
+  ↓
+sagPlayer::sm_LocalPlayer
+  ↓
+GET_PLAYER_ACTOR(-1) != 0
+  ↓
+InitSpawn continúa
+
+No estoy afirmando todavía que ese script concreto haga el spawn. Lo que sí está demostrado es que el cliente histórico tenía precisamente el mecanismo para cargar scripts externos que podían llamar a esos natives.
+
+Esto también explica algo del client.log
+
+Nuestro log mostraba:
+
+CREATE_LAYOUT ...
+
+pero no:
+
+CREATE_PLAYER_ACTOR_IN_LAYOUT
+CREATE_ACTOR_IN_LAYOUT
+RESPAWN_PLAYER_ACTOR_IN_LAYOUT
+
+y después:
+
+GET_PLAYER_ACTOR(-1) = 0
+
+Eso ahora encaja con una hipótesis mucho más específica:
+
+el runtime está llegando al subsistema de recursos/layouts, pero no estamos reproduciendo la ejecución del client script histórico que debía avanzar ese proceso.
+
+Y hay otro detalle todavía más importante: el fullReadPath de Frontier veía RPFs, pero no habíamos visto realmente una carga de boot.sc. Eso era una señal de que estábamos reproduciendo la lógica de transición sin necesariamente reproducir el mecanismo de ejecución histórico.
+
+El nuevo client-luascripting.dll muestra que había otro nivel de ejecución por encima del motor de scripts nativo: recursos → manifest → client scripts → natives.
+
+client-main.dll también queda mejor explicado
+
+La nueva evidencia de FUN_1800069F0 sigue siendo válida:
+
+OnPressStartScriptRunning
+OnMainScriptRunning
+OnUpdatePerTick
+OnUpdatePerFrame
+...
+
+y registra callbacks en:
+
+StaticCallbacksHandler<rage::scrThread>
+
+Pero ahora no asumiría que esos callbacks sean por sí solos quienes crean al jugador.
+
+La arquitectura que empieza a emerger es más bien:
+
+client-main.dll
+    │
+    ├── lifecycle / callbacks
+    ├── LoadOnline
+    └── InitSpawn
+             │
+             └── ResourcesManager
+                    │
+                    └── client-luascripting.dll
+                           │
+                           ├── manifest.toml
+                           ├── client_scripts
+                           └── scripts que llaman natives
+
+Eso es bastante más consistente con todos los datos que tenemos.
+
+Hay además una ausencia muy significativa
+
+Revisé el árbol completo actual de DLL-descomprimidos-. Lo nuevo que agregaste contiene principalmente evidencia de reverse engineering de DLLs.
+
+No aparecen dentro de ese repo los recursos históricos reales del tipo:
+
+manifest.toml
+*.lua
+
+ni un paquete de recursos que podamos identificar como el script que crea al jugador.
+
+Por eso todavía nos falta la pieza:
+
+¿qué client_script histórico ejecutaba la creación/activación del jugador y qué hacía exactamente?
+
+Ese es ahora el hueco documental más importante.
+
+Mi conclusión
+
+La investigación avanzó un nivel.
+
+Antes el modelo era:
+
+frontend → online → world loaded → falta player
+
+Ahora el modelo más sólido es:
+
+frontend
+  ↓
+online transition
+  ↓
+LoadOnline
+  ↓
+InitSpawn
+  ↓
+ResourcesManager::LoadAllResources
+  ↓
+Resource::Load
+  ↓
+manifest.toml
+  ↓
+client_scripts
+  ↓
+script histórico
+  ↓
+player/actor initialization
+  ↓
+sagPlayer::sm_LocalPlayer
+  ↓
+GET_PLAYER_ACTOR(-1)
+  ↓
+InitSpawn continúa
+
+Y esto explica por qué no conviene todavía hardcodear CREATE_PLAYER_ACTOR_IN_LAYOUT en Frontier. Primero necesitamos identificar el recurso/script histórico y sus argumentos/contexto. La nueva evidencia hace que esa búsqueda sea mucho más concreta.
+
+También explica por qué el último client.log no muestra necesariamente un fallo del native tracer: puede estar faltando la capa que decide llamar esos natives en primer lugar.
+
+
+
+Powered by ChatGPT Exporter (https://www.chatgptexporter.com)
