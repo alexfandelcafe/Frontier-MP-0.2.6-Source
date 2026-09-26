@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 #include <atomic>
+#include <mutex>
 #include "frontier/game/rdr_bridge.hpp"
 #include "frontier/game/frontier_session.hpp"
 #include "frontier/client/remote_player_manager.hpp"
@@ -16,6 +17,7 @@ public:
     void run_loop();
     void shutdown();
     void update();
+    void request_server_connection(const std::string& host, std::uint16_t port);
     bool connected() const { return connected_; }
     frontier::game::RdrBridge& game_bridge() { return gameBridge_; }
 
@@ -41,6 +43,13 @@ private:
     std::uint64_t lastLocalPlayerSpawnAttemptMs_{};
     bool localPlayerSpawnReady_{};
     bool debugRemoteTestEnabled_{};
+    std::mutex connectionRequestMutex_;
+    std::string pendingServerHost_{};
+    std::uint16_t pendingServerPort_{};
+    bool connectionRequestPending_{};
+    std::string playerName_{"Player"};
+    std::string buildId_{};
+    std::uint64_t buildHash_{};
 };
 
 } // namespace frontier::client
