@@ -31,6 +31,7 @@ std::uint32_t gCreatePlayerActorTraceCount = 0;
 std::uint32_t gGetPlayerActorTraceCount = 0;
 std::atomic<std::uint32_t> gObservedLocalPlayerActor{0u};
 std::atomic<bool> gObservedLocalPlayerActorKnown{false};
+bool gGetPlayerActorHandlerAvailabilityLogged = false;
 
 std::uint32_t gCreateActorInLayoutTraceCount = 0;
 std::uint32_t gIsActorInitedTraceCount = 0;
@@ -372,6 +373,7 @@ bool StartupNativeTracer::attach(NativeInvoker& invoker, GameThreadDispatcher& d
 
     gObservedLocalPlayerActor.store(0u, std::memory_order_release);
     gObservedLocalPlayerActorKnown.store(false, std::memory_order_release);
+    gGetPlayerActorHandlerAvailabilityLogged = false;
     if (g_tracer != nullptr) {
         error = "another startup native tracer is already attached";
         return false;
@@ -731,8 +733,15 @@ bool StartupNativeTracer::retry_actor_optional_hooks() {
     // slot surface during startup was not necessary for the readiness barrier
     // and increases ABI/registration risk. GET_PLAYER_ACTOR is the one signal
     // required by InitSpawn and is already observed from the game's own script.
-    if (originalGetPlayerActor_ != nullptr ||
-        !invoker_->has_handler(kGetPlayerActor)) {
+    if (originalGetPlayerActor_ != nullptr) {
+        return false;
+    }
+
+    if (!invoker_->has_handler(kGetPlayerActor)) {
+        if (!gGetPlayerActorHandlerAvailabilityLogged) {
+            log("[FrontierNativeTrace] deferred GET_PLAYER_ACTOR handler unavailable after native registration");
+            gGetPlayerActorHandlerAvailabilityLogged = true;
+        }
         return false;
     }
 
