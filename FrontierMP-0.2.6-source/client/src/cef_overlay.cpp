@@ -983,6 +983,17 @@ bool query_command_queue(
 
     if (firstMethod == nullptr) return false;
 
+    MEMORY_BASIC_INFORMATION vtableMbi{};
+    if (VirtualQuery(
+            vtable,
+            &vtableMbi,
+            sizeof(vtableMbi)) != sizeof(vtableMbi) ||
+        vtableMbi.State != MEM_COMMIT ||
+        (vtableMbi.Protect & PAGE_GUARD) != 0 ||
+        (vtableMbi.Protect & PAGE_NOACCESS) != 0) {
+        return false;
+    }
+
     MEMORY_BASIC_INFORMATION methodMbi{};
     if (VirtualQuery(
             firstMethod,
@@ -993,6 +1004,27 @@ bool query_command_queue(
          (methodMbi.Protect & PAGE_EXECUTE_READ) == 0 &&
          (methodMbi.Protect & PAGE_EXECUTE_READWRITE) == 0 &&
          (methodMbi.Protect & PAGE_EXECUTE_WRITECOPY) == 0)) {
+        return false;
+    }
+
+    HMODULE methodModule = nullptr;
+    if (!GetModuleHandleExA(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            reinterpret_cast<LPCSTR>(firstMethod),
+            &methodModule) ||
+        methodModule == nullptr) {
+        return false;
+    }
+
+    char moduleName[MAX_PATH]{};
+    if (GetModuleFileNameA(methodModule, moduleName, sizeof(moduleName)) == 0) {
+        return false;
+    }
+
+    const char* baseName = std::strrchr(moduleName, '\\');
+    baseName = baseName != nullptr ? baseName + 1 : moduleName;
+    if (_stricmp(baseName, "d3d12.dll") != 0) {
         return false;
     }
 
