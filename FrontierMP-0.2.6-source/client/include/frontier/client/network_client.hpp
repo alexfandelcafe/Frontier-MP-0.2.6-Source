@@ -2,6 +2,9 @@
 
 #include "frontier/client/udp_socket.hpp"
 #include "frontier/protocol.hpp"
+#ifdef FRONTIER_RDRMP_ENET_AVAILABLE
+#include "frontier/rdrmp_enet.hpp"
+#endif
 
 #include <cstdint>
 #include <functional>
@@ -28,6 +31,7 @@ public:
     ConnectionState state() const { return state_; }
     std::uint16_t player_id() const { return playerId_; }
     const std::string& session_token() const { return sessionToken_; }
+    bool rdrmp_compatibility_enabled() const { return useRdrmpCompat_; }
 
     void set_on_welcome(WelcomeCallback callback) { onWelcome_ = std::move(callback); }
     void set_on_snapshot(SnapshotCallback callback) { onSnapshot_ = std::move(callback); }
