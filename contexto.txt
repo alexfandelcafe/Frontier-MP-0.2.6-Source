@@ -2924,3 +2924,21 @@ Esto no reintroduce los hooks IAT de `CreateDXGIFactory*`, ni shadow-vtables de 
 
 Nota técnica: la cola pasada a `D3D11On12CreateDevice` debe ser una cola 3D válida y el uso de recursos envueltos requiere coordinación con la cola D3D12 que usa el rendering/present de la aplicación. La documentación oficial de Microsoft describe el flujo con el mismo command queue para el interop. No se considera resuelto hasta comprobar en el runtime que Frontier encuentre la cola real de RDR y complete la composición sin una nueva excepción.
 
+## 65. Eliminar el scan privado de command queue del Present (2026-09-27)
+
+Los logs posteriores confirmaron que el crash seguía apareciendo antes de que el scan privado del swapchain pudiera producir una queue válida. Se reemplazó ese mecanismo por una captura basada en la API pública de DXGI:
+
+- Se obtiene desde el swapchain de prueba la dirección compartida de `IDXGIFactory2::CreateSwapChainForHwnd`.
+- Se instala un detour de esa implementación compartida, además del detour compartido de `Present`.
+- Cuando RDR crea su swapchain D3D12, el parámetro `IUnknown* device` recibido por `CreateSwapChainForHwnd` se consulta como `ID3D12CommandQueue`. La documentación de Microsoft especifica que para D3D11On12 las command queues suministradas deben ser colas 3D, y sus ejemplos pasan la queue usada por el swapchain. citeturn694664search0turn694664search6
+- Frontier guarda la queue junto con una referencia al swapchain real de RDR.
+- `CefOverlay::on_present()` ya no inspecciona memoria privada de objetos COM para encontrar la queue. Si no existe una pareja `swapchain real + queue real`, no inicializa D3D11On12 ni compone CEF.
+
+También se eliminó el fallback que podía aceptar accidentalmente la command queue del swapchain de prueba. Esto evita usar una queue de otro dispositivo/swapchain para el interop.
+
+Commit de implementación: `fdf4fcea41163ba0c184ed0234da2b4a1c5f4052`.
+
+La prueba de runtime necesaria es que aparezca:
+`[FrontierD3D] shared CreateSwapChainForHwnd captured RDR D3D12 queue ...`
+antes del primer `Present` que intente inicializar D3D11On12. Si ese mensaje no aparece, el siguiente punto de diagnóstico es el target compartido de `CreateSwapChainForHwnd`, no el objeto swapchain privado.
+
