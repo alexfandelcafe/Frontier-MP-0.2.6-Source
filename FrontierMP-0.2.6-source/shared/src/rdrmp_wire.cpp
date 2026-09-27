@@ -193,6 +193,19 @@ bool decode_player_property(const std::vector<std::uint8_t>& bytes, PlayerProper
     return reader.u16(value.playerId) && reader.u32(value.value) && reader.remaining() == 0;
 }
 
+std::vector<std::uint8_t> encode_client_player_state(const ClientPlayerState& value) {
+    Writer writer;
+    if (!write_vec3(writer, value.position) || !write_vec3(writer, value.rotation)) return {};
+    return writer.data();
+}
+
+bool decode_client_player_state(const std::vector<std::uint8_t>& bytes, ClientPlayerState& value) {
+    Reader reader(bytes);
+    return read_vec3(reader, value.position) &&
+           read_vec3(reader, value.rotation) &&
+           reader.remaining() == 0;
+}
+
 std::vector<std::uint8_t> encode_player_transform(const PlayerTransform& value) {
     Writer writer;
     if (!writer.u16(value.playerId) || !write_vec3(writer, value.position) || !write_vec3(writer, value.rotation)) return {};
