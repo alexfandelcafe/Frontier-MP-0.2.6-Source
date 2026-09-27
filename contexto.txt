@@ -2470,3 +2470,135 @@ Riesgo todavía abierto:
 HEAD de continuidad de código:
 dbf49d94c3d66d6a36385ca4299db3255831c2b8
 
+============================================================
+59. EVIDENCIA NUEVA DEL REPO DLL-DESCOMPRIMIDOS — LIFECYCLE + RENDER HISTÓRICO
+============================================================
+
+Fuente principal:
+alexfandelcafe/DLL-descomprimidos-
+
+Artefactos revisados:
+- evidence 2.0/game-core.dll_frontier_evidence/decomp_01.txt
+- evidence 2.0/game-core.dll_frontier_evidence/07_seed_functions.txt
+- evidence 2.0/client-main.dll_frontier_evidence/decomp_01.txt
+- evidence 2.0/client-main.dll_frontier_evidence/decomp_02.txt
+- RdrmpBootstrap_client-webrenderer.dll_20260926_015945.txt
+- RdrmpBootstrap_client-main.dll_20260926_015212.txt
+
+Estado del branch Frontier al revisar:
+- commit de punta actual del branch: 23e6b3507facb4ba8d3570f756ed8951b18cc40f
+- dicho commit solo documenta la corrección DXGI en contexto.txt;
+- HEAD de código efectivo sigue siendo dbf49d94c3d66d6a36385ca4299db3255831c2b8.
+
+HALLAZGO A — CALLBACKS HISTÓRICOS DE scrThread:
+
+game-core.dll:
+- PostLoad histórico en 0x180008070 prepara hooks de:
+  rage::scrThread::Wait
+  rage::scrThread::StartNewThreadOverride
+  sagCoreScript::RDRStartNewScript
+  y otras rutas.
+- n_Wait histórico en 0x1800071e0 consulta GET_SCRIPT_NAME y, según el
+  nombre del script, dispara callbacks:
+  OnUpdatePerTick
+  OnUpdatePerFrame
+  OnPressStartScriptRunning
+  OnMainScriptRunning
+  antes de ejecutar el Wait original.
+- sagPlayerMgr::GetLocalPlayer está en 0x18000bef0 y devuelve el global
+  s_LocalPlayer cuando existe.
+- sagPlayerMgr::PostLoad encuentra/parchea sagPlayerMgr::s_LocalPlayer.
+
+client-main.dll:
+- FUN_1800069f0 corresponde al Application::__MainThread histórico.
+- Esa rutina registra explícitamente en StaticCallbacksHandler<rage::scrThread>:
+  OnPressStartScriptRunning
+  OnMainScriptRunning
+  OnUpdatePerTick
+  OnUpdatePerFrame
+  OnQuitGame.
+- También registra callbacks de ciclo de vida OnInitialize/OnRender/OnReset/OnShutdown.
+
+CONSECUENCIA PARA FRONTIER:
+La implementación actual de on_historical_wait() solo observa/loguea
+OnPressStartScriptRunning y OnMainScriptRunning. Eso NO reproduce todavía
+la semántica histórica de dispatch.
+La reconstrucción correcta posterior debe tener:
+  scrThread::Wait
+      ->
+  GET_SCRIPT_NAME
+      ->
+  selección de callback
+      ->
+  ejecución del callback registrado
+      ->
+  Wait original
+
+No convertir todavía esa evidencia en creación ad-hoc del local player:
+primero debe preservarse la separación entre frontend, lifecycle y
+RemotePlayerManager.
+
+HALLAZGO B — OnRender HISTÓRICO ES UNA RUTA REAL Y NO SOLO UN NOMBRE:
+
+En client-main.dll:
+- FUN_180059490 (RVA 0x59490) es el handler asociado al ciclo OnRender.
+- Antes de disparar "OnRender", trabaja sobre un contexto de render
+  recibido en param_2 y ejecuta llamadas sobre sus interfaces.
+- Luego llama a FUN_180059f00(param_1, "OnRender"), que despacha el
+  callback registrado.
+
+En client-webrenderer.dll:
+- existe CEFManager::Draw(ID3D11Device*, void*) en 0x180004080.
+- existe ClientHandler::Draw(ID3D11Device*, void*) en 0x180009a00.
+- existe ClientHandler::OnPaint(...) en 0x180009250.
+- también existen CEFManager::DoFrame y ClientHandler::DoFrame.
+
+INTERPRETACIÓN:
+La arquitectura histórica da una pista fuerte de que el CEF era integrado
+desde el ciclo de render del juego mediante un contexto/device suministrado
+por el engine, en lugar de depender necesariamente de un hook de Present
+instalado desde RDR.exe.
+
+Esto es una inferencia arquitectónica, no una demostración completa del
+caller:
+- no se recuperó todavía el cuerpo exacto de lambda_3 de Application::__MainThread;
+- por tanto no afirmar todavía que lambda_3 sea quien llame directamente
+  a CEFManager::Draw;
+- sí queda demostrado que existe la ruta OnRender + CEFManager::Draw en las
+  DLL históricas y que debe compararse contra el Present-hook actual.
+
+HALLAZGO C — FRONTEND HISTÓRICO:
+
+client-rdrmp2/data/game/content/ui/boot.sc.xml conserva el flujo real:
+- StartScreen1 -> startScreenExit -> fileCheckSignedIn -> StartScreen2;
+- StartScreen2 -> auth.success -> net.EnterOnline;
+- net.EnterOnline -> fileSetForMPLoad -> ValidateNormalMode ->
+  LoadingScreen -> waitforInTransition -> Startup_Checks.
+
+Esto confirma que la transición frontend -> online estaba coordinada por
+la máquina UI histórica y que LoadOnline/InitSpawn ocurrían dentro de un
+flujo ya iniciado, no como sustituto arbitrario de esa máquina.
+
+IMPACTO EN EL SIGUIENTE DESARROLLO:
+
+1. El bloqueo inmediato continúa siendo el render CEF.
+2. Antes de expandir indiscriminadamente el hook DXGI, comparar el diseño
+   histórico OnRender/CEFManager::Draw contra la captura actual de
+   CreateDXGIFactory*/Present.
+3. Si la prueba de runtime demuestra que RDR nunca pasa por los callbacks
+   Present/Present1 capturados, el siguiente cambio debe ser un render bridge
+   alineado con OnRender, no otro parche de vtable.
+4. Una vez resuelto el render, implementar el dispatch real de callbacks de
+   scrThread de forma compatible con la arquitectura histórica.
+5. Solo después volver a local-player spawn/bootstrapComplete.
+6. No modificar RemotePlayerManager mientras este camino no cambie.
+
+ESTADO:
+- Este apartado documenta evidencia estática nueva.
+- No hubo ejecución de RDR1 durante este análisis.
+- No se afirma que CEF ya renderice.
+- No se afirma todavía la implementación exacta de CEFManager::Draw en Frontier.
+- No se modifica aquí la lógica de RemotePlayerManager ni el local player.
+
+HEAD DE CONTINUIDAD:
+23e6b3507facb4ba8d3570f756ed8951b18cc40f
