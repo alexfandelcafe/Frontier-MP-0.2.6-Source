@@ -1384,8 +1384,8 @@ void unhook_render_path() {
         }
     }
 
-    g_presentHook.hookedFactory.Reset();
     g_presentHook.hookedFactory2.Reset();
+    g_presentHook.hookedFactory.Reset();
     g_presentHook.hookedFactoryVtable.fill(nullptr);
     g_presentHook.hookedFactory2Vtable.fill(nullptr);
     g_presentHook.originalFactoryVtableAddress = nullptr;
@@ -1397,15 +1397,20 @@ void unhook_render_path() {
     g_presentHook.factory2Hooked = false;
     g_presentHook.factory2SharesBaseObject = false;
 
-    for (std::size_t i = 0; i < g_presentHook.factoryImportCount; ++i) {
-        restore_import(g_presentHook.factoryImports[i]);
+    for (auto& patch : g_presentHook.factoryImports) {
+        restore_import(patch);
     }
+    g_presentHook.createFactoryOriginal = nullptr;
+    g_presentHook.createFactory1Original = nullptr;
+    g_presentHook.createFactory2Original = nullptr;
     g_presentHook.factoryImportCount = 0;
 
     restore_import(g_presentHook.createImport);
     g_presentHook.createOriginal = nullptr;
     g_presentHook.rdrModule = nullptr;
     g_presentHook.installed = false;
+
+    log_line("[FrontierD3D] render path unhooked");
 }
 
 bool install_render_path(CefOverlay* overlay) {
