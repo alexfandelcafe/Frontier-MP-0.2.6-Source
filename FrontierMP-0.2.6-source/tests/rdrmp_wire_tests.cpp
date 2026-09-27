@@ -7,12 +7,22 @@
 #include <string>
 #include <variant>
 #include <vector>
+#include <cstdio>
+#include <cstdlib>
 
 namespace {
 
+void require(bool condition, const char* message) {
+    if (!condition) {
+        std::fprintf(stderr, "RDRMP wire test failed: %s\n", message);
+        std::exit(1);
+    }
+}
+
 void expect_bytes(const std::vector<std::uint8_t>& actual,
                   std::initializer_list<std::uint8_t> expected) {
-    assert(actual == std::vector<std::uint8_t>(expected));
+    const std::vector<std::uint8_t> expectedBytes(expected);
+    require(actual == expectedBytes, "unexpected byte sequence");
 }
 
 void test_client_welcome() {
@@ -35,11 +45,11 @@ void test_client_welcome() {
     });
 
     frontier::rdrmp::ClientWelcome decoded{};
-    assert(frontier::rdrmp::decode_client_welcome(bytes, decoded));
-    assert(decoded.actorModel == 837);
-    assert(decoded.name == "John");
-    assert(decoded.position.x == 1.0f && decoded.position.y == 2.0f && decoded.position.z == 3.0f);
-    assert(decoded.rotation.x == 10.0f && decoded.rotation.y == 20.0f && decoded.rotation.z == 30.0f);
+    require(frontier::rdrmp::decode_client_welcome(bytes, decoded), "client welcome decode");
+    require(decoded.actorModel == 837, "client welcome model");
+    require(decoded.name == "John", "client welcome name");
+    require(decoded.position.x == 1.0f && decoded.position.y == 2.0f && decoded.position.z == 3.0f, "client welcome position");
+    require(decoded.rotation.x == 10.0f && decoded.rotation.y == 20.0f && decoded.rotation.z == 30.0f, "client welcome rotation");
 }
 
 void test_player_packets() {
@@ -67,8 +77,8 @@ void test_player_packets() {
     transform.position = create.position;
     transform.rotation = create.rotation;
     const auto transformBytes = frontier::rdrmp::encode_player_transform(transform);
-    assert(transformBytes.size() == 26);
-    assert(transformBytes[0] == 0x12 && transformBytes[1] == 0x34);
+    require(transformBytes.size() == 26, "player transform size");
+    require(transformBytes[0] == 0x12 && transformBytes[1] == 0x34, "player transform id");
 
     frontier::rdrmp::ClientPlayerState clientState{};
     clientState.position = {4.0f, 5.0f, 6.0f};
@@ -97,7 +107,7 @@ void test_player_packets() {
 }
 
 void test_event_codec() {
-    assert(frontier::rdrmp::fnv1a64("core:on_player_joined") == 0xC4D7C7B3F6C05466ULL);
+    require(frontier::rdrmp::fnv1a64("core:on_player_joined") == 0xC4D7C7B3F6C05466ULL, "FNV-1a hash");
 
     const std::vector<frontier::rdrmp::EventValue> values{
         std::uint64_t{7},
@@ -108,26 +118,26 @@ void test_event_codec() {
     };
 
     const auto bytes = frontier::rdrmp::encode_event("test:event", values);
-    assert(!bytes.empty());
+    require(!bytes.empty(), "event encoding");
 
     std::string eventName;
     std::vector<frontier::rdrmp::EventValue> decoded;
-    assert(frontier::rdrmp::decode_event(bytes, eventName, decoded));
-    assert(eventName == "test:event");
-    assert(decoded.size() == values.size());
-    assert(std::get<std::uint64_t>(decoded[0]) == 7);
-    assert(std::fabs(std::get<double>(decoded[1]) - 2.5) < 1e-12);
-    assert(std::get<bool>(decoded[2]));
-    assert(std::get<std::string>(decoded[3]) == "hello");
+    require(frontier::rdrmp::decode_event(bytes, eventName, decoded), "event decode");
+    require(eventName == "test:event", "event name");
+    require(decoded.size() == values.size(), "event arg count");
+    require(std::get<std::uint64_t>(decoded[0]) == 7, "event uint64");
+    require(std::fabs(std::get<double>(decoded[1]) - 2.5) < 1e-12, "event double");
+    require(std::get<bool>(decoded[2]), "event bool");
+    require(std::get<std::string>(decoded[3]) == "hello", "event string");
     const auto vector = std::get<frontier::Vec3>(decoded[4]);
-    assert(vector.x == 1.0f && vector.y == 2.0f && vector.z == 3.0f);
+    require(vector.x == 1.0f && vector.y == 2.0f && vector.z == 3.0f, "event Vector3");
 }
 
 void test_malformed_event() {
     std::vector<std::uint8_t> bytes{0x00, 0x01, 0x06};
     std::string eventName;
     std::vector<frontier::rdrmp::EventValue> arguments;
-    assert(!frontier::rdrmp::decode_event(bytes, eventName, arguments));
+    require(!frontier::rdrmp::decode_event(bytes, eventName, arguments), "malformed event rejected");
 }
 
 } // namespace
@@ -139,3 +149,4 @@ int main() {
     test_malformed_event();
     return 0;
 }
+
