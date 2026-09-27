@@ -52,6 +52,12 @@ HRESULT STDMETHODCALLTYPE frontier_present1(
 
 using Microsoft::WRL::ComPtr;
 
+// Process-wide hooks used by the RDR window procedure. They are kept
+// independent from PresentHookState because Win32 dispatch can occur before
+// the render path state is initialized and during render-path teardown.
+std::atomic<CefOverlay*> g_activeOverlay{nullptr};
+std::atomic<WNDPROC> g_originalWindowProc{nullptr};
+
 void log_line(const std::string& line) {
     char localAppData[MAX_PATH]{};
     const DWORD n = GetEnvironmentVariableA("LOCALAPPDATA", localAppData, MAX_PATH);
