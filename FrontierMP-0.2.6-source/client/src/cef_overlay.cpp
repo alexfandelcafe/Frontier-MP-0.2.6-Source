@@ -514,9 +514,7 @@ void STDMETHODCALLTYPE frontier_present_body(
     // The register-preserving gateway restores the exact Present entry state
     // before transferring control to the original trampoline. This callback
     // must therefore only perform Frontier work and never call Present again.
-    log_line(
-        std::string("[FrontierD3D] Present callback enter state=") +
-        (overlay->state_ != nullptr && overlay->state_->initialized ? "initialized" : "not-initialized"));
+    log_line("[FrontierD3D] Present callback enter");
     try {
         overlay->on_present(swapChain);
     } catch (...) {
