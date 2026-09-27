@@ -1945,6 +1945,7 @@ void unhook_render_path() {
     g_presentHook.originalVtable.fill(nullptr);
     g_presentHook.hookedVtable1.fill(nullptr);
     g_presentHook.originalVtable1.fill(nullptr);
+    g_presentHook.extendedVtableEntryCount = 0;
     g_presentHook.originalVtableAddress = nullptr;
     g_presentHook.originalVtable1Address = nullptr;
     g_presentHook.presentOriginal = nullptr;
