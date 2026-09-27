@@ -1,0 +1,19 @@
+name: FrontierMP build
+
+on:
+  push:
+    branches:
+      - final-rdr1-1.0.0
+  pull_request:
+
+jobs:
+  windows-vs2022:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake --preset windows-vs2022-x64 -DFRONTIER_BUILD_RDRMP_COMPAT=ON -DFRONTIER_CEF_PACKAGE_DIR=""
+      - name: Build
+        run: cmake --build --preset windows-vs2022-x64-release --parallel --verbose
+      - name: Test
+        run: ctest --test-dir build/vs2022-x64 -C Release --output-on-failure
