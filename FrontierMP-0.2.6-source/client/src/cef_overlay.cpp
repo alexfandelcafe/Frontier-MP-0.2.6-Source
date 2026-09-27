@@ -961,16 +961,25 @@ bool query_command_queue(
 
     if (vtable == nullptr) return false;
 
-    MEMORY_BASIC_INFORMATION vtableMbi{};
+    void* firstMethod = nullptr;
+    __try {
+        firstMethod = *reinterpret_cast<void**>(vtable);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+
+    if (firstMethod == nullptr) return false;
+
+    MEMORY_BASIC_INFORMATION methodMbi{};
     if (VirtualQuery(
-            vtable,
-            &vtableMbi,
-            sizeof(vtableMbi)) != sizeof(vtableMbi) ||
-        vtableMbi.State != MEM_COMMIT ||
-        (vtableMbi.Protect & PAGE_EXECUTE) == 0 &&
-        (vtableMbi.Protect & PAGE_EXECUTE_READ) == 0 &&
-        (vtableMbi.Protect & PAGE_EXECUTE_READWRITE) == 0 &&
-        (vtableMbi.Protect & PAGE_EXECUTE_WRITECOPY) == 0) {
+            firstMethod,
+            &methodMbi,
+            sizeof(methodMbi)) != sizeof(methodMbi) ||
+        methodMbi.State != MEM_COMMIT ||
+        ((methodMbi.Protect & PAGE_EXECUTE) == 0 &&
+         (methodMbi.Protect & PAGE_EXECUTE_READ) == 0 &&
+         (methodMbi.Protect & PAGE_EXECUTE_READWRITE) == 0 &&
+         (methodMbi.Protect & PAGE_EXECUTE_WRITECOPY) == 0)) {
         return false;
     }
 
