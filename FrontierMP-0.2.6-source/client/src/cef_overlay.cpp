@@ -878,10 +878,8 @@ HRESULT STDMETHODCALLTYPE frontier_shared_create_swap_chain_for_hwnd(
         commandQueue != nullptr) {
         std::lock_guard lock(g_presentHook.mutex);
         g_presentHook.capturedCommandQueue = commandQueue;
-        g_presentHook.capturedSwapChainRef.Reset();
-        reinterpret_cast<IDXGISwapChain1*>(*swapChain)->AddRef();
-        g_presentHook.capturedSwapChainRef.Attach(
-            reinterpret_cast<IDXGISwapChain*>(*swapChain));
+        g_presentHook.capturedSwapChainRef =
+            reinterpret_cast<IDXGISwapChain*>(*swapChain);
 
         std::ostringstream message;
         message << "[FrontierD3D] shared CreateSwapChainForHwnd captured RDR D3D12 queue"
@@ -1170,7 +1168,7 @@ bool install_historical_present_hook(
         reinterpret_cast<std::uintptr_t>((*swapChainVtableAddress)[8]);
     if (presentTarget == 0) {
         DestroyWindow(probeWindow);
-        UnregisterClass(probeWindow);
+        UnregisterClassA(className, windowClass.hInstance);
         error = "probe Present entry unavailable";
         return false;
     }
