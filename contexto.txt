@@ -2601,4 +2601,4 @@ ESTADO:
 - No se modifica aquí la lógica de RemotePlayerManager ni el local player.
 
 HEAD DE CONTINUIDAD:
-23e6b3507facb4ba8d3570f756ed8951b18cc40f
+7e526b1b5229d803d51c7e0c5a4ccb8ed88a2e72
