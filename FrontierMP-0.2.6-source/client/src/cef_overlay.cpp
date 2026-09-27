@@ -1097,9 +1097,64 @@ bool query_command_queue(
     }
 }
 
+bool scan_object_for_command_queue(
+    void* object,
+    std::size_t maxBytes,
+    ComPtr<ID3D12CommandQueue>& queue,
+    std::size_t& matchedOffset) {
+    queue.Reset();
+    matchedOffset = static_cast<std::size_t>(-1);
+    if (object == nullptr) return false;
+
+    MEMORY_BASIC_INFORMATION mbi{};
+    if (VirtualQuery(
+            object,
+            &mbi,
+            sizeof(mbi)) != sizeof(mbi) ||
+        mbi.State != MEM_COMMIT ||
+        (mbi.Protect & PAGE_GUARD) != 0 ||
+        (mbi.Protect & PAGE_NOACCESS) != 0) {
+        return false;
+    }
+
+    const auto base = reinterpret_cast<std::uintptr_t>(object);
+    const auto regionBegin = reinterpret_cast<std::uintptr_t>(mbi.BaseAddress);
+    const auto regionEnd = regionBegin + mbi.RegionSize;
+    if (base < regionBegin || base >= regionEnd) return false;
+
+    const std::size_t scanBytes =
+        std::min<std::size_t>(
+            static_cast<std::size_t>(regionEnd - base),
+            std::min<std::size_t>(maxBytes, 0x4000u));
+
+    for (std::size_t offset = sizeof(void*);
+         offset + sizeof(void*) <= scanBytes;
+         offset += sizeof(void*)) {
+        void* candidate = nullptr;
+        if (!read_swapchain_pointer(
+                reinterpret_cast<IDXGISwapChain*>(object),
+                offset,
+                candidate)) {
+            continue;
+        }
+
+        ComPtr<ID3D12CommandQueue> resolved;
+        if (!query_command_queue(candidate, resolved)) {
+            continue;
+        }
+
+        queue = std::move(resolved);
+        matchedOffset = offset;
+        return true;
+    }
+
+    return false;
+}
+
 bool locate_command_queue(
     PresentHookState& state,
     IDXGISwapChain* swapChain,
+    ID3D12Device* d3d12Device,
     ComPtr<ID3D12CommandQueue>& queue,
     std::size_t& matchedOffset) {
     queue.Reset();
@@ -1133,54 +1188,33 @@ bool locate_command_queue(
         }
     }
 
-    // The historical RDRMP object layout is not part of the DXGI ABI. If the
-    // private queue field moved, discover a valid command queue dynamically
-    // once and cache the offset for subsequent frames.
-    MEMORY_BASIC_INFORMATION mbi{};
-    if (VirtualQuery(
+    // The historical RDRMP object layout is not part of the DXGI ABI. First
+    // scan a larger range of the concrete swap-chain allocation. Some builds
+    // place the command queue beyond the small probe window.
+    if (scan_object_for_command_queue(
             swapChain,
-            &mbi,
-            sizeof(mbi)) == sizeof(mbi) &&
-        mbi.State == MEM_COMMIT &&
-        (mbi.Protect & PAGE_GUARD) == 0 &&
-        (mbi.Protect & PAGE_NOACCESS) == 0) {
-        const auto base =
-            reinterpret_cast<std::uintptr_t>(swapChain);
-        const auto regionBegin =
-            reinterpret_cast<std::uintptr_t>(mbi.BaseAddress);
-        const auto regionEnd =
-            regionBegin + mbi.RegionSize;
-        if (base >= regionBegin && base < regionEnd) {
-            const std::size_t scanBytes =
-                std::min<std::size_t>(
-                    static_cast<std::size_t>(regionEnd - base),
-                    0x600u);
+            0x4000u,
+            queue,
+            matchedOffset)) {
+        state.activeCommandQueueOffset = matchedOffset;
+        log_line(
+            "[FrontierD3D] discovered D3D12 command queue from swapchain object: offset=" +
+            std::to_string(matchedOffset));
+        return true;
+    }
 
-            for (std::size_t offset = sizeof(void*);
-                 offset + sizeof(void*) <= scanBytes;
-                 offset += sizeof(void*)) {
-                void* candidate = nullptr;
-                if (!read_swapchain_pointer(
-                        swapChain,
-                        offset,
-                        candidate)) {
-                    continue;
-                }
-
-                ComPtr<ID3D12CommandQueue> resolved;
-                if (!query_command_queue(candidate, resolved)) {
-                    continue;
-                }
-
-                queue = std::move(resolved);
-                matchedOffset = offset;
-                state.activeCommandQueueOffset = offset;
-                log_line(
-                    "[FrontierD3D] discovered D3D12 command queue offset dynamically: " +
-                    std::to_string(offset));
-                return true;
-            }
-        }
+    // Some RDR builds do not retain the queue in the DXGI swap-chain object.
+    // The device can still retain concrete ID3D12CommandQueue references, so
+    // use the device object as a second, non-invasive discovery source.
+    if (scan_object_for_command_queue(
+            d3d12Device,
+            0x4000u,
+            queue,
+            matchedOffset)) {
+        log_line(
+            "[FrontierD3D] discovered D3D12 command queue from device object: offset=" +
+            std::to_string(matchedOffset));
+        return true;
     }
 
     return false;
@@ -2751,6 +2785,7 @@ bool CefOverlay::initialize_on_game_thread() {
         return false;
     }
 
+    state.cefThreadId = GetCurrentThreadId();
     state.gameWindow = find_rdr_window();
     if (state.gameWindow == nullptr) {
         log_line("[FrontierCEF] RDR window not found after CEF initialization");
@@ -2827,6 +2862,17 @@ void CefOverlay::pump_on_game_thread() {
     if (state_ == nullptr ||
         !state_->initialized ||
         stopRequested_.load(std::memory_order_acquire)) {
+        return;
+    }
+
+    const DWORD currentThreadId = GetCurrentThreadId();
+    if (state_->cefThreadId != 0 &&
+        currentThreadId != state_->cefThreadId) {
+        std::ostringstream message;
+        message << "[FrontierCEF] game-thread pump skipped on wrong thread current="
+                << currentThreadId
+                << " expected=" << state_->cefThreadId;
+        log_line(message.str());
         return;
     }
 
@@ -3530,8 +3576,10 @@ void CefOverlay::on_present(::IDXGISwapChain* swapChain) {
         return;
     }
 
-    // RDRMP pumped CEF independently from its graphics bridge.
-    CefDoMessageLoopWork();
+    // CEF is owned by the game thread that called CefInitialize. The Present
+    // detour may execute on a different render thread, so it must never call
+    // CefDoMessageLoopWork from here. The game-thread dispatcher below owns the
+    // CEF pump; Present only consumes the latest completed OSR frame.
 
     std::lock_guard frameLock(state_->frameMutex);
     if (state_->frame.empty() ||
@@ -3562,6 +3610,7 @@ void CefOverlay::on_present(::IDXGISwapChain* swapChain) {
             !locate_command_queue(
                 g_presentHook,
                 swapChain,
+                d3d12Device.Get(),
                 commandQueue,
                 queueOffset)) {
             static std::atomic<std::uint32_t> missingQueueTrace{0};
