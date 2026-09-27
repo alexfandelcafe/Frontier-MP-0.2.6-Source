@@ -6,6 +6,7 @@
 #endif
 
 #include <cstring>
+#include <initializer_list>
 #include <limits>
 
 namespace frontier::game {
@@ -361,7 +362,7 @@ bool InlineHook::install_preserving_entry_registers(
     emit_u64(callback);
     emit({0xFFu, 0xD0u});
 
-    for (std::size_t index = std::size(kSavedRegisters); index != 0; --index) {
+    for (std::size_t index = sizeof(kSavedRegisters) / sizeof(kSavedRegisters[0]); index != 0; --index) {
         emit_restore(kSavedRegisters[index - 1]);
     }
 
