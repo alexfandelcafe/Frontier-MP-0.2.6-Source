@@ -625,7 +625,7 @@ void GameThreadDispatcher::wait_hook(void* context) {
         return;
     }
 
-    const fallback = g_fallbackOriginalWait.load(std::memory_order_acquire);
+    const auto fallback = g_fallbackOriginalWait.load(std::memory_order_acquire);
     if (fallback) {
         fallback(context);
     }
