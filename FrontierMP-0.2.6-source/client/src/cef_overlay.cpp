@@ -1707,12 +1707,22 @@ void hook_swapchain(
         state.hookedVtable1[8] =
             reinterpret_cast<void*>(&frontier_present);
 
+        // Collect all COM metadata and ownership before changing the object's
+        // vtable. After the swap, avoid AddRef/Release/GetDesc calls through
+        // the freshly-installed table on the creation/activation boundary.
+        DXGI_SWAP_CHAIN_DESC1 desc1{};
+        HWND hwnd1 = nullptr;
+        const bool haveDesc1 = SUCCEEDED(swapChain1->GetDesc1(&desc1));
+        const bool haveHwnd1 = SUCCEEDED(swapChain1->GetHwnd(&hwnd1));
+        ComPtr<IDXGISwapChain> heldSwapChain = swapChain;
+        ComPtr<IDXGISwapChain1> heldSwapChain1 = swapChain1;
+
         state.originalVtable1Address = *vtable1;
         *vtable1 = state.hookedVtable1.data();
 
-        state.hookedSwapChain = swapChain;
-        state.hookedSwapChainRef = swapChain;
-        state.hookedSwapChain1Ref = swapChain1;
+        state.hookedSwapChain = heldSwapChain.Get();
+        state.hookedSwapChainRef = std::move(heldSwapChain);
+        state.hookedSwapChain1Ref = std::move(heldSwapChain1);
         state.swapchainHooked = true;
         state.swapchain1Hooked = true;
         state.swapchainUsesExtendedVtable = true;
@@ -1721,11 +1731,6 @@ void hook_swapchain(
             state.capturedCommandQueue = commandQueueHint;
             log_line("[FrontierD3D] captured D3D12 command queue from swapchain creation");
         }
-
-        DXGI_SWAP_CHAIN_DESC1 desc1{};
-        HWND hwnd1 = nullptr;
-        const bool haveDesc1 = SUCCEEDED(swapChain1->GetDesc1(&desc1));
-        const bool haveHwnd1 = SUCCEEDED(swapChain1->GetHwnd(&hwnd1));
 
         std::ostringstream message;
         message << "[FrontierD3D] hooked IDXGISwapChain1 swapchain="
