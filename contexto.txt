@@ -2602,3 +2602,82 @@ ESTADO:
 
 HEAD DE CONTINUIDAD:
 7e526b1b5229d803d51c7e0c5a4ccb8ed88a2e72
+
+
+============================================================
+60. CORRECCIÓN CEF — PRESENT GLOBAL + D3D11ON12
+============================================================
+
+Fecha:
+2026-09-26
+
+EVIDENCIA COMPLETA REVISADA:
+Se cargaron y analizaron los blobs completos:
+- DLL-descomprimidos-/client-main.dll.c
+- DLL-descomprimidos-/client-webrenderer.dll.c
+
+Hallazgos decisivos:
+- client-main.dll: Application::__MainThread registra OnRender.
+- FUN_180008010 (lambda de OnRender) ejecuta:
+    CEFManager::DoFrame()
+    CEFManager::Draw(ID3D11Device*, void*)
+- FUN_180059490 es el ciclo de render histórico.
+- FUN_180059b60 es el hook histórico de Present.
+- FUN_180058880 crea un swapchain D3D12 auxiliar y obtiene la dirección
+  compartida de Present para engancharla; no depende de las imports de
+  creación DXGI de RDR.exe.
+- FUN_180058db0 crea el puente D3D11On12 y envuelve los backbuffers D3D12.
+- client-webrenderer.dll: CEFManager::Draw llama a ClientHandler::Draw;
+  ClientHandler::OnPaint conserva el framebuffer BGRA de CEF.
+
+CORRECCIÓN APLICADA EN FRONTIER:
+Commit:
+07eaabc067be6aa709f74f83846d0398da04033f
+
+Además:
+- 08af28d898d72c67e37b6bf2bb59691fc6d62bfa
+- b6bbcd7c026cd859da824e039c16fa1f5cadbf30
+- 4484ba9e4768812a16c2109fb29acf3528dc43ec
+- 632388517e2a4591a1a5370813d94bbc9efa6dec
+- a574ee34c506bf372fb2ff231aa4f306d9ad8315
+- 07eaabc067be6aa709f74f83846d0398da04033f
+
+Archivos:
+- FrontierMP-0.2.6-source/client/src/cef_overlay.cpp
+- FrontierMP-0.2.6-source/client/include/frontier/client/cef_overlay.hpp
+- FrontierMP-0.2.6-source/CMakeLists.txt
+
+Cambios:
+1. Se añade un probe D3D12 interno que crea un swapchain auxiliar con
+   CreateDXGIFactory1/CreateSwapChainForHwnd/D3D12CreateDevice.
+2. Se obtiene Present del slot 8 del swapchain auxiliar y se parchea la
+   vtable compartida de DXGI.
+3. Se cubre también Present1 del slot 22.
+4. Se conserva el IAT/delay-IAT D3D11 anterior como fallback.
+5. En el Present real se detecta primero ID3D12Device.
+6. Se localiza el ID3D12CommandQueue usando los offsets observados en el
+   swapchain auxiliar y, si no coinciden, mediante una búsqueda dinámica
+   segura dentro del objeto.
+7. Se crea D3D11On12 con el device y command queue reales del RDR.
+8. Se obtiene IDXGISwapChain3::GetCurrentBackBufferIndex().
+9. Se envuelven los backbuffers D3D12 con CreateWrappedResource usando
+   estado de entrada RENDER_TARGET y salida PRESENT.
+10. Se copia el framebuffer BGRA de CEF a una textura D3D11 y se compone en
+    el backbuffer envuelto.
+11. Se ejecuta CefDoMessageLoopWork() en el camino histórico de Present,
+    reproduciendo el orden DoFrame -> Draw.
+12. El contexto D3D11 usado para CEF es propio del puente D3D11On12, por lo
+    que no pisa directamente el estado del contexto gráfico de RDR.
+13. CMake enlaza d3d12.
+14. Se añaden trazas específicas para aislar hook, cola, puente y composición.
+
+Logs esperados:
+[FrontierD3D] historical D3D12 Present hook installed
+[FrontierD3D] Present trace=...
+[FrontierD3D] D3D11On12 bridge initialized ...
+[FrontierD3D] first CEF frame composited through D3D11On12 into RDR backbuffer
+
+IMPORTANTE:
+- La rama contiene el código de corrección, pero aquí no se pudo ejecutar RDR1.
+- La prueba definitiva continúa siendo la ejecución real de RDR1.
+- No se tocó RemotePlayerManager ni el local-player bootstrap.
