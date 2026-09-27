@@ -50,6 +50,11 @@ HRESULT STDMETHODCALLTYPE frontier_present1(
     UINT flags,
     const DXGI_PRESENT_PARAMETERS* parameters);
 
+void STDMETHODCALLTYPE frontier_present_body(
+    IDXGISwapChain* swapChain,
+    UINT syncInterval,
+    UINT flags);
+
 using Microsoft::WRL::ComPtr;
 
 // These DXGI entry points are MSVC x64 functions whose prologue on the
