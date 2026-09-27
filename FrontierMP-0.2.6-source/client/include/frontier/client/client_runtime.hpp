@@ -25,6 +25,8 @@ private:
     bool connected_{};
     std::atomic<bool> stopRequested_{false};
     std::atomic<bool> updateInProgress_{false};
+    std::atomic<bool> sessionResetPending_{false};
+    std::atomic<bool> remoteUpdatePending_{false};
     frontier::game::RdrBridge gameBridge_{};
     std::uint32_t clientTick_{};
     std::uint64_t lastStateSendMs_{};
