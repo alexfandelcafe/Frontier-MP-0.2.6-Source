@@ -52,6 +52,11 @@ HRESULT STDMETHODCALLTYPE frontier_present1(
 
 using Microsoft::WRL::ComPtr;
 
+// These DXGI entry points are MSVC x64 functions whose prologue on the
+// target runtime extends through a 5-byte LEA. A 14-byte detour would steal
+// only part of that instruction and the trampoline would return into it.
+constexpr std::size_t kDxgiDetourPatchSize = 16u;
+
 // Process-wide hooks used by the RDR window procedure. They are kept
 // independent from PresentHookState because Win32 dispatch can occur before
 // the render path state is initialized and during render-path teardown.
@@ -644,7 +649,7 @@ bool install_historical_present_hook(
     if (!createHook->install(
             createSwapChainForHwndTarget,
             reinterpret_cast<std::uintptr_t>(&frontier_shared_create_swap_chain_for_hwnd),
-            14u,
+            kDxgiDetourPatchSize,
             "RDRMP historical CreateSwapChainForHwnd",
             hookError)) {
         DestroyWindow(probeWindow);
@@ -668,7 +673,7 @@ bool install_historical_present_hook(
     if (!presentHook->install(
             presentTarget,
             reinterpret_cast<std::uintptr_t>(&frontier_present),
-            14u,
+            kDxgiDetourPatchSize,
             "RDRMP historical Present",
             hookError)) {
         createHook->uninstall();
