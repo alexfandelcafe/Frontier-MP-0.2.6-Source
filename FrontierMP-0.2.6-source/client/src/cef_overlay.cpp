@@ -2491,6 +2491,7 @@ struct CefOverlay::State final {
     CefRefPtr<FrontierCefClient> client{};
     CefRefPtr<CefBrowser> browser{};
     bool initialized{};
+    DWORD cefThreadId{};
 
     std::mutex frameMutex;
     std::vector<std::uint8_t> frame{};
