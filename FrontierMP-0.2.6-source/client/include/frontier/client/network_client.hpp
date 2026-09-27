@@ -4,6 +4,8 @@
 #include "frontier/protocol.hpp"
 
 #include <cstdint>
+#include <array>
+#include <map>
 #include <functional>
 #include <string>
 
@@ -37,6 +39,8 @@ private:
     void send_hello(std::uint64_t nowMs);
     void send_message(protocol::MessageType type, protocol::Channel channel, bool reliable, const std::vector<std::uint8_t>& payload);
     void handle_packet(const std::vector<std::uint8_t>& bytes, std::uint64_t nowMs);
+    void dispatch_message(const protocol::Message& message, std::uint64_t nowMs);
+    bool accept_channel_message(protocol::Message message, std::uint64_t nowMs);
     void reconnect_or_timeout(std::uint64_t nowMs);
     std::uint64_t make_connection_id() const;
 
@@ -55,6 +59,11 @@ private:
     std::uint32_t nextSequence_{1};
     protocol::ReceiveHistory receiveHistory_;
     protocol::ReliabilityTracker reliability_;
+    std::array<std::uint32_t, 2> nextChannelSequence_{{1, 1}};
+    std::uint32_t nextControlReceiveSequence_{1};
+    std::uint32_t lastStateReceiveSequence_{};
+    bool controlReceiveInitialized_{};
+    std::map<std::uint32_t, protocol::Message> pendingControlMessages_;
     WelcomeCallback onWelcome_;
     SnapshotCallback onSnapshot_;
     DisconnectCallback onDisconnect_;
