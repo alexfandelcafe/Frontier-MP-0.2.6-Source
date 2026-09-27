@@ -492,12 +492,13 @@ struct PresentHookState final {
     ComPtr<IDXGISwapChain1> hookedSwapChain1Ref{};
     std::array<void*, 18> hookedVtable{};
     std::array<void*, 18> originalVtable{};
-    std::array<void*, 23> hookedVtable1{};
-    std::array<void*, 23> originalVtable1{};
+    std::array<void*, 28> hookedVtable1{};
+    std::array<void*, 28> originalVtable1{};
     void** originalVtableAddress{};
     void** originalVtable1Address{};
     bool swapchainHooked{};
     bool swapchain1Hooked{};
+    bool swapchainUsesExtendedVtable{};
     bool installed{};
 };
 
@@ -931,7 +932,7 @@ void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
     if (swapChain == nullptr) return;
 
     std::lock_guard lock(state.mutex);
-    if (state.swapchainHooked) return;
+    if (state.swapchainHooked || state.swapchain1Hooked) return;
 
     DXGI_SWAP_CHAIN_DESC desc{};
     const bool haveDesc = SUCCEEDED(swapChain->GetDesc(&desc));
@@ -948,12 +949,106 @@ void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
         return;
     }
 
-    void*** vtable = reinterpret_cast<void***>(swapChain);
-    if (vtable == nullptr || *vtable == nullptr) return;
+    // Query the extended interface before replacing either vtable. In the
+    // normal implementation the IDXGISwapChain and IDXGISwapChain1 interface
+    // pointers refer to the same COM object/vtable. Keeping the full 28-entry
+    // IDXGISwapChain1 table is necessary because Present1 is index 22 and
+    // methods continue through GetRotation at index 27.
+    ComPtr<IDXGISwapChain1> swapChain1;
+    const bool haveSwapChain1 =
+        SUCCEEDED(swapChain->QueryInterface(IID_PPV_ARGS(&swapChain1))) &&
+        swapChain1 != nullptr;
 
+    void*** baseVtable = reinterpret_cast<void***>(swapChain);
+    if (baseVtable == nullptr || *baseVtable == nullptr) return;
+
+    if (haveSwapChain1) {
+        void*** vtable1 = reinterpret_cast<void***>(swapChain1.Get());
+        if (vtable1 == nullptr || *vtable1 == nullptr) return;
+
+        for (std::size_t i = 0; i < state.originalVtable1.size(); ++i) {
+            state.originalVtable1[i] = (*vtable1)[i];
+            state.hookedVtable1[i] = (*vtable1)[i];
+        }
+
+        state.presentOriginal =
+            reinterpret_cast<PresentHookState::PresentProc>(
+                state.originalVtable1[8]);
+        state.present1Original =
+            reinterpret_cast<PresentHookState::Present1Proc>(
+                state.originalVtable1[22]);
+
+        if (state.presentOriginal == nullptr) {
+            state.originalVtable1.fill(nullptr);
+            state.hookedVtable1.fill(nullptr);
+            return;
+        }
+
+        if (state.present1Original == nullptr) {
+            log_line("[FrontierD3D] IDXGISwapChain1 Present1 slot=22 is null");
+        } else {
+            state.hookedVtable1[22] =
+                reinterpret_cast<void*>(&frontier_present1);
+        }
+        state.hookedVtable1[8] =
+            reinterpret_cast<void*>(&frontier_present);
+
+        state.originalVtable1Address = *vtable1;
+        *vtable1 = state.hookedVtable1.data();
+
+        state.hookedSwapChain = swapChain;
+        state.hookedSwapChainRef = swapChain;
+        state.hookedSwapChain1Ref = swapChain1;
+        state.swapchainHooked = true;
+        state.swapchain1Hooked = true;
+        state.swapchainUsesExtendedVtable = true;
+
+        DXGI_SWAP_CHAIN_DESC1 desc1{};
+        HWND hwnd1 = nullptr;
+        const bool haveDesc1 = SUCCEEDED(swapChain1->GetDesc1(&desc1));
+        const bool haveHwnd1 = SUCCEEDED(swapChain1->GetHwnd(&hwnd1));
+
+        std::ostringstream message;
+        message << "[FrontierD3D] hooked IDXGISwapChain1 swapchain="
+                << static_cast<const void*>(swapChain1.Get())
+                << " sameObject="
+                << (swapChain1.Get() == swapChain ? 1 : 0)
+                << " hwnd=" << (haveHwnd1 ? hwnd1 : nullptr)
+                << " size=" << (haveDesc1 ? desc1.Width : 0)
+                << "x" << (haveDesc1 ? desc1.Height : 0)
+                << " format="
+                << (haveDesc1 ? static_cast<int>(desc1.Format) : -1)
+                << " presentSlot=8"
+                << " present1Slot=22"
+                << " vtableEntries=28";
+        log_line(message.str());
+
+        if (swapChain1.Get() == swapChain) {
+            // The derived interface is the same COM object pointer, so the
+            // extended vtable already services both Present and Present1.
+            return;
+        }
+
+        // A separate interface pointer/object is unusual but valid. Preserve
+        // the base interface independently in that case.
+        for (std::size_t i = 0; i < state.originalVtable.size(); ++i) {
+            state.originalVtable[i] = (*baseVtable)[i];
+            state.hookedVtable[i] = (*baseVtable)[i];
+        }
+
+        state.hookedVtable[8] =
+            reinterpret_cast<void*>(&frontier_present);
+        state.originalVtableAddress = *baseVtable;
+        *baseVtable = state.hookedVtable.data();
+        state.swapchainUsesExtendedVtable = false;
+
+        return;
+    }
+
+    // Legacy/fallback path: only IDXGISwapChain is available.
     for (std::size_t i = 0; i < state.originalVtable.size(); ++i) {
-        state.originalVtable[i] = (*vtable)[i];
-        state.hookedVtable[i] = (*vtable)[i];
+        state.originalVtable[i] = (*baseVtable)[i];
+        state.hookedVtable[i] = (*baseVtable)[i];
     }
 
     state.presentOriginal =
@@ -968,11 +1063,12 @@ void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
     state.hookedVtable[8] =
         reinterpret_cast<void*>(&frontier_present);
 
-    state.originalVtableAddress = *vtable;
-    *vtable = state.hookedVtable.data();
+    state.originalVtableAddress = *baseVtable;
+    *baseVtable = state.hookedVtable.data();
     state.hookedSwapChain = swapChain;
     state.hookedSwapChainRef = swapChain;
     state.swapchainHooked = true;
+    state.swapchainUsesExtendedVtable = false;
 
     std::ostringstream message;
     message << "[FrontierD3D] hooked IDXGISwapChain swapchain="
@@ -982,56 +1078,10 @@ void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
             << "x" << (haveDesc ? desc.BufferDesc.Height : 0)
             << " format="
             << (haveDesc ? static_cast<int>(desc.BufferDesc.Format) : -1)
-            << " presentSlot=8";
+            << " presentSlot=8"
+            << " vtableEntries=18"
+            << " present1Unavailable=1";
     log_line(message.str());
-
-    ComPtr<IDXGISwapChain1> swapChain1;
-    if (FAILED(swapChain->QueryInterface(IID_PPV_ARGS(&swapChain1))) ||
-        swapChain1 == nullptr) {
-        log_line("[FrontierD3D] swapchain has no IDXGISwapChain1 interface; Present1 hook unavailable");
-        return;
-    }
-
-    void*** vtable1 = reinterpret_cast<void***>(swapChain1.Get());
-    if (vtable1 == nullptr || *vtable1 == nullptr) return;
-
-    for (std::size_t i = 0; i < state.originalVtable1.size(); ++i) {
-        state.originalVtable1[i] = (*vtable1)[i];
-        state.hookedVtable1[i] = (*vtable1)[i];
-    }
-
-    state.present1Original =
-        reinterpret_cast<PresentHookState::Present1Proc>(
-            state.originalVtable1[22]);
-    if (state.present1Original == nullptr) {
-        state.originalVtable1.fill(nullptr);
-        state.hookedVtable1.fill(nullptr);
-        log_line("[FrontierD3D] IDXGISwapChain1 Present1 slot=22 is null");
-        return;
-    }
-
-    state.hookedVtable1[22] =
-        reinterpret_cast<void*>(&frontier_present1);
-    state.originalVtable1Address = *vtable1;
-    *vtable1 = state.hookedVtable1.data();
-    state.hookedSwapChain1Ref = swapChain1;
-    state.swapchain1Hooked = true;
-
-    DXGI_SWAP_CHAIN_DESC1 desc1{};
-    HWND hwnd1 = nullptr;
-    const bool haveDesc1 = SUCCEEDED(swapChain1->GetDesc1(&desc1));
-    const bool haveHwnd1 = SUCCEEDED(swapChain1->GetHwnd(&hwnd1));
-
-    std::ostringstream message1;
-    message1 << "[FrontierD3D] hooked IDXGISwapChain1 swapchain="
-             << static_cast<const void*>(swapChain1.Get())
-             << " hwnd=" << (haveHwnd1 ? hwnd1 : nullptr)
-             << " size=" << (haveDesc1 ? desc1.Width : 0)
-             << "x" << (haveDesc1 ? desc1.Height : 0)
-             << " format="
-             << (haveDesc1 ? static_cast<int>(desc1.Format) : -1)
-             << " present1Slot=22";
-    log_line(message1.str());
 }
 
 HRESULT WINAPI frontier_create_dxgi_factory(
@@ -1083,7 +1133,22 @@ HRESULT WINAPI frontier_create_dxgi_factory2(
     }
     if (original == nullptr) return E_FAIL;
 
+    {
+        std::ostringstream message;
+        message << "[FrontierD3D] CreateDXGIFactory2 intercepted riid=" 
+                << static_cast<const void*>(riid)
+                << " flags=0x" << std::hex << flags;
+        log_line(message.str());
+    }
+
     const HRESULT result = original(flags, riid, factory);
+    {
+        std::ostringstream message;
+        message << "[FrontierD3D] CreateDXGIFactory2 result=0x"
+                << std::hex << static_cast<unsigned long>(result)
+                << " factory=" << (factory != nullptr ? *factory : nullptr);
+        log_line(message.str());
+    }
     if (SUCCEEDED(result) && factory != nullptr && *factory != nullptr) {
         hook_factory(
             g_presentHook,
@@ -1127,6 +1192,18 @@ HRESULT STDMETHODCALLTYPE frontier_factory_create_swap_chain_for_hwnd(
     }
     if (original == nullptr) return E_FAIL;
 
+    {
+        std::ostringstream message;
+        message << "[FrontierD3D] CreateSwapChainForHwnd intercepted factory="
+                << static_cast<const void*>(factory)
+                << " hwnd=" << window
+                << " desc="
+                << (desc != nullptr ? static_cast<int>(desc->Format) : -1)
+                << "x"
+                << (desc != nullptr ? static_cast<int>(desc->Width) : 0);
+        log_line(message.str());
+    }
+
     const HRESULT result = original(
         factory,
         device,
@@ -1135,6 +1212,14 @@ HRESULT STDMETHODCALLTYPE frontier_factory_create_swap_chain_for_hwnd(
         fullscreenDesc,
         restrictToOutput,
         swapChain);
+    {
+        std::ostringstream message;
+        message << "[FrontierD3D] CreateSwapChainForHwnd result=0x"
+                << std::hex << static_cast<unsigned long>(result)
+                << " swapchain="
+                << (swapChain != nullptr ? *swapChain : nullptr);
+        log_line(message.str());
+    }
     if (SUCCEEDED(result) && swapChain != nullptr && *swapChain != nullptr) {
         log_line("[FrontierD3D] DXGI CreateSwapChainForHwnd produced swapchain");
         hook_swapchain(
@@ -1229,8 +1314,18 @@ void unhook_render_path() {
 
     g_presentHook.overlay.store(nullptr, std::memory_order_release);
 
-    if (g_presentHook.swapchainHooked &&
-        g_presentHook.hookedSwapChain != nullptr) {
+    if (g_presentHook.swapchainUsesExtendedVtable &&
+        g_presentHook.swapchain1Hooked &&
+        g_presentHook.hookedSwapChain1Ref != nullptr) {
+        void*** vtable1 =
+            reinterpret_cast<void***>(g_presentHook.hookedSwapChain1Ref.Get());
+        if (vtable1 != nullptr &&
+            *vtable1 == g_presentHook.hookedVtable1.data() &&
+            g_presentHook.originalVtable1Address != nullptr) {
+            *vtable1 = g_presentHook.originalVtable1Address;
+        }
+    } else if (g_presentHook.swapchainHooked &&
+               g_presentHook.hookedSwapChain != nullptr) {
         void*** vtable =
             reinterpret_cast<void***>(g_presentHook.hookedSwapChain);
         if (vtable != nullptr &&
@@ -1241,6 +1336,7 @@ void unhook_render_path() {
     }
 
     if (g_presentHook.swapchain1Hooked &&
+        !g_presentHook.swapchainUsesExtendedVtable &&
         g_presentHook.hookedSwapChain1Ref != nullptr) {
         void*** vtable1 =
             reinterpret_cast<void***>(g_presentHook.hookedSwapChain1Ref.Get());
@@ -1264,6 +1360,7 @@ void unhook_render_path() {
     g_presentHook.present1Original = nullptr;
     g_presentHook.swapchainHooked = false;
     g_presentHook.swapchain1Hooked = false;
+    g_presentHook.swapchainUsesExtendedVtable = false;
 
     if (g_presentHook.factory2Hooked &&
         g_presentHook.hookedFactory2 != nullptr &&
@@ -1287,8 +1384,8 @@ void unhook_render_path() {
         }
     }
 
-    g_presentHook.hookedFactory2.Reset();
     g_presentHook.hookedFactory.Reset();
+    g_presentHook.hookedFactory2.Reset();
     g_presentHook.hookedFactoryVtable.fill(nullptr);
     g_presentHook.hookedFactory2Vtable.fill(nullptr);
     g_presentHook.originalFactoryVtableAddress = nullptr;
@@ -1300,20 +1397,15 @@ void unhook_render_path() {
     g_presentHook.factory2Hooked = false;
     g_presentHook.factory2SharesBaseObject = false;
 
-    for (auto& patch : g_presentHook.factoryImports) {
-        restore_import(patch);
+    for (std::size_t i = 0; i < g_presentHook.factoryImportCount; ++i) {
+        restore_import(g_presentHook.factoryImports[i]);
     }
-    g_presentHook.createFactoryOriginal = nullptr;
-    g_presentHook.createFactory1Original = nullptr;
-    g_presentHook.createFactory2Original = nullptr;
     g_presentHook.factoryImportCount = 0;
 
     restore_import(g_presentHook.createImport);
     g_presentHook.createOriginal = nullptr;
     g_presentHook.rdrModule = nullptr;
     g_presentHook.installed = false;
-
-    log_line("[FrontierD3D] render path unhooked");
 }
 
 bool install_render_path(CefOverlay* overlay) {
