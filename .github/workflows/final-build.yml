@@ -12,8 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Configure
+        working-directory: FrontierMP-0.2.6-source
         run: cmake --preset windows-vs2022-x64 -DFRONTIER_BUILD_RDRMP_COMPAT=ON -DFRONTIER_CEF_PACKAGE_DIR=""
       - name: Build
+        working-directory: FrontierMP-0.2.6-source
         run: cmake --build --preset windows-vs2022-x64-release --parallel --verbose
       - name: Test
+        working-directory: FrontierMP-0.2.6-source
         run: ctest --test-dir build/vs2022-x64 -C Release --output-on-failure
