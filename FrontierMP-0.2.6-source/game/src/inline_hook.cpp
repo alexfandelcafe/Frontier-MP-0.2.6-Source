@@ -367,6 +367,10 @@ bool InlineHook::install_call_site(std::uintptr_t callSite,
 #endif
 }
 
+void InlineHook::uninstall() {
+    reset();
+}
+
 void InlineHook::reset() {
 #ifdef _WIN32
     if (target_ != 0 && !originalBytes_.empty()) {
