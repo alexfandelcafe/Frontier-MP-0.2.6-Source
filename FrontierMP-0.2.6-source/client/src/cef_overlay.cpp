@@ -487,8 +487,10 @@ struct PresentHookState final {
     struct FactoryHookData final {
         ComPtr<IDXGIFactory> factory{};
         ComPtr<IDXGIFactory2> factory2{};
-        std::array<void*, 12> hookedBaseVtable{};
-        std::array<void*, 25> hookedFactory2Vtable{};
+        std::array<void*, 64> hookedBaseVtable{};
+        std::array<void*, 64> hookedFactory2Vtable{};
+        std::size_t baseVtableEntryCount{};
+        std::size_t factory2VtableEntryCount{};
         void** originalBaseVtable{};
         void** originalFactory2Vtable{};
         void* createSwapChainOriginal{};
@@ -504,10 +506,13 @@ struct PresentHookState final {
     IDXGISwapChain* hookedSwapChain{};
     ComPtr<IDXGISwapChain> hookedSwapChainRef{};
     ComPtr<IDXGISwapChain1> hookedSwapChain1Ref{};
-    std::array<void*, 18> hookedVtable{};
-    std::array<void*, 18> originalVtable{};
-    std::array<void*, 41> hookedVtable1{};
-    std::array<void*, 41> originalVtable1{};
+    // Keep enough of the concrete COM object's vtable to preserve
+    // implementation-specific/private entries that are not part of the
+    // public IDXGISwapChain4 interface.
+    std::array<void*, 64> hookedVtable{};
+    std::array<void*, 64> originalVtable{};
+    std::array<void*, 128> hookedVtable1{};
+    std::array<void*, 128> originalVtable1{};
     std::size_t extendedVtableEntryCount{};
     void** originalVtableAddress{};
     void** originalVtable1Address{};
@@ -845,6 +850,41 @@ HRESULT STDMETHODCALLTYPE frontier_present(
     IDXGISwapChain* swapChain,
     UINT syncInterval,
     UINT flags);
+
+std::size_t readable_vtable_entries(
+    void** vtable,
+    std::size_t minimumEntries,
+    std::size_t maximumEntries) {
+    if (vtable == nullptr ||
+        minimumEntries == 0 ||
+        maximumEntries < minimumEntries) {
+        return 0;
+    }
+
+    MEMORY_BASIC_INFORMATION mbi{};
+    if (VirtualQuery(
+            vtable,
+            &mbi,
+            sizeof(mbi)) != sizeof(mbi) ||
+        mbi.State != MEM_COMMIT ||
+        (mbi.Protect & PAGE_GUARD) != 0 ||
+        (mbi.Protect & PAGE_NOACCESS) != 0) {
+        return 0;
+    }
+
+    const auto base =
+        reinterpret_cast<std::uintptr_t>(vtable);
+    const auto regionBegin =
+        reinterpret_cast<std::uintptr_t>(mbi.BaseAddress);
+    const auto regionEnd =
+        regionBegin + mbi.RegionSize;
+    if (base < regionBegin || base >= regionEnd) return 0;
+
+    const std::size_t available = static_cast<std::size_t>(
+        (regionEnd - base) / sizeof(void*));
+    if (available < minimumEntries) return 0;
+    return std::min(available, maximumEntries);
+}
 
 bool patch_vtable_slot(
     void** vtable,
@@ -1451,7 +1491,17 @@ void hook_factory(PresentHookState& state, IDXGIFactory* factory) {
         void** originalFactory2Vtable = *vtable2;
         hook.originalFactory2Vtable = originalFactory2Vtable;
 
-        for (std::size_t i = 0; i < hook.hookedFactory2Vtable.size(); ++i) {
+        hook.factory2VtableEntryCount = readable_vtable_entries(
+            originalFactory2Vtable,
+            25u,
+            hook.hookedFactory2Vtable.size());
+        if (hook.factory2VtableEntryCount < 25u) {
+            log_line("[FrontierD3D] IDXGIFactory2 vtable is shorter than the public ABI; refusing factory shadow hook");
+            state.factoryHooks.pop_back();
+            return;
+        }
+
+        for (std::size_t i = 0; i < hook.factory2VtableEntryCount; ++i) {
             hook.hookedFactory2Vtable[i] = originalFactory2Vtable[i];
         }
 
@@ -1468,13 +1518,36 @@ void hook_factory(PresentHookState& state, IDXGIFactory* factory) {
 
         if (hook.factory2.Get() == factory) {
             hook.originalBaseVtable = *baseVtable;
+            hook.baseVtableEntryCount = hook.factory2VtableEntryCount;
             hook.factory2SharesBaseObject = true;
             *baseVtable = hook.hookedFactory2Vtable.data();
 
-            log_line("[FrontierD3D] IDXGIFactory2 shadow-vtable hooks installed for returned factory instance (shared base object)");
+            {
+                std::ostringstream message;
+                message << "[FrontierD3D] IDXGIFactory2 shadow-vtable hooks installed for returned factory instance (shared base object)"
+                        << " shadowEntries=" << hook.factory2VtableEntryCount;
+                log_line(message.str());
+            }
         } else {
             hook.originalBaseVtable = *baseVtable;
-            for (std::size_t i = 0; i < hook.hookedBaseVtable.size(); ++i) {
+            hook.baseVtableEntryCount = readable_vtable_entries(
+                hook.originalBaseVtable,
+                12u,
+                hook.hookedBaseVtable.size());
+            if (hook.baseVtableEntryCount < 12u) {
+                log_line("[FrontierD3D] IDXGIFactory base vtable is shorter than the public ABI; refusing factory shadow hook");
+                if (hook.originalBaseVtable != nullptr) *baseVtable = hook.originalBaseVtable;
+                if (hook.factory2 != nullptr && hook.originalFactory2Vtable != nullptr) {
+                    void*** vtable2 = reinterpret_cast<void***>(hook.factory2.Get());
+                    if (vtable2 != nullptr && *vtable2 == hook.hookedFactory2Vtable.data()) {
+                        *vtable2 = hook.originalFactory2Vtable;
+                    }
+                }
+                state.factoryHooks.pop_back();
+                return;
+            }
+
+            for (std::size_t i = 0; i < hook.baseVtableEntryCount; ++i) {
                 hook.hookedBaseVtable[i] = (*baseVtable)[i];
             }
 
@@ -1483,11 +1556,27 @@ void hook_factory(PresentHookState& state, IDXGIFactory* factory) {
             *baseVtable = hook.hookedBaseVtable.data();
             *vtable2 = hook.hookedFactory2Vtable.data();
 
-            log_line("[FrontierD3D] IDXGIFactory/IDXGIFactory2 shadow-vtable hooks installed for returned factory instance");
+            {
+                std::ostringstream message;
+                message << "[FrontierD3D] IDXGIFactory/IDXGIFactory2 shadow-vtable hooks installed for returned factory instance"
+                        << " baseShadowEntries=" << hook.baseVtableEntryCount
+                        << " factory2ShadowEntries=" << hook.factory2VtableEntryCount;
+                log_line(message.str());
+            }
         }
     } else {
         hook.originalBaseVtable = *baseVtable;
-        for (std::size_t i = 0; i < hook.hookedBaseVtable.size(); ++i) {
+        hook.baseVtableEntryCount = readable_vtable_entries(
+            hook.originalBaseVtable,
+            12u,
+            hook.hookedBaseVtable.size());
+        if (hook.baseVtableEntryCount < 12u) {
+            log_line("[FrontierD3D] IDXGIFactory vtable is shorter than the public ABI; refusing factory shadow hook");
+            state.factoryHooks.pop_back();
+            return;
+        }
+
+        for (std::size_t i = 0; i < hook.baseVtableEntryCount; ++i) {
             hook.hookedBaseVtable[i] = (*baseVtable)[i];
         }
 
@@ -1568,16 +1657,26 @@ void hook_swapchain(
         void*** vtable1 = reinterpret_cast<void***>(swapChain1.Get());
         if (vtable1 == nullptr || *vtable1 == nullptr) return;
 
-        std::size_t extendedVtableEntries = 29; // IDXGISwapChain1: 0..28
+        std::size_t minimumVtableEntries = 29; // IDXGISwapChain1: 0..28
         ComPtr<IDXGISwapChain2> swapChain2;
         ComPtr<IDXGISwapChain3> swapChain3;
         ComPtr<IDXGISwapChain4> swapChain4;
         if (SUCCEEDED(swapChain1.As(&swapChain4)) && swapChain4 != nullptr) {
-            extendedVtableEntries = 41;
+            minimumVtableEntries = 41;
         } else if (SUCCEEDED(swapChain1.As(&swapChain3)) && swapChain3 != nullptr) {
-            extendedVtableEntries = 40;
+            minimumVtableEntries = 40;
         } else if (SUCCEEDED(swapChain1.As(&swapChain2)) && swapChain2 != nullptr) {
-            extendedVtableEntries = 36;
+            minimumVtableEntries = 36;
+        }
+
+        const std::size_t extendedVtableEntries =
+            readable_vtable_entries(
+                *vtable1,
+                minimumVtableEntries,
+                state.hookedVtable1.size());
+        if (extendedVtableEntries < minimumVtableEntries) {
+            log_line("[FrontierD3D] swapchain vtable is shorter than the public ABI; refusing vtable shadow hook");
+            return;
         }
 
         for (std::size_t i = 0; i < extendedVtableEntries; ++i) {
@@ -1640,7 +1739,8 @@ void hook_swapchain(
                 << (haveDesc1 ? static_cast<int>(desc1.Format) : -1)
                 << " presentSlot=8"
                 << " present1Slot=22"
-                << " vtableEntries=" << extendedVtableEntries;
+                << " publicVtableEntries=" << minimumVtableEntries
+                << " shadowVtableEntries=" << extendedVtableEntries;
         log_line(message.str());
 
         if (swapChain1.Get() == swapChain) {
@@ -1651,7 +1751,16 @@ void hook_swapchain(
 
         // A separate interface pointer/object is unusual but valid. Preserve
         // the base interface independently in that case.
-        for (std::size_t i = 0; i < state.originalVtable.size(); ++i) {
+        const std::size_t baseVtableEntries = readable_vtable_entries(
+            *baseVtable,
+            18u,
+            state.hookedVtable.size());
+        if (baseVtableEntries < 18u) {
+            log_line("[FrontierD3D] IDXGISwapChain base vtable is shorter than the public ABI; refusing vtable shadow hook");
+            return;
+        }
+
+        for (std::size_t i = 0; i < baseVtableEntries; ++i) {
             state.originalVtable[i] = (*baseVtable)[i];
             state.hookedVtable[i] = (*baseVtable)[i];
         }
@@ -1671,7 +1780,16 @@ void hook_swapchain(
     }
 
     // Legacy/fallback path: only IDXGISwapChain is available.
-    for (std::size_t i = 0; i < state.originalVtable.size(); ++i) {
+    const std::size_t baseVtableEntries = readable_vtable_entries(
+        *baseVtable,
+        18u,
+        state.hookedVtable.size());
+    if (baseVtableEntries < 18u) {
+        log_line("[FrontierD3D] IDXGISwapChain base vtable is shorter than the public ABI; refusing legacy vtable shadow hook");
+        return;
+    }
+
+    for (std::size_t i = 0; i < baseVtableEntries; ++i) {
         state.originalVtable[i] = (*baseVtable)[i];
         state.hookedVtable[i] = (*baseVtable)[i];
     }
