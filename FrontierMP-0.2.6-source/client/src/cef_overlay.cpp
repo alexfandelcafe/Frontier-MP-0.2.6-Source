@@ -688,7 +688,6 @@ bool install_historical_present_hook(
     state.historicalCreateSwapChainForHwndDetourAttached = true;
     state.historicalPresentHook = std::move(presentHook);
     state.historicalPresentDetourAttached = true;
-    state.sharedPresentPatched = true;
     state.capturedCommandQueue.Reset();
     state.capturedSwapChainRef.Reset();
 
@@ -706,6 +705,56 @@ bool install_historical_present_hook(
     return true;
 }
 
+
+HRESULT STDMETHODCALLTYPE frontier_shared_create_swap_chain_for_hwnd(
+    IDXGIFactory2* factory,
+    IUnknown* device,
+    HWND window,
+    const DXGI_SWAP_CHAIN_DESC1* desc,
+    const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* fullscreenDesc,
+    IDXGIOutput* restrictToOutput,
+    IDXGISwapChain1** swapChain) {
+    PresentHookState::CreateSwapChainForHwndProc original = nullptr;
+    {
+        std::lock_guard lock(g_presentHook.mutex);
+        original = g_presentHook.historicalCreateSwapChainForHwndOriginal;
+    }
+
+    if (original == nullptr) {
+        return E_FAIL;
+    }
+
+    const HRESULT result = original(
+        factory,
+        device,
+        window,
+        desc,
+        fullscreenDesc,
+        restrictToOutput,
+        swapChain);
+
+    if (FAILED(result) || swapChain == nullptr || *swapChain == nullptr) {
+        return result;
+    }
+
+    ComPtr<ID3D12CommandQueue> commandQueue;
+    if (device != nullptr &&
+        SUCCEEDED(device->QueryInterface(IID_PPV_ARGS(&commandQueue))) &&
+        commandQueue != nullptr) {
+        std::lock_guard lock(g_presentHook.mutex);
+        g_presentHook.capturedCommandQueue = commandQueue;
+        g_presentHook.capturedSwapChainRef =
+            reinterpret_cast<IDXGISwapChain*>(*swapChain);
+
+        std::ostringstream message;
+        message << "[FrontierD3D] shared CreateSwapChainForHwnd captured RDR D3D12 queue"
+                << " queue=" << static_cast<const void*>(commandQueue.Get())
+                << " swapchain=" << static_cast<const void*>(*swapChain);
+        log_line(message.str());
+    }
+
+    return result;
+}
 
 void unhook_render_path() {
     std::lock_guard lock(g_presentHook.mutex);
