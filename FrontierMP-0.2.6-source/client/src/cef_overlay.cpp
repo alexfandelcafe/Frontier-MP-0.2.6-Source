@@ -505,6 +505,9 @@ struct PresentHookState final {
     void** sharedSwapChainVtable{};
     void* sharedPresentOriginal{};
     bool sharedPresentPatched{};
+    void** sharedSwapChain1Vtable{};
+    void* sharedPresent1Original{};
+    bool sharedPresent1Patched{};
     std::array<std::size_t, 8> commandQueueOffsets{};
     std::size_t commandQueueOffsetCount{};
     std::size_t activeCommandQueueOffset{static_cast<std::size_t>(-1)};
@@ -1166,6 +1169,32 @@ bool install_historical_present_hook(
     state.sharedSwapChainVtable = vtable;
     state.sharedPresentOriginal = original;
     state.sharedPresentPatched = true;
+
+    void*** vtable1Address =
+        reinterpret_cast<void***>(probeSwapChain1.Get());
+    if (vtable1Address != nullptr && *vtable1Address != nullptr) {
+        void** vtable1 = *vtable1Address;
+        void* originalPresent1 = nullptr;
+        std::string patch1Error;
+        if (patch_vtable_slot(
+                vtable1,
+                22,
+                reinterpret_cast<void*>(&frontier_present1),
+                originalPresent1,
+                patch1Error)) {
+            state.sharedSwapChain1Vtable = vtable1;
+            state.sharedPresent1Original = originalPresent1;
+            state.sharedPresent1Patched = true;
+            state.present1Original =
+                reinterpret_cast<PresentHookState::Present1Proc>(
+                    originalPresent1);
+        } else {
+            log_line(
+                "[FrontierD3D] historical Present1 probe hook unavailable: " +
+                patch1Error);
+        }
+    }
+
     state.activeCommandQueueOffset =
         static_cast<std::size_t>(-1);
 
@@ -1716,9 +1745,37 @@ void unhook_render_path() {
         }
     }
 
+    if (g_presentHook.sharedPresent1Patched &&
+        g_presentHook.sharedSwapChain1Vtable != nullptr &&
+        g_presentHook.sharedSwapChain1Vtable[22] ==
+            reinterpret_cast<void*>(&frontier_present1)) {
+        DWORD oldProtect = 0;
+        if (VirtualProtect(
+                &g_presentHook.sharedSwapChain1Vtable[22],
+                sizeof(void*),
+                PAGE_READWRITE,
+                &oldProtect)) {
+            g_presentHook.sharedSwapChain1Vtable[22] =
+                g_presentHook.sharedPresent1Original;
+            DWORD ignored = 0;
+            VirtualProtect(
+                &g_presentHook.sharedSwapChain1Vtable[22],
+                sizeof(void*),
+                oldProtect,
+                &ignored);
+            FlushInstructionCache(
+                GetCurrentProcess(),
+                &g_presentHook.sharedSwapChain1Vtable[22],
+                sizeof(void*));
+        }
+    }
+
     g_presentHook.sharedSwapChainVtable = nullptr;
     g_presentHook.sharedPresentOriginal = nullptr;
     g_presentHook.sharedPresentPatched = false;
+    g_presentHook.sharedSwapChain1Vtable = nullptr;
+    g_presentHook.sharedPresent1Original = nullptr;
+    g_presentHook.sharedPresent1Patched = false;
     g_presentHook.commandQueueOffsets.fill(0);
     g_presentHook.commandQueueOffsetCount = 0;
     g_presentHook.activeCommandQueueOffset =
@@ -1992,9 +2049,19 @@ HRESULT STDMETHODCALLTYPE frontier_present(
     const std::uint32_t trace = traceCount.fetch_add(1, std::memory_order_relaxed);
     if (trace < 8) {
         std::ostringstream message;
+        void** currentVtable = nullptr;
+        if (swapChain != nullptr) {
+            void*** currentVtableAddress =
+                reinterpret_cast<void***>(swapChain);
+            if (currentVtableAddress != nullptr) {
+                currentVtable = *currentVtableAddress;
+            }
+        }
         message << "[FrontierD3D] Present trace=" << trace
                 << " swapchain=" << static_cast<const void*>(swapChain)
                 << " hooked=" << (shouldRender ? 1 : 0)
+                << " sharedVtable="
+                << (currentVtable == g_presentHook.sharedSwapChainVtable ? 1 : 0)
                 << " sync=" << syncInterval
                 << " flags=0x" << std::hex << flags;
         log_line(message.str());
@@ -2025,7 +2092,8 @@ HRESULT STDMETHODCALLTYPE frontier_present1(
         shouldRender =
             overlay != nullptr &&
             original != nullptr &&
-            swapChain == g_presentHook.hookedSwapChain1Ref.Get();
+            (g_presentHook.sharedPresent1Patched ||
+             swapChain == g_presentHook.hookedSwapChain1Ref.Get());
     }
 
     static std::atomic<std::uint32_t> traceCount{0};
@@ -3349,7 +3417,7 @@ void CefOverlay::on_present(::IDXGISwapChain* swapChain) {
                 state_->d3d11On12Device->CreateWrappedResource(
                     backBuffer12.Get(),
                     &flags,
-                    D3D12_RESOURCE_STATE_PRESENT,
+                    D3D12_RESOURCE_STATE_RENDER_TARGET,
                     D3D12_RESOURCE_STATE_PRESENT,
                     IID_PPV_ARGS(&wrapped));
 
