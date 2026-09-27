@@ -30,7 +30,7 @@ public:
 
     bool submit(std::function<void()> task, std::string& error);
     bool submit_and_wait(std::function<void()> task, std::uint32_t timeoutMs, std::string& error);
-    std::size_t pump(std::size_t maxTasks = 32);
+    std::size_t pump(std::size_t maxTasks = 32, void* waitContext = nullptr);
 
     bool is_game_thread() const;
 
@@ -47,6 +47,8 @@ private:
     static void get_this_script_id_hook(void* context);
     static void get_script_name_hook(void* context);
 
+    bool is_authorized_wait_context(void* context) const;
+
     NativeInvoker* invoker_{};
     std::atomic<Handler> originalWait_{};
     std::atomic<Handler> originalGetThisScriptId_{};
@@ -55,6 +57,7 @@ private:
     mutable std::mutex queueMutex_;
     std::deque<std::shared_ptr<PendingTask>> queue_;
     std::thread::id gameThreadId_{};
+    std::uintptr_t gameThreadContext_{};
     std::atomic<bool> gameThreadKnown_{false};
 };
 
