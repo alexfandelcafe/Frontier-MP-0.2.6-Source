@@ -8,7 +8,9 @@
 #include <d3dcompiler.h>
 #include <dxgi.h>
 #include <dxgi1_2.h>
+#include <dxgi1_3.h>
 #include <dxgi1_4.h>
+#include <dxgi1_5.h>
 #include <wrl/client.h>
 
 #include <algorithm>
@@ -504,8 +506,9 @@ struct PresentHookState final {
     ComPtr<IDXGISwapChain1> hookedSwapChain1Ref{};
     std::array<void*, 18> hookedVtable{};
     std::array<void*, 18> originalVtable{};
-    std::array<void*, 28> hookedVtable1{};
-    std::array<void*, 28> originalVtable1{};
+    std::array<void*, 41> hookedVtable1{};
+    std::array<void*, 41> originalVtable1{};
+    std::size_t extendedVtableEntryCount{};
     void** originalVtableAddress{};
     void** originalVtable1Address{};
     bool swapchainHooked{};
@@ -1442,11 +1445,11 @@ void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
         return;
     }
 
-    // Query the extended interface before replacing either vtable. In the
-    // normal implementation the IDXGISwapChain and IDXGISwapChain1 interface
-    // pointers refer to the same COM object/vtable. Keeping the full 28-entry
-    // IDXGISwapChain1 table is necessary because Present1 is index 22 and
-    // methods continue through GetRotation at index 27.
+    // Query the highest swap-chain interface exposed by the RDR object before
+    // replacing its vtable. A D3D12 swap chain commonly exposes IDXGISwapChain4;
+    // its complete COM table has 41 entries. Replacing that table with only the
+    // IDXGISwapChain1 prefix leaves later methods reading past the shadow array
+    // and can crash DXGI during swap-chain initialization.
     ComPtr<IDXGISwapChain1> swapChain1;
     const bool haveSwapChain1 =
         SUCCEEDED(swapChain->QueryInterface(IID_PPV_ARGS(&swapChain1))) &&
@@ -1459,7 +1462,19 @@ void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
         void*** vtable1 = reinterpret_cast<void***>(swapChain1.Get());
         if (vtable1 == nullptr || *vtable1 == nullptr) return;
 
-        for (std::size_t i = 0; i < state.originalVtable1.size(); ++i) {
+        std::size_t extendedVtableEntries = 29; // IDXGISwapChain1: 0..28
+        ComPtr<IDXGISwapChain2> swapChain2;
+        ComPtr<IDXGISwapChain3> swapChain3;
+        ComPtr<IDXGISwapChain4> swapChain4;
+        if (SUCCEEDED(swapChain1.As(&swapChain4)) && swapChain4 != nullptr) {
+            extendedVtableEntries = 41;
+        } else if (SUCCEEDED(swapChain1.As(&swapChain3)) && swapChain3 != nullptr) {
+            extendedVtableEntries = 40;
+        } else if (SUCCEEDED(swapChain1.As(&swapChain2)) && swapChain2 != nullptr) {
+            extendedVtableEntries = 36;
+        }
+
+        for (std::size_t i = 0; i < extendedVtableEntries; ++i) {
             state.originalVtable1[i] = (*vtable1)[i];
             state.hookedVtable1[i] = (*vtable1)[i];
         }
@@ -1483,6 +1498,7 @@ void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
             state.hookedVtable1[22] =
                 reinterpret_cast<void*>(&frontier_present1);
         }
+        state.extendedVtableEntryCount = extendedVtableEntries;
         state.hookedVtable1[8] =
             reinterpret_cast<void*>(&frontier_present);
 
@@ -1513,7 +1529,7 @@ void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
                 << (haveDesc1 ? static_cast<int>(desc1.Format) : -1)
                 << " presentSlot=8"
                 << " present1Slot=22"
-                << " vtableEntries=28";
+                << " vtableEntries=" << extendedVtableEntries;
         log_line(message.str());
 
         if (swapChain1.Get() == swapChain) {
