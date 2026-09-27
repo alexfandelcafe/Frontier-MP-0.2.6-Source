@@ -482,6 +482,14 @@ struct PresentHookState final {
     std::unique_ptr<frontier::game::InlineHook> historicalPresentHook{};
     bool historicalPresentDetourAttached{};
 
+    // Capture the actual D3D12 command queue from the shared
+    // IDXGIFactory2::CreateSwapChainForHwnd implementation. For D3D12,
+    // the API's IUnknown* device parameter is the command queue.
+    std::unique_ptr<frontier::game::InlineHook> historicalCreateSwapChainForHwndHook{};
+    bool historicalCreateSwapChainForHwndDetourAttached{};
+    CreateSwapChainForHwndProc historicalCreateSwapChainForHwndOriginal{};
+    ComPtr<IDXGISwapChain> capturedSwapChainRef{};
+
     ImportPatch createImport{};
     CreateDeviceAndSwapChainProc createOriginal{};
 
@@ -533,9 +541,6 @@ struct PresentHookState final {
     void** sharedSwapChain1Vtable{};
     void* sharedPresent1Original{};
     bool sharedPresent1Patched{};
-    std::array<std::size_t, 8> commandQueueOffsets{};
-    std::size_t commandQueueOffsetCount{};
-    std::size_t activeCommandQueueOffset{static_cast<std::size_t>(-1)};
     ComPtr<ID3D12CommandQueue> capturedCommandQueue{};
 
     // Never patch a real RDR swapchain while still inside DXGI's
@@ -836,6 +841,58 @@ HRESULT STDMETHODCALLTYPE frontier_factory_create_swap_chain(
     const DXGI_SWAP_CHAIN_DESC* desc,
     IDXGISwapChain** swapChain);
 
+HRESULT STDMETHODCALLTYPE frontier_shared_create_swap_chain_for_hwnd(
+    IDXGIFactory2* factory,
+    IUnknown* device,
+    HWND window,
+    const DXGI_SWAP_CHAIN_DESC1* desc,
+    const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* fullscreenDesc,
+    IDXGIOutput* restrictToOutput,
+    IDXGISwapChain1** swapChain) {
+    PresentHookState::CreateSwapChainForHwndProc original = nullptr;
+    {
+        std::lock_guard lock(g_presentHook.mutex);
+        original = g_presentHook.historicalCreateSwapChainForHwndOriginal;
+    }
+
+    if (original == nullptr) {
+        return E_FAIL;
+    }
+
+    const HRESULT result = original(
+        factory,
+        device,
+        window,
+        desc,
+        fullscreenDesc,
+        restrictToOutput,
+        swapChain);
+
+    if (FAILED(result) || swapChain == nullptr || *swapChain == nullptr) {
+        return result;
+    }
+
+    ComPtr<ID3D12CommandQueue> commandQueue;
+    if (device != nullptr &&
+        SUCCEEDED(device->QueryInterface(IID_PPV_ARGS(&commandQueue))) &&
+        commandQueue != nullptr) {
+        std::lock_guard lock(g_presentHook.mutex);
+        g_presentHook.capturedCommandQueue = commandQueue;
+        g_presentHook.capturedSwapChainRef.Reset();
+        reinterpret_cast<IDXGISwapChain1*>(*swapChain)->AddRef();
+        g_presentHook.capturedSwapChainRef.Attach(
+            reinterpret_cast<IDXGISwapChain*>(*swapChain));
+
+        std::ostringstream message;
+        message << "[FrontierD3D] shared CreateSwapChainForHwnd captured RDR D3D12 queue"
+                << " queue=" << static_cast<const void*>(commandQueue.Get())
+                << " swapchain=" << static_cast<const void*>(*swapChain);
+        log_line(message.str());
+    }
+
+    return result;
+}
+
 HRESULT STDMETHODCALLTYPE frontier_factory_create_swap_chain_for_hwnd(
     IDXGIFactory2* factory,
     IUnknown* device,
@@ -925,300 +982,38 @@ bool patch_vtable_slot(
     return true;
 }
 
-std::size_t collect_pointer_offsets(
-    void* object,
-    const void* needle,
-    std::array<std::size_t, 8>& offsets) {
-    offsets.fill(0);
-    if (object == nullptr || needle == nullptr) return 0;
-
-    MEMORY_BASIC_INFORMATION mbi{};
-    if (VirtualQuery(object, &mbi, sizeof(mbi)) != sizeof(mbi) ||
-        mbi.State != MEM_COMMIT ||
-        (mbi.Protect & PAGE_GUARD) != 0 ||
-        (mbi.Protect & PAGE_NOACCESS) != 0) {
-        return 0;
-    }
-
-    const auto base = reinterpret_cast<std::uintptr_t>(object);
-    const auto regionBegin = reinterpret_cast<std::uintptr_t>(mbi.BaseAddress);
-    const auto regionEnd = regionBegin + mbi.RegionSize;
-    if (base < regionBegin || base >= regionEnd) return 0;
-
-    const std::size_t scanBytes =
-        std::min<std::size_t>(
-            static_cast<std::size_t>(regionEnd - base),
-            0x1000u);
-
-    std::size_t count = 0;
-    for (std::size_t offset = 0;
-         offset + sizeof(void*) <= scanBytes;
-         offset += sizeof(void*)) {
-        void* value = nullptr;
-        __try {
-            value = *reinterpret_cast<void**>(base + offset);
-        } __except (EXCEPTION_EXECUTE_HANDLER) {
-            value = nullptr;
-        }
-
-        if (value == needle) {
-            offsets[count++] = offset;
-            if (count == offsets.size()) break;
-        }
-    }
-
-    return count;
-}
-
-bool read_swapchain_pointer(
-    IDXGISwapChain* swapChain,
-    std::size_t offset,
-    void*& pointer) {
-    pointer = nullptr;
-    if (swapChain == nullptr) return false;
-
-    MEMORY_BASIC_INFORMATION mbi{};
-    if (VirtualQuery(
-            swapChain,
-            &mbi,
-            sizeof(mbi)) != sizeof(mbi) ||
-        mbi.State != MEM_COMMIT ||
-        (mbi.Protect & PAGE_GUARD) != 0 ||
-        (mbi.Protect & PAGE_NOACCESS) != 0) {
-        return false;
-    }
-
-    const auto base = reinterpret_cast<std::uintptr_t>(swapChain);
-    const auto regionBegin = reinterpret_cast<std::uintptr_t>(mbi.BaseAddress);
-    const auto regionEnd = regionBegin + mbi.RegionSize;
-    if (base < regionBegin ||
-        offset > static_cast<std::size_t>(regionEnd - base) ||
-        sizeof(void*) > regionEnd - base - offset) {
-        return false;
-    }
-
-    __try {
-        pointer = *reinterpret_cast<void**>(base + offset);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        pointer = nullptr;
-        return false;
-    }
-
-    return pointer != nullptr;
-}
-
-bool query_command_queue(
-    void* candidate,
-    ComPtr<ID3D12CommandQueue>& queue) {
-    queue.Reset();
-    if (candidate == nullptr) return false;
-
-    MEMORY_BASIC_INFORMATION mbi{};
-    if (VirtualQuery(
-            candidate,
-            &mbi,
-            sizeof(mbi)) != sizeof(mbi) ||
-        mbi.State != MEM_COMMIT ||
-        (mbi.Protect & PAGE_GUARD) != 0 ||
-        (mbi.Protect & PAGE_NOACCESS) != 0) {
-        return false;
-    }
-
-    void* vtable = nullptr;
-    __try {
-        vtable = *reinterpret_cast<void**>(candidate);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
-
-    if (vtable == nullptr) return false;
-
-    void* firstMethod = nullptr;
-    __try {
-        firstMethod = *reinterpret_cast<void**>(vtable);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
-
-    if (firstMethod == nullptr) return false;
-
-    MEMORY_BASIC_INFORMATION vtableMbi{};
-    if (VirtualQuery(
-            vtable,
-            &vtableMbi,
-            sizeof(vtableMbi)) != sizeof(vtableMbi) ||
-        vtableMbi.State != MEM_COMMIT ||
-        (vtableMbi.Protect & PAGE_GUARD) != 0 ||
-        (vtableMbi.Protect & PAGE_NOACCESS) != 0) {
-        return false;
-    }
-
-    MEMORY_BASIC_INFORMATION methodMbi{};
-    if (VirtualQuery(
-            firstMethod,
-            &methodMbi,
-            sizeof(methodMbi)) != sizeof(methodMbi) ||
-        methodMbi.State != MEM_COMMIT ||
-        ((methodMbi.Protect & PAGE_EXECUTE) == 0 &&
-         (methodMbi.Protect & PAGE_EXECUTE_READ) == 0 &&
-         (methodMbi.Protect & PAGE_EXECUTE_READWRITE) == 0 &&
-         (methodMbi.Protect & PAGE_EXECUTE_WRITECOPY) == 0)) {
-        return false;
-    }
-
-    HMODULE methodModule = nullptr;
-    if (!GetModuleHandleExA(
-            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-                GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-            reinterpret_cast<LPCSTR>(firstMethod),
-            &methodModule) ||
-        methodModule == nullptr) {
-        return false;
-    }
-
-    char moduleName[MAX_PATH]{};
-    if (GetModuleFileNameA(methodModule, moduleName, sizeof(moduleName)) == 0) {
-        return false;
-    }
-
-    const char* baseName = std::strrchr(moduleName, '\\');
-    baseName = baseName != nullptr ? baseName + 1 : moduleName;
-    if (_stricmp(baseName, "d3d12.dll") != 0) {
-        return false;
-    }
-
-    __try {
-        const auto unknown = reinterpret_cast<IUnknown*>(candidate);
-        return SUCCEEDED(
-            unknown->QueryInterface(IID_PPV_ARGS(&queue)));
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        queue.Reset();
-        return false;
-    }
-}
-
-bool scan_object_for_command_queue(
-    void* object,
-    std::size_t maxBytes,
-    ComPtr<ID3D12CommandQueue>& queue,
-    std::size_t& matchedOffset) {
-    queue.Reset();
-    matchedOffset = static_cast<std::size_t>(-1);
-    if (object == nullptr) return false;
-
-    MEMORY_BASIC_INFORMATION mbi{};
-    if (VirtualQuery(
-            object,
-            &mbi,
-            sizeof(mbi)) != sizeof(mbi) ||
-        mbi.State != MEM_COMMIT ||
-        (mbi.Protect & PAGE_GUARD) != 0 ||
-        (mbi.Protect & PAGE_NOACCESS) != 0) {
-        return false;
-    }
-
-    const auto base = reinterpret_cast<std::uintptr_t>(object);
-    const auto regionBegin = reinterpret_cast<std::uintptr_t>(mbi.BaseAddress);
-    const auto regionEnd = regionBegin + mbi.RegionSize;
-    if (base < regionBegin || base >= regionEnd) return false;
-
-    const std::size_t scanBytes =
-        std::min<std::size_t>(
-            static_cast<std::size_t>(regionEnd - base),
-            std::min<std::size_t>(maxBytes, 0x4000u));
-
-    for (std::size_t offset = sizeof(void*);
-         offset + sizeof(void*) <= scanBytes;
-         offset += sizeof(void*)) {
-        void* candidate = nullptr;
-        if (!read_swapchain_pointer(
-                reinterpret_cast<IDXGISwapChain*>(object),
-                offset,
-                candidate)) {
-            continue;
-        }
-
-        ComPtr<ID3D12CommandQueue> resolved;
-        if (!query_command_queue(candidate, resolved)) {
-            continue;
-        }
-
-        queue = std::move(resolved);
-        matchedOffset = offset;
-        return true;
-    }
-
-    return false;
-}
-
-bool locate_command_queue(
+bool install_historical_present_hook(
     PresentHookState& state,
+    std::string& error);
+
+HRESULT STDMETHODCALLTYPE frontier_shared_create_swap_chain_for_hwnd(
+    IDXGIFactory2* factory,
+    IUnknown* device,
+    HWND window,
+    const DXGI_SWAP_CHAIN_DESC1* desc,
+    const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* fullscreenDesc,
+    IDXGIOutput* restrictToOutput,
+    IDXGISwapChain1** swapChain);
+
+HRESULT STDMETHODCALLTYPE frontier_factory_create_swap_chain_for_hwnd(
+    IDXGIFactory2* factory,
+    IUnknown* device,
+    HWND window,
+    const DXGI_SWAP_CHAIN_DESC1* desc,
+    const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* fullscreenDesc,
+    IDXGIOutput* restrictToOutput,
+    IDXGISwapChain1** swapChain);
+
+HRESULT STDMETHODCALLTYPE frontier_present(
     IDXGISwapChain* swapChain,
-    ID3D12Device* d3d12Device,
-    ComPtr<ID3D12CommandQueue>& queue,
-    std::size_t& matchedOffset) {
-    queue.Reset();
-    matchedOffset = static_cast<std::size_t>(-1);
+    UINT syncInterval,
+    UINT flags);
 
-    auto tryOffset = [&](std::size_t offset) -> bool {
-        void* candidate = nullptr;
-        if (!read_swapchain_pointer(swapChain, offset, candidate)) {
-            return false;
-        }
-
-        ComPtr<ID3D12CommandQueue> resolved;
-        if (!query_command_queue(candidate, resolved)) {
-            return false;
-        }
-
-        queue = std::move(resolved);
-        matchedOffset = offset;
-        return true;
-    };
-
-    if (state.activeCommandQueueOffset != static_cast<std::size_t>(-1) &&
-        tryOffset(state.activeCommandQueueOffset)) {
-        return true;
-    }
-
-    for (std::size_t i = 0; i < state.commandQueueOffsetCount; ++i) {
-        if (tryOffset(state.commandQueueOffsets[i])) {
-            state.activeCommandQueueOffset = matchedOffset;
-            return true;
-        }
-    }
-
-    // The historical RDRMP object layout is not part of the DXGI ABI. First
-    // scan a larger range of the concrete swap-chain allocation. Some builds
-    // place the command queue beyond the small probe window.
-    if (scan_object_for_command_queue(
-            swapChain,
-            0x4000u,
-            queue,
-            matchedOffset)) {
-        state.activeCommandQueueOffset = matchedOffset;
-        log_line(
-            "[FrontierD3D] discovered D3D12 command queue from swapchain object: offset=" +
-            std::to_string(matchedOffset));
-        return true;
-    }
-
-    // Some RDR builds do not retain the queue in the DXGI swap-chain object.
-    // The device can still retain concrete ID3D12CommandQueue references, so
-    // use the device object as a second, non-invasive discovery source.
-    if (scan_object_for_command_queue(
-            d3d12Device,
-            0x4000u,
-            queue,
-            matchedOffset)) {
-        log_line(
-            "[FrontierD3D] discovered D3D12 command queue from device object: offset=" +
-            std::to_string(matchedOffset));
-        return true;
-    }
-
-    return false;
-}
+HRESULT STDMETHODCALLTYPE frontier_present1(
+    IDXGISwapChain1* swapChain,
+    UINT syncInterval,
+    UINT flags,
+    const DXGI_PRESENT_PARAMETERS* parameters);
 
 bool install_historical_present_hook(
     PresentHookState& state,
@@ -1231,13 +1026,11 @@ bool install_historical_present_hook(
         return false;
     }
 
-    // Historical RDRMP FUN_180058880:
-    //   CreateDXGIFactory1 -> D3D12CreateDevice -> CreateCommandQueue
-    //   -> CreateSwapChainForHwnd -> read Present -> DirectXHook detour.
-    //
-    // The auxiliary swapchain exists only to discover the shared Present
-    // implementation and the swapchain/queue field relationship. We never
-    // patch the probe or any RDR COM vtable.
+    // Historical RDRMP FUN_180058880 created an auxiliary D3D12 swapchain to
+    // discover shared DXGI method implementations. Detour the shared
+    // CreateSwapChainForHwnd implementation as well as shared Present so the
+    // real RDR queue is captured from the API argument instead of guessing
+    // private DXGI/RDR object offsets.
     const char* const className = "FrontierMP_D3DProbe";
     WNDCLASSA windowClass{};
     windowClass.lpfnWndProc = DefWindowProcA;
@@ -1346,46 +1139,75 @@ bool install_historical_present_hook(
         return false;
     }
 
-    void*** vtableAddress =
+    void*** factoryVtableAddress =
+        reinterpret_cast<void***>(factory.Get());
+    if (factoryVtableAddress == nullptr || *factoryVtableAddress == nullptr) {
+        DestroyWindow(probeWindow);
+        UnregisterClassA(className, windowClass.hInstance);
+        error = "probe factory vtable unavailable";
+        return false;
+    }
+
+    const auto createSwapChainForHwndTarget =
+        reinterpret_cast<std::uintptr_t>((*factoryVtableAddress)[15]);
+    if (createSwapChainForHwndTarget == 0) {
+        DestroyWindow(probeWindow);
+        UnregisterClassA(className, windowClass.hInstance);
+        error = "probe CreateSwapChainForHwnd entry unavailable";
+        return false;
+    }
+
+    void*** swapChainVtableAddress =
         reinterpret_cast<void***>(probeSwapChain.Get());
-    if (vtableAddress == nullptr || *vtableAddress == nullptr) {
+    if (swapChainVtableAddress == nullptr || *swapChainVtableAddress == nullptr) {
         DestroyWindow(probeWindow);
         UnregisterClassA(className, windowClass.hInstance);
         error = "probe swapchain vtable unavailable";
         return false;
     }
 
-    void** vtable = *vtableAddress;
     const auto presentTarget =
-        reinterpret_cast<std::uintptr_t>(vtable[8]);
+        reinterpret_cast<std::uintptr_t>((*swapChainVtableAddress)[8]);
     if (presentTarget == 0) {
         DestroyWindow(probeWindow);
-        UnregisterClassA(className, windowClass.hInstance);
+        UnregisterClass(probeWindow);
         error = "probe Present entry unavailable";
         return false;
     }
 
-    state.commandQueueOffsetCount = collect_pointer_offsets(
-        probeSwapChain.Get(),
-        queue.Get(),
-        state.commandQueueOffsets);
-    if (state.commandQueueOffsetCount == 0) {
+    auto createHook = std::make_unique<frontier::game::InlineHook>();
+    std::string hookError;
+    if (!createHook->install(
+            createSwapChainForHwndTarget,
+            reinterpret_cast<std::uintptr_t>(&frontier_shared_create_swap_chain_for_hwnd),
+            14u,
+            "RDRMP historical CreateSwapChainForHwnd",
+            hookError)) {
         DestroyWindow(probeWindow);
         UnregisterClassA(className, windowClass.hInstance);
-        error = "probe swapchain does not expose command queue field";
+        error = "CreateSwapChainForHwnd detour failed: " + hookError;
+        return false;
+    }
+
+    state.historicalCreateSwapChainForHwndOriginal =
+        reinterpret_cast<PresentHookState::CreateSwapChainForHwndProc>(
+            createHook->trampoline());
+    if (state.historicalCreateSwapChainForHwndOriginal == nullptr) {
+        createHook->uninstall();
+        DestroyWindow(probeWindow);
+        UnregisterClassA(className, windowClass.hInstance);
+        error = "CreateSwapChainForHwnd detour installed without trampoline";
         return false;
     }
 
     auto presentHook = std::make_unique<frontier::game::InlineHook>();
-    std::string hookError;
-    constexpr std::size_t kPresentPatchSize = 14u;
-
     if (!presentHook->install(
             presentTarget,
             reinterpret_cast<std::uintptr_t>(&frontier_present),
-            kPresentPatchSize,
+            14u,
             "RDRMP historical Present",
             hookError)) {
+        createHook->uninstall();
         DestroyWindow(probeWindow);
         UnregisterClassA(className, windowClass.hInstance);
         error = "Present detour failed: " + hookError;
@@ -1397,23 +1219,27 @@ bool install_historical_present_hook(
             presentHook->trampoline());
     if (state.presentOriginal == nullptr) {
         presentHook->uninstall();
+        createHook->uninstall();
         DestroyWindow(probeWindow);
         UnregisterClassA(className, windowClass.hInstance);
         error = "Present detour installed without trampoline";
         return false;
     }
 
+    state.historicalCreateSwapChainForHwndHook = std::move(createHook);
+    state.historicalCreateSwapChainForHwndDetourAttached = true;
     state.historicalPresentHook = std::move(presentHook);
     state.historicalPresentDetourAttached = true;
     state.sharedPresentPatched = true;
-    state.activeCommandQueueOffset = static_cast<std::size_t>(-1);
+    state.capturedCommandQueue = queue;
 
     std::ostringstream message;
-    message << "[FrontierD3D] historical shared Present detour installed"
+    message << "[FrontierD3D] historical shared detours installed"
+            << " createSwapChainForHwndTarget="
+            << reinterpret_cast<const void*>(createSwapChainForHwndTarget)
             << " presentTarget=" << reinterpret_cast<const void*>(presentTarget)
-            << " trampoline=" << reinterpret_cast<const void*>(state.presentOriginal)
-            << " queueFieldOffsets=" << state.commandQueueOffsetCount
-            << " firstQueueOffset=" << state.commandQueueOffsets[0];
+            << " presentTrampoline="
+            << reinterpret_cast<const void*>(state.presentOriginal);
     log_line(message.str());
 
     DestroyWindow(probeWindow);
@@ -1421,16 +1247,6 @@ bool install_historical_present_hook(
     return true;
 }
 
-HRESULT STDMETHODCALLTYPE frontier_present1(
-    IDXGISwapChain1* swapChain,
-    UINT syncInterval,
-    UINT flags,
-    const DXGI_PRESENT_PARAMETERS* parameters);
-
-void hook_swapchain(
-    PresentHookState& state,
-    IDXGISwapChain* swapChain,
-    ID3D12CommandQueue* commandQueueHint = nullptr);
 
 void defer_swapchain_hook(
     PresentHookState& state,
@@ -2184,6 +2000,14 @@ void unhook_render_path() {
         }
     }
 
+    if (g_presentHook.historicalCreateSwapChainForHwndHook != nullptr) {
+        g_presentHook.historicalCreateSwapChainForHwndHook->uninstall();
+        g_presentHook.historicalCreateSwapChainForHwndHook.reset();
+    }
+    g_presentHook.historicalCreateSwapChainForHwndDetourAttached = false;
+    g_presentHook.historicalCreateSwapChainForHwndOriginal = nullptr;
+    g_presentHook.capturedSwapChainRef.Reset();
+
     if (g_presentHook.historicalPresentHook != nullptr) {
         g_presentHook.historicalPresentHook->uninstall();
         g_presentHook.historicalPresentHook.reset();
@@ -2195,10 +2019,6 @@ void unhook_render_path() {
     g_presentHook.sharedSwapChain1Vtable = nullptr;
     g_presentHook.sharedPresent1Original = nullptr;
     g_presentHook.sharedPresent1Patched = false;
-    g_presentHook.commandQueueOffsets.fill(0);
-    g_presentHook.commandQueueOffsetCount = 0;
-    g_presentHook.activeCommandQueueOffset =
-        static_cast<std::size_t>(-1);
     g_presentHook.capturedCommandQueue.Reset();
     g_presentHook.pendingSwapChain.Reset();
     g_presentHook.pendingSwapChainQueue.Reset();
@@ -3596,45 +3416,26 @@ void CefOverlay::on_present(::IDXGISwapChain* swapChain) {
             IID_PPV_ARGS(&d3d12Device))) &&
         d3d12Device != nullptr) {
         ComPtr<ID3D12CommandQueue> commandQueue;
-        std::size_t queueOffset = static_cast<std::size_t>(-1);
-        bool historicalQueueLookup = false;
+        bool capturedHistoricalQueue = false;
         {
             std::lock_guard lock(g_presentHook.mutex);
-            historicalQueueLookup = g_presentHook.sharedPresentPatched;
-            if (!historicalQueueLookup &&
-                g_presentHook.capturedCommandQueue != nullptr) {
+            capturedHistoricalQueue =
+                g_presentHook.capturedCommandQueue != nullptr &&
+                (g_presentHook.capturedSwapChainRef == nullptr ||
+                 g_presentHook.capturedSwapChainRef.Get() == swapChain);
+            if (capturedHistoricalQueue) {
                 commandQueue = g_presentHook.capturedCommandQueue;
             }
         }
 
-        if (historicalQueueLookup &&
-            !locate_command_queue(
-                g_presentHook,
-                swapChain,
-                d3d12Device.Get(),
-                commandQueue,
-                queueOffset)) {
+        if (!capturedHistoricalQueue || commandQueue == nullptr) {
             static std::atomic<std::uint32_t> missingQueueTrace{0};
-            const auto trace = missingQueueTrace.fetch_add(1, std::memory_order_relaxed);
-            if (trace < 8) {
-                std::ostringstream message;
-                message << "[FrontierD3D] historical D3D12 Present detected but command queue field was not resolved"
-                        << " swapchain=" << static_cast<const void*>(swapChain)
-                        << " device=" << static_cast<const void*>(d3d12Device.Get())
-                        << " knownOffsets=" << g_presentHook.commandQueueOffsetCount;
-                log_line(message.str());
-            }
-            return;
-        }
-
-        if (commandQueue == nullptr) {
-            static std::atomic<std::uint32_t> missingCapturedQueueTrace{0};
             const auto trace =
-                missingCapturedQueueTrace.fetch_add(1, std::memory_order_relaxed);
+                missingQueueTrace.fetch_add(1, std::memory_order_relaxed);
             if (trace < 8) {
                 log_line(
-                    "[FrontierD3D] targeted D3D12 Present has no captured command queue; "
-                    "skipping private swapchain memory scan");
+                    "[FrontierD3D] historical Present has no command queue captured by "
+                    "CreateSwapChainForHwnd; skipping D3D11On12 initialization");
             }
             return;
         }
@@ -3697,9 +3498,7 @@ void CefOverlay::on_present(::IDXGISwapChain* swapChain) {
             message << "[FrontierD3D] D3D11On12 bridge initialized"
                     << " device=" << static_cast<const void*>(d3d12Device.Get())
                     << " queue=" << static_cast<const void*>(commandQueue.Get())
-                    << " queueOffset=" << queueOffset
-                    << " queueSource="
-                    << (historicalQueueLookup ? "private-swapchain-scan" : "CreateSwapChain")
+                    << " queueSource=CreateSwapChainForHwnd"
                     << " featureLevel=0x" << std::hex
                     << static_cast<unsigned long>(chosenLevel);
             log_line(message.str());
