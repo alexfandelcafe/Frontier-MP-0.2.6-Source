@@ -194,6 +194,12 @@ if(WIN32 AND FRONTIER_BUILD_CLIENT)
         d3d11
         dxgi
         d3dcompiler)
+
+    if(FRONTIER_BUILD_RDRMP_COMPAT)
+        target_link_libraries(frontier_client PRIVATE frontier_rdrmp_enet)
+        target_compile_definitions(frontier_client PRIVATE FRONTIER_RDRMP_ENET_AVAILABLE=1)
+    endif()
+
     frontier_enable_warnings(frontier_client)
 
     if(FRONTIER_CEF_OVERLAY_AVAILABLE)
