@@ -70,6 +70,7 @@ private:
     std::uintptr_t resolve_rip_target(std::uintptr_t instruction) const;
     bool readable(std::uintptr_t address, std::size_t size) const;
     bool read_pointer(std::uintptr_t address, std::uintptr_t& out) const;
+    bool require_game_thread_access(std::string& error) const;
 
     struct RuntimeSnapshot final {
         bool gameStateKnown{};
