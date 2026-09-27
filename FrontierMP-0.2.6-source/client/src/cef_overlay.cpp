@@ -1,4 +1,5 @@
 #include "frontier/client/cef_overlay.hpp"
+#include "frontier/game/inline_hook.hpp"
 #include "frontier/game/rdr_bridge.hpp"
 
 #include <windows.h>
@@ -475,6 +476,12 @@ struct PresentHookState final {
     std::atomic<CefOverlay*> overlay{nullptr};
     HMODULE rdrModule{};
 
+    // RDRMP's DirectXHook detoured the shared Present implementation
+    // discovered from an auxiliary swapchain instead of modifying RDR's
+    // DXGI factory/swapchain COM vtables.
+    std::unique_ptr<frontier::game::InlineHook> historicalPresentHook{};
+    bool historicalPresentDetourAttached{};
+
     ImportPatch createImport{};
     CreateDeviceAndSwapChainProc createOriginal{};
 
@@ -538,9 +545,8 @@ struct PresentHookState final {
     ComPtr<IDXGISwapChain> pendingSwapChain{};
     ComPtr<ID3D12CommandQueue> pendingSwapChainQueue{};
 
-    // The game must finish its loading/shader-preload transition before the
-    // overlay can touch a real RDR swapchain. This starts false and is raised
-    // by the game-thread pump after consecutive world-ready observations.
+    // Retained only by legacy factory/swapchain helper code below. The active
+    // RDRMP-compatible Present detour does not gate on world state.
     std::atomic<bool> renderActivationAllowed{false};
 
     bool installed{};
@@ -1191,6 +1197,13 @@ bool install_historical_present_hook(
         return false;
     }
 
+    // Historical RDRMP FUN_180058880:
+    //   CreateDXGIFactory1 -> D3D12CreateDevice -> CreateCommandQueue
+    //   -> CreateSwapChainForHwnd -> read Present -> DirectXHook detour.
+    //
+    // The auxiliary swapchain exists only to discover the shared Present
+    // implementation and the swapchain/queue field relationship. We never
+    // patch the probe or any RDR COM vtable.
     const char* const className = "FrontierMP_D3DProbe";
     WNDCLASSA windowClass{};
     windowClass.lpfnWndProc = DefWindowProcA;
@@ -1205,8 +1218,8 @@ bool install_historical_present_hook(
         WS_OVERLAPPEDWINDOW,
         0,
         0,
-        2,
-        2,
+        100,
+        100,
         nullptr,
         nullptr,
         windowClass.hInstance,
@@ -1265,8 +1278,8 @@ bool install_historical_present_hook(
     }
 
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc{};
-    swapChainDesc.Width = 2;
-    swapChainDesc.Height = 2;
+    swapChainDesc.Width = 100;
+    swapChainDesc.Height = 100;
     swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     swapChainDesc.SampleDesc.Count = 1;
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -1309,10 +1322,9 @@ bool install_historical_present_hook(
     }
 
     void** vtable = *vtableAddress;
-    state.presentOriginal =
-        reinterpret_cast<PresentHookState::PresentProc>(vtable[8]);
-
-    if (state.presentOriginal == nullptr) {
+    const auto presentTarget =
+        reinterpret_cast<std::uintptr_t>(vtable[8]);
+    if (presentTarget == 0) {
         DestroyWindow(probeWindow);
         UnregisterClassA(className, windowClass.hInstance);
         error = "probe Present entry unavailable";
@@ -1323,7 +1335,6 @@ bool install_historical_present_hook(
         probeSwapChain.Get(),
         queue.Get(),
         state.commandQueueOffsets);
-
     if (state.commandQueueOffsetCount == 0) {
         DestroyWindow(probeWindow);
         UnregisterClassA(className, windowClass.hInstance);
@@ -1331,66 +1342,50 @@ bool install_historical_present_hook(
         return false;
     }
 
-    void* original = nullptr;
-    std::string patchError;
-    if (!patch_vtable_slot(
-            vtable,
-            8,
-            reinterpret_cast<void*>(&frontier_present),
-            original,
-            patchError)) {
+    auto presentHook = std::make_unique<frontier::game::InlineHook>();
+    std::string hookError;
+    constexpr std::size_t kPresentPatchSize = 14u;
+
+    if (!presentHook->install(
+            presentTarget,
+            reinterpret_cast<std::uintptr_t>(&frontier_present),
+            kPresentPatchSize,
+            "RDRMP historical Present",
+            hookError)) {
         DestroyWindow(probeWindow);
         UnregisterClassA(className, windowClass.hInstance);
-        error = patchError;
+        error = "Present detour failed: " + hookError;
         return false;
     }
 
-    state.sharedSwapChainVtable = vtable;
-    state.sharedPresentOriginal = original;
-    state.sharedPresentPatched = true;
-
-    void*** vtable1Address =
-        reinterpret_cast<void***>(probeSwapChain1.Get());
-    if (vtable1Address != nullptr && *vtable1Address != nullptr) {
-        void** vtable1 = *vtable1Address;
-        void* originalPresent1 = nullptr;
-        std::string patch1Error;
-        if (patch_vtable_slot(
-                vtable1,
-                22,
-                reinterpret_cast<void*>(&frontier_present1),
-                originalPresent1,
-                patch1Error)) {
-            state.sharedSwapChain1Vtable = vtable1;
-            state.sharedPresent1Original = originalPresent1;
-            state.sharedPresent1Patched = true;
-            state.present1Original =
-                reinterpret_cast<PresentHookState::Present1Proc>(
-                    originalPresent1);
-        } else {
-            log_line(
-                "[FrontierD3D] historical Present1 probe hook unavailable: " +
-                patch1Error);
-        }
+    state.presentOriginal =
+        reinterpret_cast<PresentHookState::PresentProc>(
+            presentHook->trampoline());
+    if (state.presentOriginal == nullptr) {
+        presentHook->uninstall();
+        DestroyWindow(probeWindow);
+        UnregisterClassA(className, windowClass.hInstance);
+        error = "Present detour installed without trampoline";
+        return false;
     }
 
-    state.activeCommandQueueOffset =
-        static_cast<std::size_t>(-1);
+    state.historicalPresentHook = std::move(presentHook);
+    state.historicalPresentDetourAttached = true;
+    state.sharedPresentPatched = true;
+    state.activeCommandQueueOffset = static_cast<std::size_t>(-1);
 
     std::ostringstream message;
-    message << "[FrontierD3D] historical D3D12 Present hook installed"
-            << " present=" << original
-            << " queueFieldOffsets="
-            << state.commandQueueOffsetCount
-            << " firstQueueOffset="
-            << state.commandQueueOffsets[0];
+    message << "[FrontierD3D] historical shared Present detour installed"
+            << " presentTarget=" << reinterpret_cast<const void*>(presentTarget)
+            << " trampoline=" << reinterpret_cast<const void*>(state.presentOriginal)
+            << " queueFieldOffsets=" << state.commandQueueOffsetCount
+            << " firstQueueOffset=" << state.commandQueueOffsets[0];
     log_line(message.str());
 
     DestroyWindow(probeWindow);
     UnregisterClassA(className, windowClass.hInstance);
     return true;
 }
-
 
 HRESULT STDMETHODCALLTYPE frontier_present1(
     IDXGISwapChain1* swapChain,
@@ -2155,6 +2150,11 @@ void unhook_render_path() {
         }
     }
 
+    if (g_presentHook.historicalPresentHook != nullptr) {
+        g_presentHook.historicalPresentHook->uninstall();
+        g_presentHook.historicalPresentHook.reset();
+    }
+    g_presentHook.historicalPresentDetourAttached = false;
     g_presentHook.sharedSwapChainVtable = nullptr;
     g_presentHook.sharedPresentOriginal = nullptr;
     g_presentHook.sharedPresentPatched = false;
@@ -2214,6 +2214,7 @@ void unhook_render_path() {
     g_presentHook.originalVtable1Address = nullptr;
     g_presentHook.presentOriginal = nullptr;
     g_presentHook.present1Original = nullptr;
+    g_presentHook.historicalPresentDetourAttached = false;
     g_presentHook.swapchainHooked = false;
     g_presentHook.swapchain1Hooked = false;
     g_presentHook.swapchainUsesExtendedVtable = false;
@@ -2270,169 +2271,26 @@ bool install_render_path(CefOverlay* overlay) {
 
     g_presentHook.rdrModule = GetModuleHandleA("RDR.exe");
     if (g_presentHook.rdrModule == nullptr) {
-        log_line("[FrontierD3D] RDR.exe module unavailable while installing fallback render hook");
+        log_line("[FrontierD3D] RDR.exe module unavailable while installing historical Present detour");
         return false;
     }
 
-    g_presentHook.renderActivationAllowed.store(false, std::memory_order_release);
+    g_presentHook.overlay.store(overlay, std::memory_order_release);
 
     std::string error;
-    bool anyHookInstalled = false;
-
-    if (find_and_patch_import(
-            g_presentHook.rdrModule,
-            "d3d11.dll",
-            "D3D11CreateDeviceAndSwapChain",
-            reinterpret_cast<void*>(&frontier_create_device_and_swapchain),
-            g_presentHook.createImport,
-            error)) {
-        g_presentHook.createOriginal =
-            reinterpret_cast<PresentHookState::CreateDeviceAndSwapChainProc>(
-                g_presentHook.createImport.original);
-        anyHookInstalled = true;
-        log_line("[FrontierD3D] fallback D3D11CreateDeviceAndSwapChain IAT hook installed");
-    } else {
-        void* delayOriginal = nullptr;
-        std::string delayError;
-        if (find_and_patch_delay_import(
-                g_presentHook.rdrModule,
-                "d3d11.dll",
-                "D3D11CreateDeviceAndSwapChain",
-                reinterpret_cast<void*>(&frontier_create_device_and_swapchain),
-                g_presentHook.createImport,
-                delayOriginal,
-                delayError)) {
-            g_presentHook.createOriginal =
-                reinterpret_cast<PresentHookState::CreateDeviceAndSwapChainProc>(
-                    delayOriginal);
-            anyHookInstalled = true;
-            log_line("[FrontierD3D] fallback D3D11CreateDeviceAndSwapChain delay-IAT hook installed");
-        } else {
-            log_line(
-                "[FrontierD3D] fallback D3D11CreateDeviceAndSwapChain unavailable: " +
-                error +
-                " delay=" +
-                delayError);
-        }
-    }
-
-    const char* factoryNames[] = {
-        "CreateDXGIFactory",
-        "CreateDXGIFactory1",
-        "CreateDXGIFactory2"
-    };
-    void* factoryReplacements[] = {
-        reinterpret_cast<void*>(&frontier_create_dxgi_factory),
-        reinterpret_cast<void*>(&frontier_create_dxgi_factory1),
-        reinterpret_cast<void*>(&frontier_create_dxgi_factory2)
-    };
-
-    for (std::size_t i = 0; i < std::size(factoryNames); ++i) {
-        ImportPatch patch{};
-        std::string factoryError;
-        void* resolvedFactory = nullptr;
-        if (!find_and_patch_import(
-                g_presentHook.rdrModule,
-                "dxgi.dll",
-                factoryNames[i],
-                factoryReplacements[i],
-                patch,
-                factoryError)) {
-            std::string delayFactoryError;
-            if (!find_and_patch_delay_import(
-                    g_presentHook.rdrModule,
-                    "dxgi.dll",
-                    factoryNames[i],
-                    factoryReplacements[i],
-                    patch,
-                    resolvedFactory,
-                    delayFactoryError)) {
-                continue;
-            }
-        }
-
-        if (g_presentHook.factoryImportCount >=
-            g_presentHook.factoryImports.size()) {
-            restore_import(patch);
-            continue;
-        }
-
-        g_presentHook.factoryImports[g_presentHook.factoryImportCount++] = patch;
-        void* factoryOriginal = resolvedFactory != nullptr
-            ? resolvedFactory
-            : patch.original;
-
-        if (i == 0) {
-            g_presentHook.createFactoryOriginal =
-                reinterpret_cast<PresentHookState::CreateDXGIFactoryProc>(
-                    factoryOriginal);
-        } else if (i == 1) {
-            g_presentHook.createFactory1Original =
-                reinterpret_cast<PresentHookState::CreateDXGIFactoryProc>(
-                    factoryOriginal);
-        } else {
-            g_presentHook.createFactory2Original =
-                reinterpret_cast<PresentHookState::CreateDXGIFactory2Proc>(
-                    factoryOriginal);
-        }
-
-        anyHookInstalled = true;
+    if (!install_historical_present_hook(g_presentHook, error)) {
+        g_presentHook.overlay.store(nullptr, std::memory_order_release);
         log_line(
-            std::string("[FrontierD3D] fallback ") +
-            factoryNames[i] +
-            (resolvedFactory != nullptr
-                ? " delay-IAT hook installed"
-                : " IAT hook installed"));
-    }
-
-    if (anyHookInstalled) {
-        g_presentHook.overlay.store(overlay, std::memory_order_release);
-        g_presentHook.installed = true;
-        log_line("[FrontierD3D] targeted RDR IAT/factory render path active");
-        return true;
-    }
-
-    log_line("[FrontierD3D] no targeted RDR D3D11/DXGI render path could be hooked");
-
-    char historicalSwitch[8]{};
-    const DWORD historicalSwitchLength =
-        GetEnvironmentVariableA(
-            "FRONTIER_ENABLE_HISTORICAL_PRESENT",
-            historicalSwitch,
-            sizeof(historicalSwitch));
-    const bool historicalEnabled =
-        historicalSwitchLength > 0 &&
-        historicalSwitchLength < sizeof(historicalSwitch) &&
-        (historicalSwitch[0] == '1' ||
-         historicalSwitch[0] == 'y' ||
-         historicalSwitch[0] == 'Y' ||
-         historicalSwitch[0] == 't' ||
-         historicalSwitch[0] == 'T');
-
-    if (!historicalEnabled) {
-        log_line(
-            "[FrontierD3D] shared historical Present hook disabled by default; "
-            "set FRONTIER_ENABLE_HISTORICAL_PRESENT=1 only for legacy testing");
+            "[FrontierD3D] historical Present detour failed: " +
+            (error.empty() ? "unknown error" : error));
         return false;
     }
 
-    // The historical path patches the shared IDXGISwapChain vtable exposed by
-    // a probe object. On current RDR this global COM-vtable mutation can be
-    // classified as a third-party overlay and produce Rockstar error 25D11007.
-    std::string historicalError;
-    if (install_historical_present_hook(
-            g_presentHook,
-            historicalError)) {
-        g_presentHook.overlay.store(overlay, std::memory_order_release);
-        g_presentHook.installed = true;
-        log_line("[FrontierD3D] historical shared Present path enabled explicitly");
-        return true;
-    }
-
+    g_presentHook.installed = true;
     log_line(
-        "[FrontierD3D] historical Present path failed: " +
-        (historicalError.empty() ? "unknown error" : historicalError));
-    return false;
+        "[FrontierD3D] RDRMP-compatible render path active: "
+        "shared Present detour only; DXGI factories and RDR swapchain vtables untouched");
+    return true;
 }
 HRESULT STDMETHODCALLTYPE frontier_present(
     IDXGISwapChain* swapChain,
@@ -2449,9 +2307,7 @@ HRESULT STDMETHODCALLTYPE frontier_present(
         shouldRender =
             overlay != nullptr &&
             original != nullptr &&
-            g_presentHook.renderActivationAllowed.load(std::memory_order_acquire) &&
-            (g_presentHook.sharedPresentPatched ||
-             swapChain == g_presentHook.hookedSwapChain);
+            g_presentHook.historicalPresentDetourAttached;
     }
 
     static std::atomic<std::uint32_t> traceCount{0};
@@ -2469,8 +2325,8 @@ HRESULT STDMETHODCALLTYPE frontier_present(
         message << "[FrontierD3D] Present trace=" << trace
                 << " swapchain=" << static_cast<const void*>(swapChain)
                 << " hooked=" << (shouldRender ? 1 : 0)
-                << " sharedVtable="
-                << (currentVtable == g_presentHook.sharedSwapChainVtable ? 1 : 0)
+                << " historicalDetour="
+                << (g_presentHook.historicalPresentDetourAttached ? 1 : 0)
                 << " sync=" << syncInterval
                 << " flags=0x" << std::hex << flags;
         log_line(message.str());
@@ -2498,12 +2354,8 @@ HRESULT STDMETHODCALLTYPE frontier_present1(
         std::lock_guard lock(g_presentHook.mutex);
         original = g_presentHook.present1Original;
         overlay = g_presentHook.overlay.load(std::memory_order_acquire);
-        shouldRender =
-            overlay != nullptr &&
-            original != nullptr &&
-            g_presentHook.renderActivationAllowed.load(std::memory_order_acquire) &&
-            (g_presentHook.sharedPresent1Patched ||
-             swapChain == g_presentHook.hookedSwapChain1Ref.Get());
+        // Historical RDRMP detoured Present, not Present1.
+        shouldRender = false;
     }
 
     static std::atomic<std::uint32_t> traceCount{0};
@@ -2717,9 +2569,8 @@ bool CefOverlay::start(frontier::game::RdrBridge& bridge) {
     frontendConnectRequested_.store(false, std::memory_order_release);
     g_activeOverlay.store(this, std::memory_order_release);
 
-    // Install the IAT hook before FrontierClient signals the suspended
-    // launcher. This catches RDR's D3D11 swapchain creation without requiring
-    // a risky global detour of dxgi.dll/d3d11.dll.
+    // Mirror the historical RDRMP startup path: CEF initializes early, while
+    // graphics integration uses one shared Present detour only.
     if (!install_render_path(this)) {
         log_line("[FrontierCEF] D3D render path not installed; CEF will still initialize for diagnostics");
     }
@@ -2759,7 +2610,6 @@ void CefOverlay::stop() {
     }
 
     g_activeOverlay.store(nullptr, std::memory_order_release);
-    g_presentHook.renderActivationAllowed.store(false, std::memory_order_release);
     unhook_render_path();
     bridge_ = nullptr;
 }
@@ -2834,7 +2684,7 @@ bool CefOverlay::initialize_on_game_thread() {
     log_line(
         "[FrontierCEF] CefInitialize thread=" +
         std::to_string(static_cast<unsigned long>(GetCurrentThreadId())));
-    log_line("[FrontierCEF] using historical OSR/D3D11 composition path");
+    log_line("[FrontierCEF] using historical RDRMP lifecycle: CEF early, graphics lazy on Present");
 
     CefMainArgs mainArgs(GetModuleHandleA(nullptr));
     state.app = new FrontierCefApp();
@@ -2995,59 +2845,10 @@ void CefOverlay::pump_on_game_thread() {
         return;
     }
 
-    // Do not touch the RDR swapchain/D3D11On12 path while the game is still
-    // in its title/loading state. The 25D11007 path is especially sensitive
-    // to third-party render interception during shader preload. Wait for
-    // repeated observations of the real world state before allowing any
-    // swapchain hook or CEF composition.
-    if (bridge_ != nullptr) {
-        std::int32_t gameState = -1;
-        bool worldLoaded = false;
-        bool worldLoadedKnown = false;
-        bool simulateStartMultiplayer = false;
-        bool simulateStartMultiplayerKnown = false;
-        bool startPosCommandLine = false;
-        bool startPosCommandLineKnown = false;
-        std::string runtimeError;
+    // Keep CEF's browser/message pump independent from graphics setup.
 
-        const bool runtimeKnown = bridge_->read_game_runtime(
-            gameState,
-            worldLoaded,
-            worldLoadedKnown,
-            simulateStartMultiplayer,
-            simulateStartMultiplayerKnown,
-            startPosCommandLine,
-            startPosCommandLineKnown,
-            runtimeError);
-
-        if (runtimeKnown &&
-            worldLoadedKnown &&
-            worldLoaded &&
-            gameState == 3) {
-            state_->renderReadyStreak =
-                std::min<std::uint32_t>(state_->renderReadyStreak + 1u, 8u);
-        } else {
-            state_->renderReadyStreak = 0;
-        }
-
-        if (state_->renderReadyStreak >= 3u &&
-            !g_presentHook.renderActivationAllowed.exchange(
-                true, std::memory_order_acq_rel)) {
-            if (!state_->renderActivationLogged) {
-                state_->renderActivationLogged = true;
-                log_line(
-                    "[FrontierD3D] render activation opened after stable RDR world; "
-                    "shader-preload/title render interception was deferred");
-            }
-        }
-    }
-
-    // Patch the actual RDR swapchain only after the CreateSwapChain* call
-    // has completely returned and the world is stable.
-    activate_pending_swapchain_hook(g_presentHook);
-
-    // Keep CEF's browser/process message pump independent from the render
-    // interception. The browser may paint while rendering remains gated.
+    // The historical shared Present detour is already installed. The first
+    // real RDR Present performs the lazy D3D11On12 initialization.
     CefDoMessageLoopWork();
 
     if (frontendConnectRequested_.load(std::memory_order_acquire) &&
@@ -3737,19 +3538,8 @@ void CefOverlay::on_present(::IDXGISwapChain* swapChain) {
         return;
     }
 
-    if (!g_presentHook.renderActivationAllowed.load(std::memory_order_acquire)) {
-        static std::atomic<std::uint32_t> renderGateTrace{0};
-        const auto trace = renderGateTrace.fetch_add(1, std::memory_order_relaxed);
-        if (trace < 4) {
-            log_line(
-                "[FrontierD3D] CEF composition deferred while RDR is loading/preloading shaders");
-        }
-        return;
-    }
-
-    if (g_presentHook.sharedPresentPatched) {
-        CefDoMessageLoopWork();
-    }
+    // RDRMP pumped CEF independently from its graphics bridge.
+    CefDoMessageLoopWork();
 
     std::lock_guard frameLock(state_->frameMutex);
     if (state_->frame.empty() ||
@@ -3759,6 +3549,7 @@ void CefOverlay::on_present(::IDXGISwapChain* swapChain) {
         return;
     }
 
+    bool initializedGraphicsBridgeThisPresent = false;
     ComPtr<ID3D12Device> d3d12Device;
     if (SUCCEEDED(swapChain->GetDevice(
             IID_PPV_ARGS(&d3d12Device))) &&
@@ -3858,6 +3649,7 @@ void CefOverlay::on_present(::IDXGISwapChain* swapChain) {
 
             state_->d3d12Device = d3d12Device;
             state_->d3d12Queue = commandQueue;
+            initializedGraphicsBridgeThisPresent = true;
 
             std::ostringstream message;
             message << "[FrontierD3D] D3D11On12 bridge initialized"
@@ -3869,6 +3661,13 @@ void CefOverlay::on_present(::IDXGISwapChain* swapChain) {
                     << " featureLevel=0x" << std::hex
                     << static_cast<unsigned long>(chosenLevel);
             log_line(message.str());
+        }
+
+        if (initializedGraphicsBridgeThisPresent) {
+            log_line(
+                "[FrontierD3D] first real RDR Present initialized the graphics bridge; "
+                "CEF draw deferred to the next Present");
+            return;
         }
 
         ComPtr<IDXGISwapChain3> swapChain3;
