@@ -2663,10 +2663,11 @@ void CefOverlay::pump_on_game_thread() {
         return;
     }
 
-    // Historical RDRMP advanced CEF from the render callback itself.
-    if (!g_presentHook.sharedPresentPatched) {
-        CefDoMessageLoopWork();
-    }
+    // Keep CEF's browser/process message pump independent from the render
+    // interception. A shared DXGI vtable hook is only a rendering signal;
+    // if the real RDR swapchain does not use that vtable, gating CEF here can
+    // leave the browser initialized but unable to deliver its first OnPaint.
+    CefDoMessageLoopWork();
 
     if (frontendConnectRequested_.load(std::memory_order_acquire) &&
         bridge_ != nullptr &&
