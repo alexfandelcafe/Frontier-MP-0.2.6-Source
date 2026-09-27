@@ -2802,3 +2802,103 @@ y el pump antes de tocar la composición.
 
 HEAD DE CONTINUIDAD DE CÓDIGO:
 f9b5e2c0d97b227908f8c438b24af6c42099fd2f
+
+
+============================================================
+63. CEF — ALINEACIÓN DEL RENDER LIFECYCLE CON RDRMP HISTÓRICO
+============================================================
+
+Fecha:
+2026-09-27
+
+Commit principal:
+5b42837717e107c7ee5076c884d4ee68d54354e4
+
+Commit de limpieza:
+bc198c7a49d1064053409ba209909d3c096f8bc8
+
+Archivo principal:
+FrontierMP-0.2.6-source/client/src/cef_overlay.cpp
+
+CAMBIO:
+Se reemplazó el camino activo de render CEF Frontier basado en:
+- IAT de D3D11CreateDeviceAndSwapChain
+- IAT de CreateDXGIFactory/CreateDXGIFactory1/CreateDXGIFactory2
+- shadow-vtables de IDXGIFactory/IDXGIFactory2
+- shadow-vtables de IDXGISwapChain
+
+por un camino alineado con la arquitectura histórica recuperada de RDRMP:
+
+startup
+  ->
+CEF inicializa
+  ->
+FUN_180058880 equivalente:
+  CreateDXGIFactory1
+  D3D12CreateDevice
+  CreateCommandQueue
+  CreateSwapChainForHwnd auxiliar
+  obtener Present del slot 8
+  ->
+detour de la implementación compartida de Present
+  ->
+primer Present real de RDR:
+  D3D12Device real
+  CommandQueue real
+  D3D11On12CreateDevice
+  ->
+siguientes Present:
+  CEF pump
+  CEF framebuffer
+  composición
+
+IMPLEMENTACIÓN FRONTIER:
+- Se reutiliza frontier::game::InlineHook para detourar la dirección de Present
+  obtenida del swapchain auxiliar.
+- El swapchain auxiliar NO se modifica.
+- Los factories DXGI de RDR NO se modifican.
+- Las vtables de los swapchains reales NO se modifican.
+- install_render_path() ya no instala IAT/factory hooks; instala solamente
+  el detour histórico de Present.
+- CefDoMessageLoopWork() permanece independiente del bridge gráfico.
+- El primer Present D3D12 inicializa D3D11On12 y NO compone CEF.
+- La composición/creación de recursos D3D del CEF queda para el siguiente
+  Present, reproduciendo la separación histórica:
+    primer Present -> inicialización gráfica
+    siguientes Present -> render/Draw
+
+IMPORTANTE:
+No se apagó el renderer 3D de RDR. Esto coincide con la evidencia histórica:
+CEF podía estar inicializado mientras el juego seguía ejecutándose normalmente.
+
+RAZÓN:
+El problema sospechado durante shader preload no debía resolverse tocando el
+renderer 3D principal. El cambio elimina precisamente la parte más intrusiva
+del camino anterior: no alterar factories ni vtables de RDR durante startup.
+
+RIESGO:
+- InlineHook requiere que los primeros 14 bytes de la implementación Present
+  formen una secuencia relocatable compatible con la implementación actual de
+  Frontier. No se ejecutó RDR1 en este entorno.
+- La coincidencia runtime entre el Present obtenido del probe y el Present
+  utilizado por RDR aún debe verificarse.
+- D3D11On12 sigue inicializándose contra el device/queue reales de RDR.
+- La ruta OnRender histórica exacta todavía no fue reproducida; Frontier
+  mantiene la composición inmediatamente antes del Present original.
+
+LOGS ESPERADOS:
+[FrontierD3D] historical shared Present detour installed
+[FrontierD3D] RDRMP-compatible render path active: shared Present detour only...
+[FrontierD3D] Present trace=...
+[FrontierD3D] D3D11On12 bridge initialized lazily on first RDR Present
+[FrontierD3D] first real RDR Present initialized the graphics bridge; CEF draw deferred to the next Present
+[FrontierCEF] first OnPaint frame=...
+[FrontierD3D] first CEF frame composited through D3D11On12 into RDR backbuffer
+
+VERIFICACIÓN:
+- Commit aplicado en GitHub.
+- Build Windows/RDR1 NO ejecutada desde este entorno.
+- RemotePlayerManager y local-player spawn no fueron modificados.
+
+HEAD DE CONTINUIDAD:
+bc198c7a49d1064053409ba209909d3c096f8bc8
