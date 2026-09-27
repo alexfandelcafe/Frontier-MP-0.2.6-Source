@@ -473,10 +473,48 @@ HRESULT STDMETHODCALLTYPE frontier_shared_create_swap_chain_for_hwnd(
     IDXGIOutput* restrictToOutput,
     IDXGISwapChain1** swapChain);
 
-HRESULT STDMETHODCALLTYPE frontier_present(
+void STDMETHODCALLTYPE frontier_present_body(
     IDXGISwapChain* swapChain,
     UINT syncInterval,
-    UINT flags);
+    UINT flags) {
+    CefOverlay* overlay = nullptr;
+    bool shouldRender = false;
+
+    {
+        std::lock_guard lock(g_presentHook.mutex);
+        overlay = g_presentHook.overlay.load(std::memory_order_acquire);
+        shouldRender =
+            overlay != nullptr &&
+            g_presentHook.historicalPresentDetourAttached;
+    }
+
+    static std::atomic<std::uint32_t> traceCount{0};
+    const std::uint32_t trace = traceCount.fetch_add(1, std::memory_order_relaxed);
+    if (trace < 8) {
+        std::ostringstream message;
+        message << "[FrontierD3D] Present trace=" << trace
+                << " swapchain=" << static_cast<const void*>(swapChain)
+                << " hooked=" << (shouldRender ? 1 : 0)
+                << " historicalDetour="
+                << (g_presentHook.historicalPresentDetourAttached ? 1 : 0)
+                << " sync=" << syncInterval
+                << " flags=0x" << std::hex << flags;
+        log_line(message.str());
+    }
+
+    if (!shouldRender || overlay == nullptr) {
+        return;
+    }
+
+    // The register-preserving gateway restores the exact Present entry state
+    // before transferring control to the original trampoline. This callback
+    // must therefore only perform Frontier work and never call Present again.
+    try {
+        overlay->on_present(swapChain);
+    } catch (...) {
+        log_line("[FrontierD3D] Present callback threw; original Present will continue");
+    }
+}
 
 HRESULT STDMETHODCALLTYPE frontier_present1(
     IDXGISwapChain1* swapChain,
@@ -670,9 +708,9 @@ bool install_historical_present_hook(
     }
 
     auto presentHook = std::make_unique<frontier::game::InlineHook>();
-    if (!presentHook->install(
+    if (!presentHook->install_preserving_entry_registers(
             presentTarget,
-            reinterpret_cast<std::uintptr_t>(&frontier_present),
+            reinterpret_cast<std::uintptr_t>(&frontier_present_body),
             kDxgiDetourPatchSize,
             "RDRMP historical Present",
             hookError)) {
