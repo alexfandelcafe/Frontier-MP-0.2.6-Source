@@ -8,6 +8,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <thread>
 #ifdef _WIN32
 #include <windows.h>
 #include <intrin.h>
@@ -17,6 +18,7 @@ namespace frontier::game {
 
 namespace {
 std::atomic<GameThreadDispatcher*> g_dispatcher{nullptr};
+std::atomic<std::uint32_t> g_hookInFlight{0};
 std::atomic<NativeInvoker::NativeHandler> g_fallbackOriginalWait{nullptr};
 std::atomic<NativeInvoker::NativeHandler> g_fallbackOriginalGetThisScriptId{nullptr};
 std::atomic<NativeInvoker::NativeHandler> g_fallbackOriginalGetScriptName{nullptr};
@@ -359,6 +361,13 @@ void GameThreadDispatcher::detach() {
         g_dispatcher.store(nullptr, std::memory_order_release);
     }
 
+    // A hook call can have loaded g_dispatcher just before the native table was
+    // restored. Do not release fallback/original pointers until every in-flight
+    // hook has returned.
+    while (g_hookInFlight.load(std::memory_order_acquire) != 0) {
+        std::this_thread::yield();
+    }
+
     g_fallbackOriginalWait.store(nullptr, std::memory_order_release);
     g_fallbackOriginalGetThisScriptId.store(nullptr, std::memory_order_release);
     g_fallbackOriginalGetScriptName.store(nullptr, std::memory_order_release);
@@ -584,6 +593,13 @@ bool GameThreadDispatcher::is_game_thread() const {
 }
 
 void GameThreadDispatcher::wait_hook(void* context) {
+    g_hookInFlight.fetch_add(1, std::memory_order_acq_rel);
+    struct HookGuard final {
+        ~HookGuard() {
+            g_hookInFlight.fetch_sub(1, std::memory_order_release);
+        }
+    } hookGuard{};
+
     auto* dispatcher = g_dispatcher.load(std::memory_order_acquire);
     if (dispatcher) {
 #ifdef _WIN32
@@ -616,6 +632,13 @@ void GameThreadDispatcher::wait_hook(void* context) {
 }
 
 void GameThreadDispatcher::get_this_script_id_hook(void* context) {
+    g_hookInFlight.fetch_add(1, std::memory_order_acq_rel);
+    struct HookGuard final {
+        ~HookGuard() {
+            g_hookInFlight.fetch_sub(1, std::memory_order_release);
+        }
+    } hookGuard{};
+
     auto* dispatcher = g_dispatcher.load(std::memory_order_acquire);
     const auto original = dispatcher != nullptr
         ? dispatcher->originalGetThisScriptId_.load(std::memory_order_acquire)
@@ -647,6 +670,13 @@ void GameThreadDispatcher::get_this_script_id_hook(void* context) {
 #endif
 }
 void GameThreadDispatcher::get_script_name_hook(void* context) {
+    g_hookInFlight.fetch_add(1, std::memory_order_acq_rel);
+    struct HookGuard final {
+        ~HookGuard() {
+            g_hookInFlight.fetch_sub(1, std::memory_order_release);
+        }
+    } hookGuard{};
+
     auto* dispatcher = g_dispatcher.load(std::memory_order_acquire);
     const auto original = dispatcher != nullptr
         ? dispatcher->originalGetScriptName_.load(std::memory_order_acquire)
