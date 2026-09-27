@@ -939,14 +939,13 @@ bool RdrBridge::try_initialize_game_thread_dispatcher() {
 }
 
 bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
+    logLine.clear();
+
     std::string gameThreadError;
     if (!require_game_thread_access(gameThreadError)) {
-        
-        error = gameThreadError;
+        logLine = "[FrontierBridge] " + gameThreadError;
         return false;
     }
-
-    logLine.clear();
 
     std::lock_guard bootstrapLock(historicalOnlineBootstrapMutex_);
 
@@ -1781,6 +1780,9 @@ bool RdrBridge::spawn_remote_actor(
     RemoteActorHandle& outActor,
     std::string& error) const {
     outActor = {};
+    if (!require_game_thread_access(error)) {
+        return false;
+    }
     error.clear();
 
     if (!initialized_) {
@@ -2012,6 +2014,9 @@ bool RdrBridge::update_remote_actor_transform(
     const PlayerState& state,
     std::string& error) const {
     error.clear();
+    if (!require_game_thread_access(error)) {
+        return false;
+    }
 
     if (actorHandle == 0u) {
         error = "invalid remote actor handle";
@@ -2069,6 +2074,9 @@ bool RdrBridge::is_remote_actor_valid(
     std::string& error) const {
     outValid = false;
     error.clear();
+    if (!require_game_thread_access(error)) {
+        return false;
+    }
 
     if (actorHandle == 0u) {
         error = "invalid remote actor handle";
@@ -2119,6 +2127,9 @@ bool RdrBridge::read_remote_actor_position(
     std::string& error) const {
     outPosition = {};
     error.clear();
+    if (!require_game_thread_access(error)) {
+        return false;
+    }
 
     if (actorHandle == 0u) {
         error = "invalid remote actor handle";
@@ -2179,6 +2190,9 @@ bool RdrBridge::prepare_remote_actor_for_locomotion(
     std::uint32_t actorHandle,
     std::string& error) const {
     error.clear();
+    if (!require_game_thread_access(error)) {
+        return false;
+    }
 
     if (actorHandle == 0u) {
         error = "invalid remote actor handle";
@@ -2279,6 +2293,9 @@ bool RdrBridge::task_go_to_remote_coord(
     const Vec3& target,
     std::string& error) const {
     error.clear();
+    if (!require_game_thread_access(error)) {
+        return false;
+    }
 
     if (actorHandle == 0u) {
         error = "invalid remote actor handle";
@@ -2350,6 +2367,9 @@ bool RdrBridge::destroy_remote_actor(
     std::uint32_t actorHandle,
     std::string& error) const {
     error.clear();
+    if (!require_game_thread_access(error)) {
+        return false;
+    }
 
     if (actorHandle == 0u) return true;
     if (!initialized_) {
@@ -2398,6 +2418,9 @@ bool RdrBridge::ensure_local_player(
     bool& outReady,
     std::string& error) {
     outReady = false;
+    if (!require_game_thread_access(error)) {
+        return false;
+    }
     error.clear();
 
     if (!initialized_) {
