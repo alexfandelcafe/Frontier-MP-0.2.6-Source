@@ -22,6 +22,11 @@ bool NetworkClient::start(const std::string& host, std::uint16_t port, const std
     nextSequence_ = 1;
     receiveHistory_ = {};
     reliability_ = {};
+    nextChannelSequence_ = {{1, 1}};
+    nextControlReceiveSequence_ = 1;
+    lastStateReceiveSequence_ = 0;
+    controlReceiveInitialized_ = false;
+    pendingControlMessages_.clear();
     const auto now = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
     send_hello(now);
     return true;
@@ -78,6 +83,11 @@ void NetworkClient::send_message(protocol::MessageType type, protocol::Channel c
 
     protocol::PacketHeader header{};
     header.sequence = nextSequence_++;
+    const auto channelIndex =
+        static_cast<std::size_t>(message.channel) < nextChannelSequence_.size()
+            ? static_cast<std::size_t>(message.channel)
+            : 0u;
+    message.channelSequence = nextChannelSequence_[channelIndex]++;
     header.ack = receiveHistory_.highest();
     header.ackBits = receiveHistory_.ack_bits();
     header.connectionId = connectionId_;
@@ -94,8 +104,7 @@ void NetworkClient::handle_packet(const std::vector<std::uint8_t>& bytes, std::u
     protocol::PacketHeader header{};
     protocol::Message message{};
     if (!protocol::decode_packet(bytes, header, message)) return;
-    // Before Welcome the server owns the connection id in its response. Once
-    // connected, every non-Welcome packet must carry the server-issued id.
+
     if (state_ == ConnectionState::Connected &&
         message.type != protocol::MessageType::Welcome &&
         header.connectionId != connectionId_) {
@@ -106,6 +115,18 @@ void NetworkClient::handle_packet(const std::vector<std::uint8_t>& bytes, std::u
     if (!receiveHistory_.accept(header.sequence)) return;
     lastReceiveMs_ = nowMs;
 
+    if (!message.channelSequence) {
+        // Version 2 peers are expected to provide a channel sequence. Keep
+        // sequence zero invalid so an absent/malformed channel order cannot
+        // accidentally bypass ordered delivery.
+        return;
+    }
+
+    (void)accept_channel_message(std::move(message), nowMs);
+}
+
+void NetworkClient::dispatch_message(const protocol::Message& message, std::uint64_t nowMs) {
+    (void)nowMs;
     switch (message.type) {
     case protocol::MessageType::Welcome: {
         protocol::Welcome welcome{};
@@ -128,6 +149,53 @@ void NetworkClient::handle_packet(const std::vector<std::uint8_t>& bytes, std::u
     default:
         break;
     }
+}
+
+bool NetworkClient::accept_channel_message(protocol::Message message, std::uint64_t nowMs) {
+    if (message.channel == protocol::Channel::State) {
+        if (message.channelSequence <= lastStateReceiveSequence_) {
+            return false;
+        }
+        lastStateReceiveSequence_ = message.channelSequence;
+        dispatch_message(message, nowMs);
+        return true;
+    }
+
+    if (message.channel != protocol::Channel::Control) {
+        dispatch_message(message, nowMs);
+        return true;
+    }
+
+    if (!controlReceiveInitialized_) {
+        controlReceiveInitialized_ = true;
+        nextControlReceiveSequence_ = 1;
+    }
+
+    if (message.channelSequence < nextControlReceiveSequence_) {
+        return false;
+    }
+
+    if (message.channelSequence > nextControlReceiveSequence_) {
+        constexpr std::uint32_t kMaxBufferedControlGap = 64;
+        if (message.channelSequence - nextControlReceiveSequence_ > kMaxBufferedControlGap) {
+            return false;
+        }
+        pendingControlMessages_[message.channelSequence] = std::move(message);
+        return true;
+    }
+
+    dispatch_message(message, nowMs);
+    ++nextControlReceiveSequence_;
+
+    for (;;) {
+        auto it = pendingControlMessages_.find(nextControlReceiveSequence_);
+        if (it == pendingControlMessages_.end()) break;
+        dispatch_message(it->second, nowMs);
+        pendingControlMessages_.erase(it);
+        ++nextControlReceiveSequence_;
+    }
+
+    return true;
 }
 
 void NetworkClient::reconnect_or_timeout(std::uint64_t nowMs) {
