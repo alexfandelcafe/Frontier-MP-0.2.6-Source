@@ -16,6 +16,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <deque>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -494,7 +495,7 @@ struct PresentHookState final {
         bool factory2SharesBaseObject{};
     };
 
-    std::vector<FactoryHookData> factoryHooks{};
+    std::deque<FactoryHookData> factoryHooks{};
 
     PresentProc presentOriginal{};
     Present1Proc present1Original{};
@@ -1327,7 +1328,13 @@ void hook_factory(PresentHookState& state, IDXGIFactory* factory) {
     void*** baseVtable = reinterpret_cast<void***>(factory);
     if (baseVtable == nullptr || *baseVtable == nullptr) return;
 
-    PresentHookState::FactoryHookData hook{};
+    // The shadow vtable must live at a stable address for as long as DXGI can
+    // call through the returned COM object. A local FactoryHookData would make
+    // the vtable pointer dangle as soon as this function returns. Keep the
+    // hook object in a deque-backed container and populate it in-place so its
+    // vtable arrays have stable storage.
+    state.factoryHooks.emplace_back();
+    auto& hook = state.factoryHooks.back();
     hook.factory = factory;
 
     ComPtr<IDXGIFactory2> factory2;
@@ -1410,10 +1417,9 @@ void hook_factory(PresentHookState& state, IDXGIFactory* factory) {
                 }
             }
         }
+        state.factoryHooks.pop_back();
         return;
     }
-
-    state.factoryHooks.emplace_back(std::move(hook));
 }
 void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
     if (swapChain == nullptr) return;
