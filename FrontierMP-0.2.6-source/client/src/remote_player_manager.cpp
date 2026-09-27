@@ -140,9 +140,15 @@ void RemotePlayerManager::update(std::uint64_t nowMs, frontier::game::RdrBridge&
     if (!sessionActive) {
         if (sessionActive_) {
             log_remote("[FrontierRemotePlayer] session inactive; clearing remote actors");
-            clear(bridge);
+            for (auto it = players_.begin(); it != players_.end();) {
+                auto current = it++;
+                remove_player(current, bridge);
+            }
+            interpolator_.clear();
+            latestServerTick_ = 0;
+            lastUpdateMs_ = 0;
+            sessionActive_ = false;
         }
-        sessionActive_ = false;
         return;
     }
 
