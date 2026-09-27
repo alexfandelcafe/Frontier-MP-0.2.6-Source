@@ -32,6 +32,8 @@ public:
     bool attached() const { return target_ != 0 && trampoline_ != 0; }
     std::uintptr_t trampoline() const { return trampoline_; }
 
+    void uninstall();
+
 private:
     void reset();
 
