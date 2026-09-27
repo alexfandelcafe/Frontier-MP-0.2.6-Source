@@ -214,6 +214,7 @@ std::vector<std::uint8_t> encode_packet(const PacketHeader& header, const Messag
     append_u64(actual.connectionId);
     out.push_back(static_cast<std::uint8_t>(message.type));
     out.push_back(static_cast<std::uint8_t>(message.channel));
+    append_le32(out, message.channelSequence);
     append_le16(out, static_cast<std::uint16_t>(message.payload.size()));
     out.insert(out.end(), message.payload.begin(), message.payload.end());
     return out;
@@ -235,6 +236,7 @@ bool decode_packet(const std::vector<std::uint8_t>& bytes, PacketHeader& header,
 
     message.type = static_cast<MessageType>(bytes[offset++]);
     message.channel = static_cast<Channel>(bytes[offset++]);
+    message.channelSequence = read_le32(bytes.data() + offset); offset += 4;
     const std::uint16_t size = read_le16(bytes.data() + offset); offset += 2;
     if (size != bytes.size() - sizeof(PacketHeader) - sizeof(MessageHeader) || size > kMaxMessageSize) return false;
     message.payload.assign(bytes.begin() + static_cast<std::ptrdiff_t>(offset), bytes.end());
