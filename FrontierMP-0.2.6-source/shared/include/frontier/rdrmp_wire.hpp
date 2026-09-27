@@ -48,6 +48,11 @@ struct PlayerProperty final {
     std::uint32_t value{};
 };
 
+struct ClientPlayerState final {
+    Vec3 position{};
+    Vec3 rotation{};
+};
+
 struct PlayerTransform final {
     std::uint16_t playerId{};
     Vec3 position{};
@@ -119,6 +124,9 @@ bool decode_player_remove(const std::vector<std::uint8_t>& bytes, PlayerRemove& 
 
 std::vector<std::uint8_t> encode_player_property(const PlayerProperty& value);
 bool decode_player_property(const std::vector<std::uint8_t>& bytes, PlayerProperty& value);
+
+std::vector<std::uint8_t> encode_client_player_state(const ClientPlayerState& value);
+bool decode_client_player_state(const std::vector<std::uint8_t>& bytes, ClientPlayerState& value);
 
 std::vector<std::uint8_t> encode_player_transform(const PlayerTransform& value);
 bool decode_player_transform(const std::vector<std::uint8_t>& bytes, PlayerTransform& value);
