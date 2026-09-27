@@ -299,7 +299,7 @@ bool InlineHook::install_preserving_entry_registers(
         return false;
     }
 
-    constexpr std::size_t kGatewaySize = 256u;
+    constexpr std::size_t kGatewaySize = 384u;
     // Leave the mandatory Windows x64 shadow space untouched. The saved GPRs
     // begin at +0x40 so the callback cannot overwrite them while using its
     // home space at +0x00..+0x1F.
