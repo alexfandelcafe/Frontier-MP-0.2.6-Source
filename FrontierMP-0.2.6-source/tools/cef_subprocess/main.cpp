@@ -51,8 +51,10 @@ public:
         auto context = CefV8Context::GetCurrentContext();
         if (context != nullptr) {
             auto frame = context->GetFrame();
-            if (frame != nullptr &&
-                frame->SendProcessMessage(PID_BROWSER, message)) {
+            if (frame != nullptr) {
+                // CEF versions used by Frontier expose SendProcessMessage()
+                // as void, so success cannot be tested as a boolean expression.
+                frame->SendProcessMessage(PID_BROWSER, message);
                 retval = CefV8Value::CreateBool(true);
             }
         }
