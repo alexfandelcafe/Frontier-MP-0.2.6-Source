@@ -281,6 +281,137 @@ bool InlineHook::install(std::uintptr_t target,
 #endif
 }
 
+
+bool InlineHook::install_preserving_entry_registers(
+    std::uintptr_t target,
+    std::uintptr_t callback,
+    std::size_t patchSize,
+    const std::string& name,
+    std::string& error) {
+    error.clear();
+
+#ifdef _WIN32
+    // Build the normal trampoline first. The temporary replacement is the
+    // callback itself; the target is repatched to the register-preserving
+    // gateway before the hook becomes observable during normal game execution.
+    if (!install(target, callback, patchSize, name, error)) {
+        return false;
+    }
+
+    constexpr std::size_t kGatewaySize = 256u;
+    constexpr std::uint32_t kStackFrameSize = 0xA8u;
+    const auto* trampolineAddress =
+        reinterpret_cast<const std::uint8_t*>(trampoline_);
+
+    auto* gateway = static_cast<std::uint8_t*>(
+        VirtualAlloc(
+            nullptr,
+            kGatewaySize,
+            MEM_COMMIT | MEM_RESERVE,
+            PAGE_EXECUTE_READWRITE));
+    if (gateway == nullptr) {
+        reset();
+        error = name + ": register-preserving gateway allocation failed";
+        return false;
+    }
+
+    std::size_t offset = 0;
+    auto emit = [&](std::initializer_list<std::uint8_t> bytes) {
+        for (const auto byte : bytes) {
+            gateway[offset++] = byte;
+        }
+    };
+    auto emit_u64 = [&](std::uintptr_t value) {
+        std::memcpy(gateway + offset, &value, sizeof(value));
+        offset += sizeof(value);
+    };
+    auto emit_save = [&](std::uint8_t reg) {
+        const std::uint8_t rex = static_cast<std::uint8_t>(
+            0x48u | (reg >= 8u ? 0x04u : 0u));
+        const std::uint8_t modrm = static_cast<std::uint8_t>(
+            0x44u | ((reg & 7u) << 3u));
+        emit({rex, 0x89u, modrm, 0x24u, static_cast<std::uint8_t>(reg * 8u)});
+    };
+    auto emit_restore = [&](std::uint8_t reg) {
+        const std::uint8_t rex = static_cast<std::uint8_t>(
+            0x48u | (reg >= 8u ? 0x04u : 0u));
+        const std::uint8_t modrm = static_cast<std::uint8_t>(
+            0x44u | ((reg & 7u) << 3u));
+        emit({rex, 0x8Bu, modrm, 0x24u, static_cast<std::uint8_t>(reg * 8u)});
+    };
+
+    // Preserve every GPR except RSP. Present has no stack arguments, so the
+    // saved original argument registers remain valid for the C++ callback.
+    emit({0x48u, 0x81u, 0xECu,
+          static_cast<std::uint8_t>(kStackFrameSize & 0xFFu),
+          static_cast<std::uint8_t>((kStackFrameSize >> 8u) & 0xFFu),
+          static_cast<std::uint8_t>((kStackFrameSize >> 16u) & 0xFFu),
+          static_cast<std::uint8_t>((kStackFrameSize >> 24u) & 0xFFu)});
+
+    constexpr std::uint8_t kSavedRegisters[] = {
+        0u, 1u, 2u, 3u, 5u, 6u, 7u,
+        8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u};
+    for (const auto reg : kSavedRegisters) {
+        emit_save(reg);
+    }
+
+    // RAX is saved above, so it is safe to use as a volatile absolute-call
+    // register for the C++ callback.
+    emit({0x48u, 0xB8u});
+    emit_u64(callback);
+    emit({0xFFu, 0xD0u});
+
+    for (auto it = std::rbegin(kSavedRegisters);
+         it != std::rend(kSavedRegisters);
+         ++it) {
+        emit_restore(*it);
+    }
+
+    emit({0x48u, 0x81u, 0xC4u,
+          static_cast<std::uint8_t>(kStackFrameSize & 0xFFu),
+          static_cast<std::uint8_t>((kStackFrameSize >> 8u) & 0xFFu),
+          static_cast<std::uint8_t>((kStackFrameSize >> 16u) & 0xFFu),
+          static_cast<std::uint8_t>((kStackFrameSize >> 24u) & 0xFFu)});
+
+    // Register-free absolute jump back to the trampoline. The pointer lives
+    // after the six-byte FF 25 instruction, so no restored register is clobbered.
+    emit({0xFFu, 0x25u, 0x00u, 0x00u, 0x00u, 0x00u});
+    emit_u64(reinterpret_cast<std::uintptr_t>(trampolineAddress));
+
+    if (offset > kGatewaySize) {
+        VirtualFree(gateway, 0, MEM_RELEASE);
+        reset();
+        error = name + ": register-preserving gateway overflow";
+        return false;
+    }
+
+    FlushInstructionCache(
+        GetCurrentProcess(),
+        gateway,
+        offset);
+
+    gateway_ = reinterpret_cast<std::uintptr_t>(gateway);
+    ownsGateway_ = true;
+
+    std::vector<std::uint8_t> patch(patchSize, 0x90u);
+    write_absolute_jump(patch.data(), gateway_);
+
+    if (!patch_function(target_, patch.data(), patch.size(), error)) {
+        reset();
+        return false;
+    }
+
+    return true;
+#else
+    (void)target;
+    (void)callback;
+    (void)patchSize;
+    (void)name;
+    error = "register-preserving inline hooks are Windows-only";
+    return false;
+#endif
+}
+
 bool InlineHook::install_call_site(std::uintptr_t callSite,
                                   std::uintptr_t replacement,
                                   const std::string& name,
@@ -382,6 +513,9 @@ void InlineHook::reset() {
     if (relay_ != 0 && ownsRelay_) {
         VirtualFree(reinterpret_cast<void*>(relay_), 0, MEM_RELEASE);
     }
+    if (gateway_ != 0 && ownsGateway_) {
+        VirtualFree(reinterpret_cast<void*>(gateway_), 0, MEM_RELEASE);
+    }
 #endif
 
     target_ = 0;
@@ -390,6 +524,8 @@ void InlineHook::reset() {
     ownsTrampoline_ = false;
     relay_ = 0;
     ownsRelay_ = false;
+    gateway_ = 0;
+    ownsGateway_ = false;
     originalBytes_.clear();
 }
 
