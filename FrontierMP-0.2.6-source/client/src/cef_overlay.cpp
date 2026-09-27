@@ -952,6 +952,28 @@ bool query_command_queue(
         return false;
     }
 
+    void* vtable = nullptr;
+    __try {
+        vtable = *reinterpret_cast<void**>(candidate);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+
+    if (vtable == nullptr) return false;
+
+    MEMORY_BASIC_INFORMATION vtableMbi{};
+    if (VirtualQuery(
+            vtable,
+            &vtableMbi,
+            sizeof(vtableMbi)) != sizeof(vtableMbi) ||
+        vtableMbi.State != MEM_COMMIT ||
+        (vtableMbi.Protect & PAGE_EXECUTE) == 0 &&
+        (vtableMbi.Protect & PAGE_EXECUTE_READ) == 0 &&
+        (vtableMbi.Protect & PAGE_EXECUTE_READWRITE) == 0 &&
+        (vtableMbi.Protect & PAGE_EXECUTE_WRITECOPY) == 0) {
+        return false;
+    }
+
     __try {
         const auto unknown = reinterpret_cast<IUnknown*>(candidate);
         return SUCCEEDED(
@@ -995,6 +1017,56 @@ bool locate_command_queue(
         if (tryOffset(state.commandQueueOffsets[i])) {
             state.activeCommandQueueOffset = matchedOffset;
             return true;
+        }
+    }
+
+    // The historical RDRMP object layout is not part of the DXGI ABI. If the
+    // private queue field moved, discover a valid command queue dynamically
+    // once and cache the offset for subsequent frames.
+    MEMORY_BASIC_INFORMATION mbi{};
+    if (VirtualQuery(
+            swapChain,
+            &mbi,
+            sizeof(mbi)) == sizeof(mbi) &&
+        mbi.State == MEM_COMMIT &&
+        (mbi.Protect & PAGE_GUARD) == 0 &&
+        (mbi.Protect & PAGE_NOACCESS) == 0) {
+        const auto base =
+            reinterpret_cast<std::uintptr_t>(swapChain);
+        const auto regionBegin =
+            reinterpret_cast<std::uintptr_t>(mbi.BaseAddress);
+        const auto regionEnd =
+            regionBegin + mbi.RegionSize;
+        if (base >= regionBegin && base < regionEnd) {
+            const std::size_t scanBytes =
+                std::min<std::size_t>(
+                    static_cast<std::size_t>(regionEnd - base),
+                    0x600u);
+
+            for (std::size_t offset = sizeof(void*);
+                 offset + sizeof(void*) <= scanBytes;
+                 offset += sizeof(void*)) {
+                void* candidate = nullptr;
+                if (!read_swapchain_pointer(
+                        swapChain,
+                        offset,
+                        candidate)) {
+                    continue;
+                }
+
+                ComPtr<ID3D12CommandQueue> resolved;
+                if (!query_command_queue(candidate, resolved)) {
+                    continue;
+                }
+
+                queue = std::move(resolved);
+                matchedOffset = offset;
+                state.activeCommandQueueOffset = offset;
+                log_line(
+                    "[FrontierD3D] discovered D3D12 command queue offset dynamically: " +
+                    std::to_string(offset));
+                return true;
+            }
         }
     }
 
