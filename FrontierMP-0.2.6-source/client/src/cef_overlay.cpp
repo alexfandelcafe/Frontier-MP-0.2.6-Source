@@ -1229,7 +1229,8 @@ bool install_historical_present_hook(
     state.historicalPresentHook = std::move(presentHook);
     state.historicalPresentDetourAttached = true;
     state.sharedPresentPatched = true;
-    state.capturedCommandQueue = queue;
+    state.capturedCommandQueue.Reset();
+    state.capturedSwapChainRef.Reset();
 
     std::ostringstream message;
     message << "[FrontierD3D] historical shared detours installed"
@@ -3419,8 +3420,8 @@ void CefOverlay::on_present(::IDXGISwapChain* swapChain) {
             std::lock_guard lock(g_presentHook.mutex);
             capturedHistoricalQueue =
                 g_presentHook.capturedCommandQueue != nullptr &&
-                (g_presentHook.capturedSwapChainRef == nullptr ||
-                 g_presentHook.capturedSwapChainRef.Get() == swapChain);
+                g_presentHook.capturedSwapChainRef != nullptr &&
+                g_presentHook.capturedSwapChainRef.Get() == swapChain;
             if (capturedHistoricalQueue) {
                 commandQueue = g_presentHook.capturedCommandQueue;
             }
