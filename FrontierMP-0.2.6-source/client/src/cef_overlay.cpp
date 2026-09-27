@@ -2099,8 +2099,6 @@ bool install_render_path(CefOverlay* overlay) {
     }
 
     log_line("[FrontierD3D] no targeted RDR D3D11/DXGI render path could be hooked");
-    return false;
-}
 
     // The historical path patches the shared IDXGISwapChain vtable exposed by
     // a probe object. On current RDR this global COM-vtable mutation can be
