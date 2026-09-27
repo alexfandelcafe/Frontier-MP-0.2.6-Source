@@ -410,6 +410,49 @@ private:
     IMPLEMENT_REFCOUNTING(FrontierCefClient);
 };
 
+struct PresentHookState final {
+    using CreateSwapChainForHwndProc = HRESULT(STDMETHODCALLTYPE*)(
+        IDXGIFactory2*,
+        IUnknown*,
+        HWND,
+        const DXGI_SWAP_CHAIN_DESC1*,
+        const DXGI_SWAP_CHAIN_FULLSCREEN_DESC*,
+        IDXGIOutput*,
+        IDXGISwapChain1**);
+
+    using PresentProc = HRESULT(STDMETHODCALLTYPE*)(
+        IDXGISwapChain*,
+        UINT,
+        UINT);
+
+    using Present1Proc = HRESULT(STDMETHODCALLTYPE*)(
+        IDXGISwapChain1*,
+        UINT,
+        UINT,
+        const DXGI_PRESENT_PARAMETERS*);
+
+    std::mutex mutex;
+    std::atomic<CefOverlay*> overlay{nullptr};
+    HMODULE rdrModule{};
+
+    std::unique_ptr<frontier::game::InlineHook> historicalCreateSwapChainForHwndHook{};
+    bool historicalCreateSwapChainForHwndDetourAttached{};
+    CreateSwapChainForHwndProc historicalCreateSwapChainForHwndOriginal{};
+
+    std::unique_ptr<frontier::game::InlineHook> historicalPresentHook{};
+    bool historicalPresentDetourAttached{};
+
+    PresentProc presentOriginal{};
+    Present1Proc present1Original{};
+
+    ComPtr<ID3D12CommandQueue> capturedCommandQueue{};
+    ComPtr<IDXGISwapChain> capturedSwapChainRef{};
+
+    bool installed{};
+};
+
+PresentHookState g_presentHook{};
+
 HRESULT STDMETHODCALLTYPE frontier_shared_create_swap_chain_for_hwnd(
     IDXGIFactory2* factory,
     IUnknown* device,
@@ -683,13 +726,6 @@ void unhook_render_path() {
         g_presentHook.historicalPresentHook.reset();
     }
     g_presentHook.historicalPresentDetourAttached = false;
-    g_presentHook.sharedPresentPatched = false;
-    g_presentHook.sharedPresentOriginal = nullptr;
-    g_presentHook.sharedSwapChainVtable = nullptr;
-    g_presentHook.sharedPresent1Patched = false;
-    g_presentHook.sharedPresent1Original = nullptr;
-    g_presentHook.sharedSwapChain1Vtable = nullptr;
-
     g_presentHook.presentOriginal = nullptr;
     g_presentHook.present1Original = nullptr;
     g_presentHook.rdrModule = nullptr;
