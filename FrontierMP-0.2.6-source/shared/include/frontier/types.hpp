@@ -26,7 +26,7 @@ struct SpawnPoint final {
     float yaw{};
 };
 
-inline constexpr std::uint16_t kProtocolVersion = 1;
+inline constexpr std::uint16_t kProtocolVersion = 2;
 inline constexpr std::uint32_t kDefaultPlayerActorModel = 837u; // ACTOR_MPPLAYER01
 inline constexpr std::uint16_t kMaxMessageSize = 4096;
 inline constexpr std::uint16_t kServerTickRate = 20;
