@@ -61,7 +61,6 @@ bool EnetClient::start(const std::string& hostName, std::uint16_t port, const st
     }
 
     playerName_ = playerName;
-    port_ = port;
     localPlayerId_ = 0;
     welcomeSent_ = false;
     connected_ = false;
@@ -177,7 +176,7 @@ void EnetClient::handle_packet(const std::uint8_t* data, std::size_t size) {
         players_[player.playerId] = player;
         if (localPlayerId_ == 0) {
             localPlayerId_ = player.playerId;
-            if (onPlayerEvent_) onPlayerEvent_(player);
+            if (onPlayer_) onPlayerEvent_(player);
         } else if (player.playerId == localPlayerId_ && onPlayerEvent_) {
             onPlayerEvent_(player);
         }
