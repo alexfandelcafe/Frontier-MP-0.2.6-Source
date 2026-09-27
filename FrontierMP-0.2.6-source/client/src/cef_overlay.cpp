@@ -3540,6 +3540,39 @@ void CefOverlay::on_present(::IDXGISwapChain* swapChain) {
             return;
         }
 
+        if (state_->frameGeneration != state_->uploadedGeneration) {
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            const HRESULT mapResult =
+                state_->d3dContext->Map(
+                    state_->uiTexture.Get(),
+                    0,
+                    D3D11_MAP_WRITE_DISCARD,
+                    0,
+                    &mapped);
+            if (FAILED(mapResult)) {
+                std::ostringstream message;
+                message << "[FrontierD3D] Map(CEF texture) failed hr=0x"
+                        << std::hex
+                        << static_cast<unsigned long>(mapResult);
+                log_line(message.str());
+                return;
+            }
+
+            const std::size_t rowBytes =
+                static_cast<std::size_t>(state_->frameWidth) * 4u;
+            for (int y = 0; y < state_->frameHeight; ++y) {
+                std::memcpy(
+                    static_cast<std::uint8_t*>(mapped.pData) +
+                        static_cast<std::size_t>(y) * mapped.RowPitch,
+                    state_->frame.data() +
+                        static_cast<std::size_t>(y) * rowBytes,
+                    rowBytes);
+            }
+
+            state_->d3dContext->Unmap(state_->uiTexture.Get(), 0);
+            state_->uploadedGeneration = state_->frameGeneration;
+        }
+
         ID3D11Resource* resources[]{
             state_->wrappedBackBuffers[bufferIndex].Get()
         };
