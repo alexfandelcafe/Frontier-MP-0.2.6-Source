@@ -87,8 +87,6 @@ void Server::handle_packet(Connection* connection, const std::vector<std::uint8_
     protocol::Message message{};
     if (!protocol::decode_packet(bytes, header, message)) return;
 
-    // Hello establishes the session. After Welcome, reject packets that do
-    // not carry the server-issued connection id recorded for this endpoint.
     const bool newHandshake =
         message.type == protocol::MessageType::Hello &&
         connection->welcomed &&
@@ -104,24 +102,75 @@ void Server::handle_packet(Connection* connection, const std::vector<std::uint8_
         connection->reliability = {};
         connection->connectionId = make_u64_token();
         connection->stateInitialized = false;
+        connection->nextChannelSequence = {{1, 1}};
+        connection->nextControlReceiveSequence = 1;
+        connection->lastStateReceiveSequence = 0;
+        connection->controlReceiveInitialized = false;
+        connection->pendingControlMessages.clear();
     }
 
     connection->reliability.acknowledge(header.ack, header.ackBits);
     if (!connection->receiveHistory.accept(header.sequence)) return;
     connection->lastReceiveMs = nowMs;
 
+    if (message.channelSequence == 0) return;
+
+    if (message.channel == protocol::Channel::State) {
+        if (message.channelSequence <= connection->lastStateReceiveSequence) return;
+        connection->lastStateReceiveSequence = message.channelSequence;
+        dispatch_message(*connection, message, nowMs);
+        return;
+    }
+
+    if (message.channel != protocol::Channel::Control) {
+        dispatch_message(*connection, message, nowMs);
+        return;
+    }
+
+    if (!connection->controlReceiveInitialized) {
+        connection->controlReceiveInitialized = true;
+        connection->nextControlReceiveSequence = 1;
+    }
+
+    if (message.channelSequence < connection->nextControlReceiveSequence) return;
+
+    if (message.channelSequence > connection->nextControlReceiveSequence) {
+        constexpr std::uint32_t kMaxBufferedControlGap = 64;
+        if (message.channelSequence - connection->nextControlReceiveSequence > kMaxBufferedControlGap) {
+            return;
+        }
+        connection->pendingControlMessages[message.channelSequence] = std::move(message);
+        return;
+    }
+
+    dispatch_message(*connection, message, nowMs);
+    ++connection->nextControlReceiveSequence;
+
+    for (;;) {
+        auto it = connection->pendingControlMessages.find(connection->nextControlReceiveSequence);
+        if (it == connection->pendingControlMessages.end()) break;
+        dispatch_message(*connection, it->second, nowMs);
+        connection->pendingControlMessages.erase(it);
+        ++connection->nextControlReceiveSequence;
+    }
+}
+
+void Server::dispatch_message(Connection& connection, const protocol::Message& message, std::uint64_t nowMs) {
     switch (message.type) {
     case protocol::MessageType::Hello:
-        handle_hello(*connection, message, nowMs);
+        handle_hello(connection, message, nowMs);
         break;
     case protocol::MessageType::PlayerState:
-        if (connection->welcomed) handle_player_state(*connection, message, nowMs);
+        if (connection.welcomed) handle_player_state(connection, message, nowMs);
         break;
     case protocol::MessageType::Ping:
-        send_message(*connection, protocol::MessageType::Pong, protocol::Channel::Control, false, {});
+        send_message(connection, protocol::MessageType::Pong, protocol::Channel::Control, false, {});
         break;
     case protocol::MessageType::Goodbye:
-        connection->lastReceiveMs = nowMs > config_.clientTimeoutMs ? nowMs - config_.clientTimeoutMs - 1 : 1;
+        connection.lastReceiveMs =
+            nowMs > config_.clientTimeoutMs
+                ? nowMs - config_.clientTimeoutMs - 1
+                : 1;
         break;
     default:
         break;
@@ -158,6 +207,11 @@ void Server::handle_hello(Connection& connection, const protocol::Message& messa
             connection.stateInitialized = false;
         }
         connection.connectionId = make_u64_token();
+        connection.nextChannelSequence = {{1, 1}};
+        connection.nextControlReceiveSequence = 1;
+        connection.lastStateReceiveSequence = 0;
+        connection.controlReceiveInitialized = false;
+        connection.pendingControlMessages.clear();
         connection.welcomed = true;
     }
 
@@ -222,6 +276,11 @@ void Server::send_message(Connection& connection, protocol::MessageType type, pr
 
     protocol::PacketHeader header{};
     header.sequence = connection.reliability.next_sequence();
+    const auto channelIndex =
+        static_cast<std::size_t>(channel) < connection.nextChannelSequence.size()
+            ? static_cast<std::size_t>(channel)
+            : 0u;
+    message.channelSequence = connection.nextChannelSequence[channelIndex]++;
     header.ack = connection.receiveHistory.highest();
     header.ackBits = connection.receiveHistory.ack_bits();
     header.connectionId = connection.connectionId;
