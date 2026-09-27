@@ -1976,19 +1976,6 @@ bool install_render_path(CefOverlay* overlay) {
         return true;
     }
 
-    std::string historicalError;
-    if (install_historical_present_hook(
-            g_presentHook,
-            historicalError)) {
-        g_presentHook.overlay.store(overlay, std::memory_order_release);
-        g_presentHook.installed = true;
-        return true;
-    }
-
-    log_line(
-        "[FrontierD3D] historical D3D12 Present hook unavailable: " +
-        (historicalError.empty() ? "unknown error" : historicalError));
-
     g_presentHook.rdrModule = GetModuleHandleA("RDR.exe");
     if (g_presentHook.rdrModule == nullptr) {
         log_line("[FrontierD3D] RDR.exe module unavailable while installing fallback render hook");
@@ -2104,16 +2091,36 @@ bool install_render_path(CefOverlay* overlay) {
                 : " IAT hook installed"));
     }
 
-    if (!anyHookInstalled) {
-        log_line("[FrontierD3D] no D3D11/DXGI render fallback could be hooked");
-        return false;
+    if (anyHookInstalled) {
+        g_presentHook.overlay.store(overlay, std::memory_order_release);
+        g_presentHook.installed = true;
+        log_line("[FrontierD3D] targeted RDR IAT/factory render path active");
+        return true;
     }
 
-    g_presentHook.overlay.store(overlay, std::memory_order_release);
-    g_presentHook.installed = true;
-    return true;
+    log_line("[FrontierD3D] no targeted RDR D3D11/DXGI render path could be hooked");
+    return false;
 }
 
+    // The historical path patches the shared IDXGISwapChain vtable exposed by
+    // a probe object. On current RDR this global COM-vtable mutation can be
+    // classified as a third-party overlay and produce Rockstar error 25D11007.
+    // Keep it only as a last-resort compatibility path.
+    std::string historicalError;
+    if (install_historical_present_hook(
+            g_presentHook,
+            historicalError)) {
+        g_presentHook.overlay.store(overlay, std::memory_order_release);
+        g_presentHook.installed = true;
+        log_line("[FrontierD3D] historical shared Present path enabled as last resort");
+        return true;
+    }
+
+    log_line(
+        "[FrontierD3D] all D3D render paths unavailable: " +
+        (historicalError.empty() ? "unknown error" : historicalError));
+    return false;
+}
 HRESULT STDMETHODCALLTYPE frontier_present(
     IDXGISwapChain* swapChain,
     UINT syncInterval,
