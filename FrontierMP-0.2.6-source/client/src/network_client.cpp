@@ -3,10 +3,62 @@
 #include <chrono>
 #include <cstdio>
 #include <random>
+#include <cstdlib>
 
 namespace frontier::client {
+namespace {
+bool env_enabled(const char* name) {
+    const char* value = std::getenv(name);
+    return value != nullptr && std::string(value) == "1";
+}
+}
 
 bool NetworkClient::start(const std::string& host, std::uint16_t port, const std::string& playerName, const std::string& buildId, std::uint64_t buildHash, const std::string& sessionToken) {
+#ifdef FRONTIER_RDRMP_ENET_AVAILABLE
+    useRdrmpCompat_ = env_enabled("FRONTIER_RDRMP_COMPAT");
+    if (useRdrmpCompat_) {
+        playerName_ = playerName;
+        playerId_ = 0;
+        state_ = ConnectionState::Handshaking;
+        rdrmpServerTick_ = 0;
+        rdrmp_.set_on_player([this](const rdrmp::PlayerCreate& player) {
+            if (playerId_ == 0) {
+                playerId_ = player.playerId;
+                state_ = ConnectionState::Connected;
+            }
+            if (onWelcome_ && player.playerId == playerId_) {
+                protocol::Welcome welcome{};
+                welcome.playerId = player.playerId;
+                welcome.serverTick = ++rdrmpServerTick_;
+                welcome.spawn.position = player.position;
+                welcome.spawn.yaw = player.rotation.y;
+                onWelcome_(welcome);
+            }
+        });
+        rdrmp_.set_on_snapshot([this](const std::vector<rdrmp::PlayerCreate>& players) {
+            protocol::Snapshot snapshot{};
+            snapshot.serverTick = ++rdrmpServerTick_;
+            snapshot.players.reserve(players.size());
+            for (const auto& player : players) {
+                PlayerState state{};
+                state.playerId = player.playerId;
+                state.clientTick = snapshot.serverTick;
+                state.position = player.position;
+                state.yaw = player.rotation.y;
+                snapshot.players.push_back(state);
+            }
+            if (onSnapshot_) onSnapshot_(snapshot);
+        });
+        rdrmp_.set_on_disconnect([this](const std::string& reason) {
+            state_ = ConnectionState::Disconnected;
+            playerId_ = 0;
+            if (onDisconnect_) onDisconnect_(reason);
+        });
+        if (!rdrmp_.start(host, port, playerName)) return false;
+        state_ = ConnectionState::Handshaking;
+        return true;
+    }
+#endif
     if (!socket_.open()) return false;
     server_ = {host, port};
     playerName_ = playerName;
@@ -28,6 +80,15 @@ bool NetworkClient::start(const std::string& host, std::uint16_t port, const std
 }
 
 void NetworkClient::stop() {
+#ifdef FRONTIER_RDRMP_ENET_AVAILABLE
+    if (useRdrmpCompat_) {
+        rdrmp_.stop();
+        useRdrmpCompat_ = false;
+        playerId_ = 0;
+        state_ = ConnectionState::Disconnected;
+        return;
+    }
+#endif
     if (state_ == ConnectionState::Disconnected) return;
     send_message(protocol::MessageType::Goodbye, protocol::Channel::Control, true, protocol::encode_goodbye({0, "client shutdown"}));
     socket_.close();
@@ -35,6 +96,13 @@ void NetworkClient::stop() {
 }
 
 void NetworkClient::update(std::uint64_t nowMs) {
+#ifdef FRONTIER_RDRMP_ENET_AVAILABLE
+    if (useRdrmpCompat_) {
+        rdrmp_.update();
+        if (rdrmp_.connected()) state_ = ConnectionState::Connected;
+        return;
+    }
+#endif
     if (state_ == ConnectionState::Disconnected) return;
     Endpoint from;
     std::vector<std::uint8_t> packet;
@@ -54,6 +122,13 @@ void NetworkClient::update(std::uint64_t nowMs) {
 }
 
 void NetworkClient::submit_player_state(PlayerState state) {
+#ifdef FRONTIER_RDRMP_ENET_AVAILABLE
+    if (useRdrmpCompat_) {
+        if (!rdrmp_.connected()) return;
+        (void)rdrmp_.submit_player_state(state, frontier::kDefaultPlayerActorModel);
+        return;
+    }
+#endif
     if (state_ != ConnectionState::Connected) return;
     state.playerId = playerId_;
     send_message(protocol::MessageType::PlayerState, protocol::Channel::State, false, protocol::encode_player_state(state));
