@@ -8,6 +8,7 @@
 #include <d3dcompiler.h>
 #include <dxgi.h>
 #include <dxgi1_2.h>
+#include <dxgi1_4.h>
 #include <wrl/client.h>
 
 #include <algorithm>
@@ -1623,7 +1624,7 @@ HRESULT WINAPI frontier_create_dxgi_factory2(
     {
         std::ostringstream message;
         message << "[FrontierD3D] CreateDXGIFactory2 intercepted riid=" 
-                << static_cast<const void*>(riid)
+                << static_cast<const void*>(&riid)
                 << " flags=0x" << std::hex << flags;
         log_line(message.str());
     }
