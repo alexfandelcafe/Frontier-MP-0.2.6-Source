@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <atomic>
+#include <mutex>
 
 namespace frontier::client {
 
@@ -36,7 +38,7 @@ public:
 
     void clear(frontier::game::RdrBridge& bridge);
 
-    std::size_t size() const { return players_.size(); }
+    std::size_t size() const;
 
 private:
     bool ensure_spawned(RemotePlayer& player, std::uint64_t nowMs,
@@ -44,7 +46,8 @@ private:
     void remove_player(std::unordered_map<std::uint16_t, RemotePlayer>::iterator it,
                        frontier::game::RdrBridge& bridge);
 
-    std::uint16_t localPlayerId_{};
+    std::atomic<std::uint16_t> localPlayerId_{};
+    mutable std::mutex mutex_;
     std::uint32_t latestServerTick_{};
     std::uint64_t lastUpdateMs_{};
     std::unordered_map<std::uint16_t, RemotePlayer> players_;
