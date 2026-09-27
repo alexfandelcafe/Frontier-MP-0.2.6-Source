@@ -3,6 +3,8 @@
 
 #include <windows.h>
 #include <d3d11.h>
+#include <d3d11on12.h>
+#include <d3d12.h>
 #include <d3dcompiler.h>
 #include <dxgi.h>
 #include <dxgi1_2.h>
@@ -499,6 +501,14 @@ struct PresentHookState final {
     bool swapchainHooked{};
     bool swapchain1Hooked{};
     bool swapchainUsesExtendedVtable{};
+
+    void** sharedSwapChainVtable{};
+    void* sharedPresentOriginal{};
+    bool sharedPresentPatched{};
+    std::array<std::size_t, 8> commandQueueOffsets{};
+    std::size_t commandQueueOffsetCount{};
+    std::size_t activeCommandQueueOffset{static_cast<std::size_t>(-1)};
+
     bool installed{};
 };
 
@@ -806,6 +816,373 @@ HRESULT STDMETHODCALLTYPE frontier_present(
     IDXGISwapChain* swapChain,
     UINT syncInterval,
     UINT flags);
+
+bool patch_vtable_slot(
+    void** vtable,
+    std::size_t index,
+    void* replacement,
+    void*& original,
+    std::string& error) {
+    if (vtable == nullptr || replacement == nullptr) {
+        error = "invalid vtable/replacement";
+        return false;
+    }
+
+    DWORD oldProtect = 0;
+    if (!VirtualProtect(
+            &vtable[index],
+            sizeof(void*),
+            PAGE_READWRITE,
+            &oldProtect)) {
+        error = "VirtualProtect(vtable) failed";
+        return false;
+    }
+
+    original = vtable[index];
+    vtable[index] = replacement;
+
+    DWORD ignored = 0;
+    VirtualProtect(&vtable[index], sizeof(void*), oldProtect, &ignored);
+    FlushInstructionCache(
+        GetCurrentProcess(),
+        &vtable[index],
+        sizeof(void*));
+    return true;
+}
+
+std::size_t collect_pointer_offsets(
+    void* object,
+    const void* needle,
+    std::array<std::size_t, 8>& offsets) {
+    offsets.fill(0);
+    if (object == nullptr || needle == nullptr) return 0;
+
+    MEMORY_BASIC_INFORMATION mbi{};
+    if (VirtualQuery(object, &mbi, sizeof(mbi)) != sizeof(mbi) ||
+        mbi.State != MEM_COMMIT ||
+        (mbi.Protect & PAGE_GUARD) != 0 ||
+        (mbi.Protect & PAGE_NOACCESS) != 0) {
+        return 0;
+    }
+
+    const auto base = reinterpret_cast<std::uintptr_t>(object);
+    const auto regionBegin = reinterpret_cast<std::uintptr_t>(mbi.BaseAddress);
+    const auto regionEnd = regionBegin + mbi.RegionSize;
+    if (base < regionBegin || base >= regionEnd) return 0;
+
+    const std::size_t scanBytes =
+        std::min<std::size_t>(
+            static_cast<std::size_t>(regionEnd - base),
+            0x1000u);
+
+    std::size_t count = 0;
+    for (std::size_t offset = 0;
+         offset + sizeof(void*) <= scanBytes;
+         offset += sizeof(void*)) {
+        void* value = nullptr;
+        __try {
+            value = *reinterpret_cast<void**>(base + offset);
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            value = nullptr;
+        }
+
+        if (value == needle) {
+            offsets[count++] = offset;
+            if (count == offsets.size()) break;
+        }
+    }
+
+    return count;
+}
+
+bool read_swapchain_pointer(
+    IDXGISwapChain* swapChain,
+    std::size_t offset,
+    void*& pointer) {
+    pointer = nullptr;
+    if (swapChain == nullptr) return false;
+
+    MEMORY_BASIC_INFORMATION mbi{};
+    if (VirtualQuery(
+            swapChain,
+            &mbi,
+            sizeof(mbi)) != sizeof(mbi) ||
+        mbi.State != MEM_COMMIT ||
+        (mbi.Protect & PAGE_GUARD) != 0 ||
+        (mbi.Protect & PAGE_NOACCESS) != 0) {
+        return false;
+    }
+
+    const auto base = reinterpret_cast<std::uintptr_t>(swapChain);
+    const auto regionBegin = reinterpret_cast<std::uintptr_t>(mbi.BaseAddress);
+    const auto regionEnd = regionBegin + mbi.RegionSize;
+    if (base < regionBegin ||
+        offset > static_cast<std::size_t>(regionEnd - base) ||
+        sizeof(void*) > regionEnd - base - offset) {
+        return false;
+    }
+
+    __try {
+        pointer = *reinterpret_cast<void**>(base + offset);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        pointer = nullptr;
+        return false;
+    }
+
+    return pointer != nullptr;
+}
+
+bool query_command_queue(
+    void* candidate,
+    ComPtr<ID3D12CommandQueue>& queue) {
+    queue.Reset();
+    if (candidate == nullptr) return false;
+
+    MEMORY_BASIC_INFORMATION mbi{};
+    if (VirtualQuery(
+            candidate,
+            &mbi,
+            sizeof(mbi)) != sizeof(mbi) ||
+        mbi.State != MEM_COMMIT ||
+        (mbi.Protect & PAGE_GUARD) != 0 ||
+        (mbi.Protect & PAGE_NOACCESS) != 0) {
+        return false;
+    }
+
+    __try {
+        const auto unknown = reinterpret_cast<IUnknown*>(candidate);
+        return SUCCEEDED(
+            unknown->QueryInterface(IID_PPV_ARGS(&queue)));
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        queue.Reset();
+        return false;
+    }
+}
+
+bool locate_command_queue(
+    PresentHookState& state,
+    IDXGISwapChain* swapChain,
+    ComPtr<ID3D12CommandQueue>& queue,
+    std::size_t& matchedOffset) {
+    queue.Reset();
+    matchedOffset = static_cast<std::size_t>(-1);
+
+    auto tryOffset = [&](std::size_t offset) -> bool {
+        void* candidate = nullptr;
+        if (!read_swapchain_pointer(swapChain, offset, candidate)) {
+            return false;
+        }
+
+        ComPtr<ID3D12CommandQueue> resolved;
+        if (!query_command_queue(candidate, resolved)) {
+            return false;
+        }
+
+        queue = std::move(resolved);
+        matchedOffset = offset;
+        return true;
+    };
+
+    if (state.activeCommandQueueOffset != static_cast<std::size_t>(-1) &&
+        tryOffset(state.activeCommandQueueOffset)) {
+        return true;
+    }
+
+    for (std::size_t i = 0; i < state.commandQueueOffsetCount; ++i) {
+        if (tryOffset(state.commandQueueOffsets[i])) {
+            state.activeCommandQueueOffset = matchedOffset;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool install_historical_present_hook(
+    PresentHookState& state,
+    std::string& error) {
+    error.clear();
+
+    if (GetModuleHandleA("dxgi.dll") == nullptr ||
+        GetModuleHandleA("d3d12.dll") == nullptr) {
+        error = "dxgi.dll/d3d12.dll not loaded";
+        return false;
+    }
+
+    const char* const className = "FrontierMP_D3DProbe";
+    WNDCLASSA windowClass{};
+    windowClass.lpfnWndProc = DefWindowProcA;
+    windowClass.hInstance = GetModuleHandleA(nullptr);
+    windowClass.lpszClassName = className;
+
+    RegisterClassA(&windowClass);
+    HWND probeWindow = CreateWindowExA(
+        0,
+        className,
+        "FrontierMP D3D Probe",
+        WS_OVERLAPPEDWINDOW,
+        0,
+        0,
+        2,
+        2,
+        nullptr,
+        nullptr,
+        windowClass.hInstance,
+        nullptr);
+
+    if (probeWindow == nullptr) {
+        UnregisterClassA(className, windowClass.hInstance);
+        error = "failed to create D3D probe window";
+        return false;
+    }
+
+    ComPtr<IDXGIFactory2> factory;
+    HRESULT result = CreateDXGIFactory1(IID_PPV_ARGS(&factory));
+    if (FAILED(result) || factory == nullptr) {
+        DestroyWindow(probeWindow);
+        UnregisterClassA(className, windowClass.hInstance);
+        error = "CreateDXGIFactory1 probe failed";
+        return false;
+    }
+
+    ComPtr<IDXGIAdapter1> adapter;
+    result = factory->EnumAdapters1(0, &adapter);
+    if (FAILED(result) || adapter == nullptr) {
+        DestroyWindow(probeWindow);
+        UnregisterClassA(className, windowClass.hInstance);
+        error = "EnumAdapters1 probe failed";
+        return false;
+    }
+
+    ComPtr<ID3D12Device> device;
+    result = D3D12CreateDevice(
+        adapter.Get(),
+        D3D_FEATURE_LEVEL_11_0,
+        IID_PPV_ARGS(&device));
+    if (FAILED(result) || device == nullptr) {
+        DestroyWindow(probeWindow);
+        UnregisterClassA(className, windowClass.hInstance);
+        error = "D3D12CreateDevice probe failed";
+        return false;
+    }
+
+    D3D12_COMMAND_QUEUE_DESC queueDesc{};
+    queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+    queueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+    queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+
+    ComPtr<ID3D12CommandQueue> queue;
+    result = device->CreateCommandQueue(
+        &queueDesc,
+        IID_PPV_ARGS(&queue));
+    if (FAILED(result) || queue == nullptr) {
+        DestroyWindow(probeWindow);
+        UnregisterClassA(className, windowClass.hInstance);
+        error = "CreateCommandQueue probe failed";
+        return false;
+    }
+
+    DXGI_SWAP_CHAIN_DESC1 swapChainDesc{};
+    swapChainDesc.Width = 2;
+    swapChainDesc.Height = 2;
+    swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    swapChainDesc.SampleDesc.Count = 1;
+    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    swapChainDesc.BufferCount = 2;
+    swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
+    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
+
+    ComPtr<IDXGISwapChain1> probeSwapChain1;
+    result = factory->CreateSwapChainForHwnd(
+        queue.Get(),
+        probeWindow,
+        &swapChainDesc,
+        nullptr,
+        nullptr,
+        &probeSwapChain1);
+    if (FAILED(result) || probeSwapChain1 == nullptr) {
+        DestroyWindow(probeWindow);
+        UnregisterClassA(className, windowClass.hInstance);
+        error = "CreateSwapChainForHwnd probe failed";
+        return false;
+    }
+
+    ComPtr<IDXGISwapChain> probeSwapChain;
+    result = probeSwapChain1.As(&probeSwapChain);
+    if (FAILED(result) || probeSwapChain == nullptr) {
+        DestroyWindow(probeWindow);
+        UnregisterClassA(className, windowClass.hInstance);
+        error = "probe swapchain QueryInterface failed";
+        return false;
+    }
+
+    void*** vtableAddress =
+        reinterpret_cast<void***>(probeSwapChain.Get());
+    if (vtableAddress == nullptr || *vtableAddress == nullptr) {
+        DestroyWindow(probeWindow);
+        UnregisterClassA(className, windowClass.hInstance);
+        error = "probe swapchain vtable unavailable";
+        return false;
+    }
+
+    void** vtable = *vtableAddress;
+    state.presentOriginal =
+        reinterpret_cast<PresentHookState::PresentProc>(vtable[8]);
+
+    if (state.presentOriginal == nullptr) {
+        DestroyWindow(probeWindow);
+        UnregisterClassA(className, windowClass.hInstance);
+        error = "probe Present entry unavailable";
+        return false;
+    }
+
+    state.commandQueueOffsetCount = collect_pointer_offsets(
+        probeSwapChain.Get(),
+        queue.Get(),
+        state.commandQueueOffsets);
+
+    if (state.commandQueueOffsetCount == 0) {
+        DestroyWindow(probeWindow);
+        UnregisterClassA(className, windowClass.hInstance);
+        error = "probe swapchain does not expose command queue field";
+        return false;
+    }
+
+    void* original = nullptr;
+    std::string patchError;
+    if (!patch_vtable_slot(
+            vtable,
+            8,
+            reinterpret_cast<void*>(&frontier_present),
+            original,
+            patchError)) {
+        DestroyWindow(probeWindow);
+        UnregisterClassA(className, windowClass.hInstance);
+        error = patchError;
+        return false;
+    }
+
+    state.sharedSwapChainVtable = vtable;
+    state.sharedPresentOriginal = original;
+    state.sharedPresentPatched = true;
+    state.activeCommandQueueOffset =
+        static_cast<std::size_t>(-1);
+
+    std::ostringstream message;
+    message << "[FrontierD3D] historical D3D12 Present hook installed"
+            << " present=" << original
+            << " queueFieldOffsets="
+            << state.commandQueueOffsetCount
+            << " firstQueueOffset="
+            << state.commandQueueOffsets[0];
+    log_line(message.str());
+
+    DestroyWindow(probeWindow);
+    UnregisterClassA(className, windowClass.hInstance);
+    return true;
+}
+
 
 HRESULT STDMETHODCALLTYPE frontier_present1(
     IDXGISwapChain1* swapChain,
@@ -1314,6 +1691,39 @@ void unhook_render_path() {
 
     g_presentHook.overlay.store(nullptr, std::memory_order_release);
 
+    if (g_presentHook.sharedPresentPatched &&
+        g_presentHook.sharedSwapChainVtable != nullptr &&
+        g_presentHook.sharedSwapChainVtable[8] ==
+            reinterpret_cast<void*>(&frontier_present)) {
+        DWORD oldProtect = 0;
+        if (VirtualProtect(
+                &g_presentHook.sharedSwapChainVtable[8],
+                sizeof(void*),
+                PAGE_READWRITE,
+                &oldProtect)) {
+            g_presentHook.sharedSwapChainVtable[8] =
+                g_presentHook.sharedPresentOriginal;
+            DWORD ignored = 0;
+            VirtualProtect(
+                &g_presentHook.sharedSwapChainVtable[8],
+                sizeof(void*),
+                oldProtect,
+                &ignored);
+            FlushInstructionCache(
+                GetCurrentProcess(),
+                &g_presentHook.sharedSwapChainVtable[8],
+                sizeof(void*));
+        }
+    }
+
+    g_presentHook.sharedSwapChainVtable = nullptr;
+    g_presentHook.sharedPresentOriginal = nullptr;
+    g_presentHook.sharedPresentPatched = false;
+    g_presentHook.commandQueueOffsets.fill(0);
+    g_presentHook.commandQueueOffsetCount = 0;
+    g_presentHook.activeCommandQueueOffset =
+        static_cast<std::size_t>(-1);
+
     if (g_presentHook.swapchainUsesExtendedVtable &&
         g_presentHook.swapchain1Hooked &&
         g_presentHook.hookedSwapChain1Ref != nullptr) {
@@ -1421,9 +1831,22 @@ bool install_render_path(CefOverlay* overlay) {
         return true;
     }
 
+    std::string historicalError;
+    if (install_historical_present_hook(
+            g_presentHook,
+            historicalError)) {
+        g_presentHook.overlay.store(overlay, std::memory_order_release);
+        g_presentHook.installed = true;
+        return true;
+    }
+
+    log_line(
+        "[FrontierD3D] historical D3D12 Present hook unavailable: " +
+        (historicalError.empty() ? "unknown error" : historicalError));
+
     g_presentHook.rdrModule = GetModuleHandleA("RDR.exe");
     if (g_presentHook.rdrModule == nullptr) {
-        log_line("[FrontierD3D] RDR.exe module unavailable while installing render hook");
+        log_line("[FrontierD3D] RDR.exe module unavailable while installing fallback render hook");
         return false;
     }
 
@@ -1441,7 +1864,7 @@ bool install_render_path(CefOverlay* overlay) {
             reinterpret_cast<PresentHookState::CreateDeviceAndSwapChainProc>(
                 g_presentHook.createImport.original);
         anyHookInstalled = true;
-        log_line("[FrontierD3D] D3D11CreateDeviceAndSwapChain IAT hook installed");
+        log_line("[FrontierD3D] fallback D3D11CreateDeviceAndSwapChain IAT hook installed");
     } else {
         void* delayOriginal = nullptr;
         std::string delayError;
@@ -1457,10 +1880,10 @@ bool install_render_path(CefOverlay* overlay) {
                 reinterpret_cast<PresentHookState::CreateDeviceAndSwapChainProc>(
                     delayOriginal);
             anyHookInstalled = true;
-            log_line("[FrontierD3D] D3D11CreateDeviceAndSwapChain delay-IAT hook installed");
+            log_line("[FrontierD3D] fallback D3D11CreateDeviceAndSwapChain delay-IAT hook installed");
         } else {
             log_line(
-                "[FrontierD3D] D3D11CreateDeviceAndSwapChain IAT hook unavailable: " +
+                "[FrontierD3D] fallback D3D11CreateDeviceAndSwapChain unavailable: " +
                 error +
                 " delay=" +
                 delayError);
@@ -1502,10 +1925,17 @@ bool install_render_path(CefOverlay* overlay) {
             }
         }
 
+        if (g_presentHook.factoryImportCount >=
+            g_presentHook.factoryImports.size()) {
+            restore_import(patch);
+            continue;
+        }
+
         g_presentHook.factoryImports[g_presentHook.factoryImportCount++] = patch;
         void* factoryOriginal = resolvedFactory != nullptr
             ? resolvedFactory
             : patch.original;
+
         if (i == 0) {
             g_presentHook.createFactoryOriginal =
                 reinterpret_cast<PresentHookState::CreateDXGIFactoryProc>(
@@ -1522,7 +1952,7 @@ bool install_render_path(CefOverlay* overlay) {
 
         anyHookInstalled = true;
         log_line(
-            std::string("[FrontierD3D] ") +
+            std::string("[FrontierD3D] fallback ") +
             factoryNames[i] +
             (resolvedFactory != nullptr
                 ? " delay-IAT hook installed"
@@ -1530,7 +1960,7 @@ bool install_render_path(CefOverlay* overlay) {
     }
 
     if (!anyHookInstalled) {
-        log_line("[FrontierD3D] no D3D11/DXGI render-creation import could be hooked");
+        log_line("[FrontierD3D] no D3D11/DXGI render fallback could be hooked");
         return false;
     }
 
@@ -1554,7 +1984,8 @@ HRESULT STDMETHODCALLTYPE frontier_present(
         shouldRender =
             overlay != nullptr &&
             original != nullptr &&
-            swapChain == g_presentHook.hookedSwapChain;
+            (g_presentHook.sharedPresentPatched ||
+             swapChain == g_presentHook.hookedSwapChain);
     }
 
     static std::atomic<std::uint32_t> traceCount{0};
@@ -1715,7 +2146,14 @@ struct CefOverlay::State final {
 
     ComPtr<ID3D11Device> d3dDevice{};
     ComPtr<ID3D11DeviceContext> d3dContext{};
+    ComPtr<ID3D11On12Device> d3d11On12Device{};
+    ComPtr<ID3D12Device> d3d12Device{};
+    ComPtr<ID3D12CommandQueue> d3d12Queue{};
     ComPtr<ID3D11Texture2D> uiTexture{};
+
+    std::vector<ComPtr<ID3D12Resource>> sourceBackBuffers12{};
+    std::vector<ComPtr<ID3D11Resource>> wrappedBackBuffers{};
+    std::vector<ComPtr<ID3D11RenderTargetView>> wrappedBackBufferViews{};
     ComPtr<ID3D11ShaderResourceView> uiTextureView{};
     ComPtr<ID3D11Texture2D> backBuffer{};
     ComPtr<ID3D11RenderTargetView> backBufferView{};
@@ -2075,7 +2513,10 @@ void CefOverlay::pump_on_game_thread() {
         return;
     }
 
-    CefDoMessageLoopWork();
+    // Historical RDRMP advanced CEF from the render callback itself.
+    if (!g_presentHook.sharedPresentPatched) {
+        CefDoMessageLoopWork();
+    }
 
     if (frontendConnectRequested_.load(std::memory_order_acquire) &&
         bridge_ != nullptr &&
@@ -2764,11 +3205,302 @@ void CefOverlay::on_present(::IDXGISwapChain* swapChain) {
         return;
     }
 
+    if (g_presentHook.sharedPresentPatched) {
+        CefDoMessageLoopWork();
+    }
+
     std::lock_guard frameLock(state_->frameMutex);
     if (state_->frame.empty() ||
         state_->frameWidth <= 0 ||
         state_->frameHeight <= 0 ||
         state_->frameGeneration == 0) {
+        return;
+    }
+
+    ComPtr<ID3D12Device> d3d12Device;
+    if (SUCCEEDED(swapChain->GetDevice(
+            IID_PPV_ARGS(&d3d12Device))) &&
+        d3d12Device != nullptr) {
+        ComPtr<ID3D12CommandQueue> commandQueue;
+        std::size_t queueOffset = static_cast<std::size_t>(-1);
+        if (!locate_command_queue(
+                g_presentHook,
+                swapChain,
+                commandQueue,
+                queueOffset)) {
+            static std::atomic<std::uint32_t> missingQueueTrace{0};
+            const auto trace = missingQueueTrace.fetch_add(1, std::memory_order_relaxed);
+            if (trace < 8) {
+                std::ostringstream message;
+                message << "[FrontierD3D] D3D12 Present detected but command queue field was not resolved"
+                        << " swapchain=" << static_cast<const void*>(swapChain)
+                        << " device=" << static_cast<const void*>(d3d12Device.Get())
+                        << " knownOffsets=" << g_presentHook.commandQueueOffsetCount;
+                log_line(message.str());
+            }
+            return;
+        }
+
+        if (state_->d3d12Device.Get() != d3d12Device.Get() ||
+            state_->d3d12Queue.Get() != commandQueue.Get()) {
+            state_->d3d12Device.Reset();
+            state_->d3d12Queue.Reset();
+            state_->d3d11On12Device.Reset();
+            state_->d3dContext.Reset();
+            state_->d3dDevice.Reset();
+            state_->sourceBackBuffers12.clear();
+            state_->wrappedBackBuffers.clear();
+            state_->wrappedBackBufferViews.clear();
+
+            D3D_FEATURE_LEVEL levels[]{
+                D3D_FEATURE_LEVEL_11_0,
+                D3D_FEATURE_LEVEL_11_1
+            };
+            IUnknown* queues[]{commandQueue.Get()};
+            D3D_FEATURE_LEVEL chosenLevel{};
+
+            const HRESULT bridgeResult = D3D11On12CreateDevice(
+                d3d12Device.Get(),
+                D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                levels,
+                static_cast<UINT>(std::size(levels)),
+                queues,
+                1,
+                0,
+                &state_->d3dDevice,
+                &state_->d3dContext,
+                &chosenLevel);
+
+            if (FAILED(bridgeResult) ||
+                state_->d3dDevice == nullptr ||
+                state_->d3dContext == nullptr) {
+                std::ostringstream message;
+                message << "[FrontierD3D] D3D11On12CreateDevice failed hr=0x"
+                        << std::hex
+                        << static_cast<unsigned long>(bridgeResult);
+                log_line(message.str());
+                return;
+            }
+
+            if (FAILED(state_->d3dDevice.As(
+                    &state_->d3d11On12Device)) ||
+                state_->d3d11On12Device == nullptr) {
+                log_line("[FrontierD3D] QI ID3D11On12Device failed");
+                state_->d3dContext.Reset();
+                state_->d3dDevice.Reset();
+                return;
+            }
+
+            state_->d3d12Device = d3d12Device;
+            state_->d3d12Queue = commandQueue;
+
+            std::ostringstream message;
+            message << "[FrontierD3D] D3D11On12 bridge initialized"
+                    << " device=" << static_cast<const void*>(d3d12Device.Get())
+                    << " queue=" << static_cast<const void*>(commandQueue.Get())
+                    << " queueOffset=" << queueOffset
+                    << " featureLevel=0x" << std::hex
+                    << static_cast<unsigned long>(chosenLevel);
+            log_line(message.str());
+        }
+
+        ComPtr<IDXGISwapChain3> swapChain3;
+        if (FAILED(swapChain->QueryInterface(
+                IID_PPV_ARGS(&swapChain3))) ||
+            swapChain3 == nullptr) {
+            log_line("[FrontierD3D] IDXGISwapChain3 unavailable");
+            return;
+        }
+
+        const UINT bufferIndex =
+            swapChain3->GetCurrentBackBufferIndex();
+        const UINT bufferCount = std::max<UINT>(
+            1u,
+            std::min<UINT>(desc.BufferCount, 8u));
+
+        if (state_->sourceBackBuffers12.size() != bufferCount) {
+            state_->sourceBackBuffers12.resize(bufferCount);
+            state_->wrappedBackBuffers.resize(bufferCount);
+            state_->wrappedBackBufferViews.resize(bufferCount);
+        }
+
+        if (bufferIndex >= state_->sourceBackBuffers12.size()) {
+            log_line("[FrontierD3D] current backbuffer index out of range");
+            return;
+        }
+
+        ComPtr<ID3D12Resource> backBuffer12;
+        if (FAILED(swapChain3->GetBuffer(
+                bufferIndex,
+                IID_PPV_ARGS(&backBuffer12))) ||
+            backBuffer12 == nullptr) {
+            log_line("[FrontierD3D] D3D12 GetBuffer(backbuffer) failed");
+            return;
+        }
+
+        if (state_->sourceBackBuffers12[bufferIndex].Get() != backBuffer12.Get() ||
+            state_->wrappedBackBuffers[bufferIndex] == nullptr ||
+            state_->wrappedBackBufferViews[bufferIndex] == nullptr) {
+            D3D11_RESOURCE_FLAGS flags{};
+            flags.BindFlags = D3D11_BIND_RENDER_TARGET;
+
+            ComPtr<ID3D11Resource> wrapped;
+            const HRESULT wrapResult =
+                state_->d3d11On12Device->CreateWrappedResource(
+                    backBuffer12.Get(),
+                    &flags,
+                    D3D12_RESOURCE_STATE_PRESENT,
+                    D3D12_RESOURCE_STATE_PRESENT,
+                    IID_PPV_ARGS(&wrapped));
+
+            if (FAILED(wrapResult) || wrapped == nullptr) {
+                std::ostringstream message;
+                message << "[FrontierD3D] CreateWrappedResource failed hr=0x"
+                        << std::hex
+                        << static_cast<unsigned long>(wrapResult)
+                        << " bufferIndex=" << std::dec << bufferIndex;
+                log_line(message.str());
+                return;
+            }
+
+            ComPtr<ID3D11RenderTargetView> view;
+            const HRESULT viewResult =
+                state_->d3dDevice->CreateRenderTargetView(
+                    wrapped.Get(),
+                    nullptr,
+                    &view);
+            if (FAILED(viewResult) || view == nullptr) {
+                std::ostringstream message;
+                message << "[FrontierD3D] CreateRenderTargetView(wrapped) failed hr=0x"
+                        << std::hex
+                        << static_cast<unsigned long>(viewResult);
+                log_line(message.str());
+                return;
+            }
+
+            state_->sourceBackBuffers12[bufferIndex] = backBuffer12;
+            state_->wrappedBackBuffers[bufferIndex] = wrapped;
+            state_->wrappedBackBufferViews[bufferIndex] = view;
+        }
+
+        if (!create_d3d_resources(
+                *state_,
+                state_->d3dDevice.Get(),
+                state_->frameWidth,
+                state_->frameHeight)) {
+            return;
+        }
+
+        ID3D11Resource* resources[]{
+            state_->wrappedBackBuffers[bufferIndex].Get()
+        };
+        state_->d3d11On12Device->AcquireWrappedResources(
+            resources,
+            1);
+
+        D3D11_VIEWPORT viewport{};
+        viewport.TopLeftX = 0.0f;
+        viewport.TopLeftY = 0.0f;
+        viewport.Width = static_cast<float>(desc.BufferDesc.Width);
+        viewport.Height = static_cast<float>(desc.BufferDesc.Height);
+        viewport.MinDepth = 0.0f;
+        viewport.MaxDepth = 1.0f;
+
+        state_->d3dContext->OMSetRenderTargets(
+            1,
+            state_->wrappedBackBufferViews[bufferIndex].GetAddressOf(),
+            nullptr);
+        state_->d3dContext->RSSetViewports(1, &viewport);
+        state_->d3dContext->RSSetState(state_->rasterizerState.Get());
+        state_->d3dContext->IASetInputLayout(state_->inputLayout.Get());
+        state_->d3dContext->IASetPrimitiveTopology(
+            D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        const struct FrontierVertex final {
+            float x;
+            float y;
+            float z;
+            float u;
+            float v;
+        } vertices[3]{
+            {-1.0f, -1.0f, 0.0f, 0.0f, 1.0f},
+            {-1.0f,  3.0f, 0.0f, 0.0f, -1.0f},
+            { 3.0f, -1.0f, 0.0f, 2.0f, 1.0f}
+        };
+
+        if (state_->vertexBuffer == nullptr) {
+            D3D11_BUFFER_DESC bufferDesc{};
+            bufferDesc.ByteWidth = sizeof(vertices);
+            bufferDesc.Usage = D3D11_USAGE_IMMUTABLE;
+            bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+
+            D3D11_SUBRESOURCE_DATA bufferData{};
+            bufferData.pSysMem = vertices;
+
+            if (FAILED(state_->d3dDevice->CreateBuffer(
+                    &bufferDesc,
+                    &bufferData,
+                    &state_->vertexBuffer))) {
+                log_line("[FrontierD3D] vertex buffer creation failed");
+                state_->d3d11On12Device->ReleaseWrappedResources(
+                    resources,
+                    1);
+                state_->d3dContext->Flush();
+                return;
+            }
+        }
+
+        const UINT stride = sizeof(FrontierVertex);
+        UINT offset = 0;
+        ID3D11Buffer* vertexBuffers[]{
+            state_->vertexBuffer.Get()
+        };
+        state_->d3dContext->IASetVertexBuffers(
+            0,
+            1,
+            vertexBuffers,
+            &stride,
+            &offset);
+        state_->d3dContext->VSSetShader(
+            state_->vertexShader.Get(),
+            nullptr,
+            0);
+        state_->d3dContext->PSSetShader(
+            state_->pixelShader.Get(),
+            nullptr,
+            0);
+
+        ID3D11ShaderResourceView* views[]{
+            state_->uiTextureView.Get()
+        };
+        state_->d3dContext->PSSetShaderResources(0, 1, views);
+
+        ID3D11SamplerState* samplers[]{
+            state_->sampler.Get()
+        };
+        state_->d3dContext->PSSetSamplers(0, 1, samplers);
+
+        const FLOAT blendFactor[4]{0.0f,0.0f,0.0f,0.0f};
+        state_->d3dContext->OMSetBlendState(
+            state_->blendState.Get(),
+            blendFactor,
+            0xffffffffu);
+
+        state_->d3dContext->Draw(3, 0);
+
+        ID3D11ShaderResourceView* nullViews[]{nullptr};
+        state_->d3dContext->PSSetShaderResources(0, 1, nullViews);
+
+        state_->d3d11On12Device->ReleaseWrappedResources(
+            resources,
+            1);
+        state_->d3dContext->Flush();
+
+        if (!state_->firstCompositeLogged) {
+            state_->firstCompositeLogged = true;
+            log_line(
+                "[FrontierD3D] first CEF frame composited through D3D11On12 into RDR backbuffer");
+        }
         return;
     }
 
@@ -2800,7 +3532,7 @@ void CefOverlay::on_present(::IDXGISwapChain* swapChain) {
     if (!state_->firstCompositeLogged) {
         state_->firstCompositeLogged = true;
         log_line(
-            "[FrontierD3D] first CEF frame composited into RDR backbuffer");
+            "[FrontierD3D] first CEF frame composited through legacy D3D11 path");
     }
 }
 
@@ -2832,6 +3564,12 @@ void CefOverlay::shutdown_on_game_thread() {
 
     state_->d3dContext.Reset();
     state_->d3dDevice.Reset();
+    state_->d3d11On12Device.Reset();
+    state_->d3d12Queue.Reset();
+    state_->d3d12Device.Reset();
+    state_->sourceBackBuffers12.clear();
+    state_->wrappedBackBuffers.clear();
+    state_->wrappedBackBufferViews.clear();
     state_->uiTexture.Reset();
     state_->uiTextureView.Reset();
     state_->backBuffer.Reset();
