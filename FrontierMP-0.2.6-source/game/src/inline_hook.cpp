@@ -361,10 +361,8 @@ bool InlineHook::install_preserving_entry_registers(
     emit_u64(callback);
     emit({0xFFu, 0xD0u});
 
-    for (auto it = std::rbegin(kSavedRegisters);
-         it != std::rend(kSavedRegisters);
-         ++it) {
-        emit_restore(*it);
+    for (std::size_t index = std::size(kSavedRegisters); index != 0; --index) {
+        emit_restore(kSavedRegisters[index - 1]);
     }
 
     emit({0x48u, 0x81u, 0xC4u,
