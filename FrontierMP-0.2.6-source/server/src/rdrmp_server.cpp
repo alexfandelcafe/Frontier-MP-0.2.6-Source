@@ -238,15 +238,18 @@ void RdrmpServer::handle_receive(
         player.state.position = welcome.position;
         player.state.rotation = welcome.rotation;
 
+        players_.emplace(id, player);
+        Player& stored = players_.at(id);
+
+        // The historical client receives packet 7 as the player-entry creation
+        // message. Send the newly assigned local player first so a compatible
+        // client can associate the first create packet with its own identity.
+        send_player(peer, stored);
         for (const auto& existing : players_) {
-            if (existing.second.active) {
+            if (existing.second.active && existing.first != id) {
                 send_player(peer, existing.second);
             }
         }
-
-        players_.emplace(id, player);
-        Player& stored = players_.at(id);
-        send_player(peer, stored);
         broadcast_create(stored, peer);
 
         std::printf("[rdrmp] player %u joined name=%s model=%u\n",
@@ -259,9 +262,8 @@ void RdrmpServer::handle_receive(
         Player* player = find_player(peer);
         if (player == nullptr) return;
 
-        frontier::rdrmp::PlayerTransform transform{};
-        if (!frontier::rdrmp::decode_player_transform(payload, transform)) return;
-        transform.playerId = player->id;
+        frontier::rdrmp::ClientPlayerState transform{};
+        if (!frontier::rdrmp::decode_client_player_state(payload, transform)) return;
         player->state.position = transform.position;
         player->state.rotation = transform.rotation;
         broadcast_transform(*player, peer);
