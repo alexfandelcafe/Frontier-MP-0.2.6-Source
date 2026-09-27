@@ -2942,3 +2942,37 @@ La prueba de runtime necesaria es que aparezca:
 `[FrontierD3D] shared CreateSwapChainForHwnd captured RDR D3D12 queue ...`
 antes del primer `Present` que intente inicializar D3D11On12. Si ese mensaje no aparece, el siguiente punto de diagnóstico es el target compartido de `CreateSwapChainForHwnd`, no el objeto swapchain privado.
 
+## 66. Game-thread dispatcher/context y aislamiento del worker (2026-09-27)
+
+Se aplicó una corrección estructural para separar el worker de las operaciones que requieren contexto vivo de RDR.
+
+### Dispatcher
+`GameThreadDispatcher::pump()` ya no acepta el primer `scrThread::Wait` como game thread automáticamente. El `Wait` debe estar asociado a un contexto de script cuyo nombre haya sido observado por `GET_SCRIPT_NAME` y que pertenezca a la whitelist:
+- `content/main`
+- `content/pressstart`
+- variantes con separador `/` o `\\` y extensión `.sc`.
+
+El contexto se registra por el puntero `context`, y `gameThreadId_` solo se fija cuando llega un `Wait` autorizado. Los nombres siguen registrándose incluso después del límite de trazas.
+
+Durante detach, `wait_hook()`, `GET_THIS_SCRIPT_ID` y `GET_SCRIPT_NAME` conservan punteros fallback a sus handlers originales para que una entrada concurrente al hook no se convierta en una llamada perdida al native original.
+
+### RdrBridge
+Se añadió `require_game_thread_access()` y las operaciones que leen/modifican estado vivo del motor fallan cerradas si el hilo actual no es el game thread autorizado. Esto incluye:
+- runtime game state;
+- lectura del local player;
+- spawn/despawn/transform/validation de actores remotos;
+- locomoción;
+- bootstrap histórico de LoadOnline;
+- eventos UI que llaman al motor.
+
+### ClientRuntime
+El worker conserva únicamente el trabajo de red/temporización. Las operaciones de RDR pasan al dispatcher:
+- `FrontierSession::update` se ejecuta en el game thread y publica un `FrontierRuntimeState` POD al worker;
+- `ensure_local_player` se ejecuta en el game thread;
+- `read_local_player_state` se ejecuta en el game thread, devuelve una copia POD y luego el worker la envía por red;
+- `RemotePlayerManager::update/clear` se ejecutan en el game thread;
+- snapshots entrantes siguen siendo datos y `RemotePlayerManager` quedó protegido contra acceso concurrente.
+
+### Alcance
+Esto corrige el problema de sincronización señalado en los puntos 1, 2, 6, 7, 9 y 10. No convierte el protocolo UDP actual en ENet ni implementa por sí solo ResourcesManager/Lua/HTTP/server-browser de RDRMP; esas partes requieren reproducir el contrato de red y los subsistemas externos correspondientes, y no se declaran compatibles hasta que ese backend exista.
+
