@@ -2681,3 +2681,55 @@ IMPORTANTE:
 - La rama contiene el código de corrección, pero aquí no se pudo ejecutar RDR1.
 - La prueba definitiva continúa siendo la ejecución real de RDR1.
 - No se tocó RemotePlayerManager ni el local-player bootstrap.
+
+
+============================================================
+61. CORRECCIÓN FINAL DEL HOOK HISTÓRICO — FUNCIÓN PRESENT COMPARTIDA
+============================================================
+
+Hallazgo adicional al revisar el cliente-main.dll.c completo:
+- FUN_180058880 no sustituye solamente la vtable del swapchain de prueba.
+- Obtiene la dirección de la implementación de Present del swapchain D3D12
+  auxiliar y la pasa al sistema de hooks histórico.
+- Por tanto, la intención histórica es interceptar la función Present compartida
+  para alcanzar los swapchains reales de RDR, aunque se haya usado un swapchain
+  auxiliar para descubrir la dirección.
+
+Corrección Frontier:
+- El camino histórico de Present se instala sobre el slot de la vtable del
+  objeto DXGI auxiliar; la vtable queda retenida como memoria de implementación
+  compartida durante la vida del hook.
+- Present1 también queda cubierto cuando la implementación expone esa vtable.
+- La detección de command queue usa primero offsets aprendidos del swapchain
+  auxiliar y luego una búsqueda dinámica segura.
+- Se valida que el primer método de un candidato COM apunte a código ejecutable
+  antes de hacer QueryInterface.
+
+Corrección de composición:
+- La ruta D3D12 usa D3D11On12.
+- El framebuffer BGRA de CEF se copia explícitamente a uiTexture antes de Draw;
+  esta copia faltaba en la primera versión del puente.
+- Los backbuffers D3D12 se envuelven con estado de entrada
+  D3D12_RESOURCE_STATE_RENDER_TARGET y estado de salida
+  D3D12_RESOURCE_STATE_PRESENT.
+- El contexto D3D11 usado para componer es el del puente D3D11On12, separado
+  del contexto D3D12 de RDR.
+
+Commit de corrección de upload:
+3baace475e77cbca866e4d8b03bad444003e0026
+
+Estado actual del código:
+- Branch: game-thread/remote-actor-spawn-test-0.2.41
+- Los archivos CEF están preparados para probar el camino histórico D3D12.
+- No existe todavía verificación runtime en este entorno.
+
+NOTA SOBRE EL REPO DLL-DESCOMPRIMIDOS:
+No se inspeccionaron todos los archivos del repositorio completo uno por uno.
+Sí se cargaron y analizaron completos, por primera vez en esta sesión:
+- client-main.dll.c (~5.96 MB)
+- client-webrenderer.dll.c (~5.00 MB)
+
+Además se revisaron los artefactos específicos de evidencia, análisis, hunter y
+los dumps bootstrap relacionados con client-main, client-webrenderer y game-core.
+Para el problema CEF, client-main.dll.c y client-webrenderer.dll.c son las fuentes
+principales de la reconstrucción actual.
