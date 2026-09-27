@@ -61,6 +61,14 @@ The reconstructed handlers provide stronger evidence for packets 6-9 than the ea
 
 ## ENet boundary
 
+Observed transport behavior is:
+
+- `ENetClient::Connect` creates/connects an ENet host with 2 channels.
+- Delivery type `0` is the reliable path used by packets 0 and 1.
+- Delivery type `1` is the unsequenced path used by packet 2.
+- `Send` prepends a 16-bit packet ID to the serialized message before passing it to the peer-message layer.
+
+
 The recovered client calls `ENetClient::Connect` with a host and port and uses an ENet host with two channels. The final FrontierMP client keeps its game-independent state machine separated from the wire codec so ENet can be used as the transport without exposing ENet types to the game bridge.
 
 The current default networking implementation in the 0.2.6 source tree remains a standalone UDP reliability layer. That layer is useful for development and automated testing, but it should not be described as byte-compatible ENet transport. The RDRMP compatibility transport is therefore a distinct integration task.
@@ -95,3 +103,7 @@ The following items require a real RDR1 runtime capture on the target executable
 - compatibility after any executable update that changes the registered fingerprint.
 
 The repository should treat these as explicit validation tasks, not inferred guarantees.
+
+## FrontierMP runtime mode
+
+The client can activate the compatibility transport with `FRONTIER_RDRMP_COMPAT=1`. The compatibility server listens on UDP 4674 by default. This mode is intentionally separate from the newer Frontier handshake protocol so the same client can be used for development and wire-compatible tests.
