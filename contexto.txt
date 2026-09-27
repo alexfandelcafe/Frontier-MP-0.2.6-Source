@@ -2733,3 +2733,72 @@ Además se revisaron los artefactos específicos de evidencia, análisis, hunter
 los dumps bootstrap relacionados con client-main, client-webrenderer y game-core.
 Para el problema CEF, client-main.dll.c y client-webrenderer.dll.c son las fuentes
 principales de la reconstrucción actual.
+
+
+============================================================
+60. CORRECCIONES CEF/DXGI — BUILD + PUMP INDEPENDIENTE
+============================================================
+
+Commits de código:
+- f852a796ab1f94dd4bdde00a09e7e74eb2ce9a3b
+- cc0b7a256ed7eea47f750dccd9ad8260db4616fd
+- f9b5e2c0d97b227908f8c438b24af6c42099fd2f
+
+Archivo principal:
+- FrontierMP-0.2.6-source/client/src/cef_overlay.cpp
+
+Correcciones:
+1. Añadido <dxgi1_4.h> para disponer de IDXGISwapChain3 y
+   GetCurrentBackBufferIndex().
+2. Corregido el logging de REFIID en CreateDXGIFactory2:
+   se usa &riid en lugar de static_cast<const void*>(riid).
+3. Movido el prototipo de frontier_present1() antes de
+   install_historical_present_hook(), eliminando el uso antes de declaración.
+4. CefDoMessageLoopWork() ya no depende de sharedPresentPatched.
+   El browser CEF se bombea siempre desde pump_on_game_thread().
+   Esto evita que un hook de Present no alcanzado deje CEF inicializado
+   pero sin entregar OnPaint.
+
+EVIDENCIA HISTÓRICA RELEVANTE:
+- client-main.dll.c contiene FUN_180008010(), que dentro del callback
+  de render ejecuta:
+    CEFManager::DoFrame()
+    pIVar9 = *(ID3D11Device **)(*param_1 + 0x70)
+    pfVar10 = *(float **)(*param_1 + 0xe8)
+    CEFManager::Draw(..., pIVar9, pfVar10)
+- client-webrenderer.dll.c confirma:
+    CEFManager::Draw(ID3D11Device*, void*)
+    -> ClientHandler::Draw(ID3D11Device*, void*)
+- client-main.dll.c también confirma FUN_180059b60() como wrapper de
+  la ruta histórica de Present que llama FUN_180059490() y después el
+  Present original.
+
+Interpretación:
+La ruta histórica combina Present/DirectXHook con un callback de render
+que entrega al CEF un ID3D11Device y un segundo contexto privado de RAGE.
+Frontier todavía no tiene demostrado ese contexto privado; su ruta actual
+usa el swapchain + D3D11On12 para componer el buffer OSR.
+
+ESTADO DE BUILD:
+- Los errores reportados por VS2026-x64:
+    frontier_present1 no declarado
+    cast de REFIID
+    IDXGISwapChain3 no declarado
+    errores derivados de ComPtr/QueryInterface/GetCurrentBackBufferIndex
+  quedan abordados por los commits anteriores.
+- No se ha ejecutado una build Windows/RDR1 desde este entorno, así que
+  la corrección debe validarse localmente.
+
+PRÓXIMA EVIDENCIA A RECOGER:
+- [FrontierCEF] first OnPaint frame=...
+- [FrontierD3D] historical D3D12 Present hook installed
+- [FrontierD3D] Present trace=... o Present1 trace=...
+- [FrontierD3D] D3D11On12 bridge initialized
+- [FrontierD3D] first CEF frame composited through D3D11On12...
+Si aparece first OnPaint pero no aparece first CEF frame composited,
+el problema restante está en la intercepción/composición D3D.
+Si ni siquiera aparece first OnPaint, hay que depurar CEFInitialize/Browser
+y el pump antes de tocar la composición.
+
+HEAD DE CONTINUIDAD DE CÓDIGO:
+f9b5e2c0d97b227908f8c438b24af6c42099fd2f
