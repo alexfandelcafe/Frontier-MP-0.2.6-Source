@@ -576,35 +576,6 @@ void ClientRuntime::update() {
 
         if (g_network->state() == ConnectionState::Connected &&
             gameBridge_.initialized() &&
-            session_.runtime_state().state == frontier::game::FrontierSessionState::Active &&
-            (lastStateSendMs_ == 0 || now - lastStateSendMs_ >= 50)) {
-            PlayerState state{};
-            std::string bridgeError;
-            if (gameBridge_.read_local_player_state(state, bridgeError)) {
-                state.clientTick = ++clientTick_;
-                g_network->submit_player_state(state);
-                lastStateSendMs_ = now;
-                if (!bridgeStateReady_) {
-                    std::ostringstream message;
-                    message << "[FrontierClient] local-player state replication active position=("
-                            << state.position.x << ", " << state.position.y << ", " << state.position.z << ")";
-                    log_line(message.str());
-
-                    const auto chain = gameBridge_.local_player_chain_diagnostic();
-                    if (!chain.empty()) {
-                        log_line("[FrontierClient] local-player ready chain " + chain);
-                    }
-
-                    bridgeStateReady_ = true;
-                }
-            } else if (lastBridgeLogMs_ == 0 || now - lastBridgeLogMs_ >= 1000) {
-                log_line("[FrontierClient] local-player read pending: " + bridgeError);
-                lastBridgeLogMs_ = now;
-            }
-
-        }
-        if (g_network->state() == ConnectionState::Connected &&
-            gameBridge_.initialized() &&
             gameBridge_.game_thread_dispatcher_attached()) {
             // Engine actor calls belong to the authorized game thread. Keep at
             // most one pending actor update so the worker cannot flood the
