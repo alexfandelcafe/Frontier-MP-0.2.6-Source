@@ -37,8 +37,10 @@ public:
     // Called by the CEF render handler. The buffer is BGRA and owned by CEF.
     void accept_paint(const void* buffer, int width, int height);
 
-    // Called from the RDR D3D11 present hook. This only composites the last
-    // CEF frame; it never calls into CEF.
+    // Called from the historical RDR render/present path. This pumps CEF,
+    // then composites the last CEF OSR frame through D3D11On12 when RDR is
+    // running its native D3D12 renderer. A D3D11 swapchain remains supported
+    // as a fallback.
     void on_present(::IDXGISwapChain* swapChain);
 
 public:
