@@ -48,6 +48,8 @@ std::string environment_value(const char* key) {
 
 bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, const std::string& playerName) {
     stopRequested_.store(false, std::memory_order_release);
+    sessionResetPending_.store(false, std::memory_order_release);
+    remoteUpdatePending_.store(false, std::memory_order_release);
     lastFrontendBootstrapAttemptMs_ = 0;
     historicalOnlineBootstrapLogged_ = false;
     nativeUiBootstrapEnabled_ = environment_value("FRONTIER_NATIVE_UI_BOOTSTRAP") == "1";
@@ -224,17 +226,27 @@ bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, cons
         log_line(message.str());
     });
     g_network->set_on_disconnect([this](const std::string& reason) {
-        if (gameBridge_.initialized()) {
-            remotePlayers_.clear(gameBridge_);
-        }
         localPlayerId_ = 0;
         localSpawnPoint_ = {};
         lastLocalPlayerSpawnAttemptMs_ = 0;
         localPlayerSpawnReady_ = false;
+        bridgeStateReady_ = false;
         gameBridge_.reset_local_player_spawn();
         gameBridge_.reset_historical_online_bootstrap();
-        session_.reset();
+        sessionResetPending_.store(true, std::memory_order_release);
         connected_ = false;
+
+        if (gameBridge_.initialized() &&
+            gameBridge_.game_thread_dispatcher_attached()) {
+            std::string queueError;
+            if (!gameBridge_.submit_game_thread(
+                    [this] {
+                        remotePlayers_.clear(gameBridge_);
+                    },
+                    queueError) && !queueError.empty()) {
+                log_line("[FrontierClient] remote-player cleanup queue failed: " + queueError);
+            }
+        }
         log_line("[FrontierClient] " + reason);
     });
 
@@ -309,8 +321,13 @@ void ClientRuntime::request_server_connection(const std::string& host, std::uint
 void ClientRuntime::shutdown() {
     stopRequested_.store(true, std::memory_order_relaxed);
     if (g_network) g_network->stop();
-    if (gameBridge_.initialized()) {
-        remotePlayers_.clear(gameBridge_);
+    if (gameBridge_.initialized() &&
+        gameBridge_.game_thread_dispatcher_attached()) {
+        std::string queueError;
+        gameBridge_.submit_game_thread_and_wait(
+            [this] { remotePlayers_.clear(gameBridge_); },
+            2000u,
+            queueError);
     }
     localPlayerId_ = 0;
     g_network.reset();
@@ -357,8 +374,12 @@ void ClientRuntime::update() {
             if (g_network->state() != ConnectionState::Disconnected) {
                 g_network->stop();
             }
-            if (gameBridge_.initialized()) {
-                remotePlayers_.clear(gameBridge_);
+            if (gameBridge_.initialized() &&
+                gameBridge_.game_thread_dispatcher_attached()) {
+                std::string queueError;
+                gameBridge_.submit_game_thread(
+                    [this] { remotePlayers_.clear(gameBridge_); },
+                    queueError);
             }
             localPlayerId_ = 0;
             localSpawnPoint_ = {};
@@ -366,7 +387,7 @@ void ClientRuntime::update() {
             lastLocalPlayerSpawnAttemptMs_ = 0;
             gameBridge_.reset_local_player_spawn();
             gameBridge_.reset_historical_online_bootstrap();
-            session_.reset();
+            sessionResetPending_.store(true, std::memory_order_release);
 
             connected_ = g_network->start(
                 requestedHost,
@@ -383,66 +404,161 @@ void ClientRuntime::update() {
 
         g_network->update(now);
 
-        if (gameBridge_.initialized() && (lastSessionUpdateMs_ == 0 || now - lastSessionUpdateMs_ >= 250)) {
-            std::string sessionLog;
-            session_.update(gameBridge_, sessionLog);
-            if (!sessionLog.empty()) log_line(sessionLog);
+        if (gameBridge_.initialized() &&
+            (lastSessionUpdateMs_ == 0 || now - lastSessionUpdateMs_ >= 250)) {
             lastSessionUpdateMs_ = now;
 
-            // The custom historical boot.sc flow is driven from StartScreen1.
-            // Do not emit net.EnterOnlineForInvite while the native frontend is
-            // still being constructed; the stock event dispatcher can otherwise
-            // consume the event before the UI state machine exists.
-            if (nativeUiBootstrapEnabled_ &&
-                sessionMode_ == "freeroam" &&
-                !historicalOnlineBootstrapLogged_ &&
-                session_.runtime_state().state !=
-                    frontier::game::FrontierSessionState::RuntimeQueryFailed) {
-                std::string bootstrapLog;
-                const bool bootstrapComplete =
-                    gameBridge_.advance_historical_online_bootstrap(bootstrapLog);
+            // Engine/runtime state and the historical online bootstrap belong to
+            // the authorized RAGE script/game thread, not the worker thread.
+            frontier::game::FrontierRuntimeState sessionRuntime{};
+            std::string sessionLog;
+            std::string bootstrapLog;
+            bool bootstrapComplete = false;
+            bool sessionTaskCompleted = false;
 
-                if (!bootstrapLog.empty()) {
-                    log_line(bootstrapLog);
-                }
-                if (bootstrapComplete) {
-                    historicalOnlineBootstrapLogged_ = true;
+            if (!gameBridge_.native_invoker_ready()) {
+                gameBridge_.try_initialize_native_invoker();
+            }
+            if (gameBridge_.native_invoker_ready() &&
+                !gameBridge_.game_thread_dispatcher_attached()) {
+                std::string dispatcherError;
+                gameBridge_.try_initialize_game_thread_dispatcher();
+                if (!gameBridge_.game_thread_dispatcher_attached()) {
+                    if (!gameBridge_.game_thread_dispatcher_error().empty()) {
+                        log_line("[FrontierClient] game-thread dispatcher pending: " +
+                                 gameBridge_.game_thread_dispatcher_error());
+                    }
+                } else {
+                    log_line("[FrontierClient] game-thread dispatcher attached");
                 }
             }
-        }
 
-        if (g_network->state() == ConnectionState::Connected &&
-            gameBridge_.initialized() &&
-            session_.runtime_state().state == frontier::game::FrontierSessionState::Active &&
-            localPlayerId_ != 0 &&
-            !localPlayerSpawnReady_ &&
-            (lastLocalPlayerSpawnAttemptMs_ == 0 ||
-             now - lastLocalPlayerSpawnAttemptMs_ >= 250)) {
-            lastLocalPlayerSpawnAttemptMs_ = now;
+            if (gameBridge_.game_thread_dispatcher_attached()) {
+                std::string taskError;
+                sessionTaskCompleted =
+                    gameBridge_.submit_game_thread_and_wait(
+                        [this, &sessionRuntime, &sessionLog, &bootstrapLog, &bootstrapComplete] {
+                            if (sessionResetPending_.exchange(false, std::memory_order_acq_rel)) {
+                                session_.reset();
+                            }
 
-            frontier::PlayerState spawnState{};
-            spawnState.playerId = localPlayerId_;
-            spawnState.position = localSpawnPoint_.position;
-            spawnState.yaw = localSpawnPoint_.yaw;
+                            session_.update(gameBridge_, sessionLog);
 
-            bool spawnReady = false;
-            std::string spawnError;
-            const bool spawnCallCompleted = gameBridge_.ensure_local_player(
-                localPlayerId_,
-                spawnState,
-                localPlayerActorModel_,
-                spawnReady,
-                spawnError);
+                            if (nativeUiBootstrapEnabled_ &&
+                                sessionMode_ == "freeroam" &&
+                                !historicalOnlineBootstrapLogged_ &&
+                                session_.runtime_state().state !=
+                                    frontier::game::FrontierSessionState::RuntimeQueryFailed) {
+                                bootstrapComplete =
+                                    gameBridge_.advance_historical_online_bootstrap(bootstrapLog);
+                            }
 
-            if (spawnReady) {
-                localPlayerSpawnReady_ = true;
-                log_line("[FrontierClient] historical local-player spawn chain reached actor");
-            } else if (!spawnCallCompleted &&
-                       (lastBridgeLogMs_ == 0 || now - lastBridgeLogMs_ >= 1000)) {
-                log_line("[FrontierClient] local-player spawn pending: " +
-                         (spawnError.empty() ? std::string("waiting for RAGE player actor")
-                                             : spawnError));
-                lastBridgeLogMs_ = now;
+                            sessionRuntime = session_.runtime_state();
+                        },
+                        2000u,
+                        taskError);
+
+                if (!sessionTaskCompleted && !taskError.empty()) {
+                    log_line("[FrontierClient] game-thread session task failed: " + taskError);
+                } else {
+                    if (!sessionLog.empty()) log_line(sessionLog);
+                    if (!bootstrapLog.empty()) log_line(bootstrapLog);
+                    if (bootstrapComplete) {
+                        historicalOnlineBootstrapLogged_ = true;
+                    }
+                }
+            }
+
+            if (sessionTaskCompleted &&
+                g_network->state() == ConnectionState::Connected &&
+                sessionRuntime.state == frontier::game::FrontierSessionState::Active &&
+                localPlayerId_ != 0 &&
+                !localPlayerSpawnReady_ &&
+                (lastLocalPlayerSpawnAttemptMs_ == 0 ||
+                 now - lastLocalPlayerSpawnAttemptMs_ >= 250)) {
+                lastLocalPlayerSpawnAttemptMs_ = now;
+
+                frontier::PlayerState spawnState{};
+                spawnState.playerId = localPlayerId_;
+                spawnState.position = localSpawnPoint_.position;
+                spawnState.yaw = localSpawnPoint_.yaw;
+
+                bool spawnReady = false;
+                bool spawnCallCompleted = false;
+                std::string spawnError;
+                std::string taskError;
+
+                spawnCallCompleted =
+                    gameBridge_.submit_game_thread_and_wait(
+                        [this, &spawnState, &spawnReady, &spawnError] {
+                            gameBridge_.ensure_local_player(
+                                spawnState.playerId,
+                                spawnState,
+                                localPlayerActorModel_,
+                                spawnReady,
+                                spawnError);
+                        },
+                        2000u,
+                        taskError);
+
+                if (spawnReady) {
+                    localPlayerSpawnReady_ = true;
+                    log_line("[FrontierClient] historical local-player spawn chain reached actor");
+                } else if (!spawnCallCompleted &&
+                           (lastBridgeLogMs_ == 0 || now - lastBridgeLogMs_ >= 1000)) {
+                    log_line("[FrontierClient] local-player spawn task failed: " +
+                             (taskError.empty() ? std::string("dispatcher timeout") : taskError));
+                    lastBridgeLogMs_ = now;
+                } else if (spawnCallCompleted &&
+                           !spawnError.empty() &&
+                           (lastBridgeLogMs_ == 0 || now - lastBridgeLogMs_ >= 1000)) {
+                    log_line("[FrontierClient] local-player spawn pending: " + spawnError);
+                    lastBridgeLogMs_ = now;
+                }
+            }
+
+            if (sessionTaskCompleted &&
+                g_network->state() == ConnectionState::Connected &&
+                sessionRuntime.state == frontier::game::FrontierSessionState::Active &&
+                localPlayerId_ != 0 &&
+                (lastStateSendMs_ == 0 || now - lastStateSendMs_ >= 50)) {
+                frontier::PlayerState state{};
+                std::string bridgeError;
+                std::string taskError;
+                bool readCompleted = false;
+
+                readCompleted =
+                    gameBridge_.submit_game_thread_and_wait(
+                        [this, &state, &bridgeError] {
+                            gameBridge_.read_local_player_state(state, bridgeError);
+                        },
+                        2000u,
+                        taskError);
+
+                if (readCompleted && bridgeError.empty()) {
+                    state.clientTick = ++clientTick_;
+                    g_network->submit_player_state(state);
+                    lastStateSendMs_ = now;
+                    if (!bridgeStateReady_) {
+                        std::ostringstream message;
+                        message << "[FrontierClient] local-player state replication active position=("
+                                << state.position.x << ", " << state.position.y << ", " << state.position.z << ")";
+                        log_line(message.str());
+
+                        const auto chain = gameBridge_.local_player_chain_diagnostic();
+                        if (!chain.empty()) {
+                            log_line("[FrontierClient] local-player ready chain " + chain);
+                        }
+
+                        bridgeStateReady_ = true;
+                    }
+                } else if (lastBridgeLogMs_ == 0 || now - lastBridgeLogMs_ >= 1000) {
+                    log_line("[FrontierClient] local-player read pending: " +
+                             (bridgeError.empty()
+                                  ? (taskError.empty() ? std::string("game-thread task pending") : taskError)
+                                  : bridgeError));
+                    lastBridgeLogMs_ = now;
+                }
             }
         }
 
@@ -475,10 +591,31 @@ void ClientRuntime::update() {
             }
 
         }
-        if (g_network->state() == ConnectionState::Connected && gameBridge_.initialized()) {
+        if (g_network->state() == ConnectionState::Connected &&
+            gameBridge_.initialized() &&
+            gameBridge_.game_thread_dispatcher_attached()) {
+            // Engine actor calls belong to the authorized game thread. Keep at
+            // most one pending actor update so the worker cannot flood the
+            // dispatcher when the render/script thread is busy.
             const bool sessionActive =
                 session_.runtime_state().state == frontier::game::FrontierSessionState::Active;
-            remotePlayers_.update(now, gameBridge_, sessionActive);
+            if (sessionActive &&
+                !remoteUpdatePending_.exchange(true, std::memory_order_acq_rel)) {
+                std::string queueError;
+                const bool queued =
+                    gameBridge_.submit_game_thread(
+                        [this, now] {
+                            remotePlayers_.update(now, gameBridge_, true);
+                            remoteUpdatePending_.store(false, std::memory_order_release);
+                        },
+                        queueError);
+                if (!queued) {
+                    remoteUpdatePending_.store(false, std::memory_order_release);
+                    if (!queueError.empty()) {
+                        log_line("[FrontierClient] remote-player game-thread update queue failed: " + queueError);
+                    }
+                }
+            }
         }
     }
 }
