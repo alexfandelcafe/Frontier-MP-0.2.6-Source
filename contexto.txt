@@ -2902,3 +2902,25 @@ VERIFICACIÓN:
 
 HEAD DE CONTINUIDAD:
 bc198c7a49d1064053409ba209909d3c096f8bc8
+
+## 64. CEF pump ownership + D3D12 queue discovery follow-up (2026-09-27)
+
+Los logs de ejecución después del cambio al Present detour histórico muestran:
+- `CefInitialize thread=7604`
+- la primera excepción `0xC0000005` ocurre en `FrontierClient.dll` desde el hilo 5468
+- el fallo aparece mientras el Present histórico está activo y antes de que exista una cola D3D12 resuelta para el swapchain real.
+
+La lectura más probable del fallo es un uso cruzado del pump CEF: `CefOverlay::on_present()` ejecutaba `CefDoMessageLoopWork()` desde el hilo que entra por `Present`, que no necesariamente es el mismo hilo que inicializó CEF. El código fue corregido para que:
+1. `CefInitialize` registre `GetCurrentThreadId()` como `cefThreadId`.
+2. `pump_on_game_thread()` compruebe que el dispatcher sigue ejecutándose en ese hilo y sea el único sitio que llama `CefDoMessageLoopWork()`.
+3. `on_present()` no invoque CEF; solamente consume el último framebuffer OSR ya producido y, cuando existe una cola válida, ejecuta la composición D3D11On12.
+
+Para el bridge D3D12, la búsqueda de la command queue ahora:
+- conserva primero los offsets descubiertos por el swapchain de prueba histórica;
+- amplía el escaneo dinámico del objeto swapchain de 0x600 a 0x4000 bytes;
+- añade una segunda búsqueda sobre el objeto `ID3D12Device` para builds donde la cola no esté retenida en el objeto swapchain.
+
+Esto no reintroduce los hooks IAT de `CreateDXGIFactory*`, ni shadow-vtables de factories/swapchains en el camino activo.
+
+Nota técnica: la cola pasada a `D3D11On12CreateDevice` debe ser una cola 3D válida y el uso de recursos envueltos requiere coordinación con la cola D3D12 que usa el rendering/present de la aplicación. La documentación oficial de Microsoft describe el flujo con el mismo command queue para el interop. No se considera resuelto hasta comprobar en el runtime que Frontier encuentre la cola real de RDR y complete la composición sin una nueva excepción.
+
