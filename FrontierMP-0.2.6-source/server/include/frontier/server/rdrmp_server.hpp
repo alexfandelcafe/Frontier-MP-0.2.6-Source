@@ -2,6 +2,7 @@
 
 #include "frontier/rdrmp_wire.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <unordered_map>
