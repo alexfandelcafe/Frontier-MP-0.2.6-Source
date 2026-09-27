@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(FrontierMP VERSION 0.2.6 LANGUAGES CXX)
+project(FrontierMP VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,6 +9,8 @@ option(FRONTIER_BUILD_CLIENT "Build the in-game client DLL" ON)
 option(FRONTIER_BUILD_TOOLS "Build developer tools" ON)
 option(FRONTIER_BUILD_TESTS "Build protocol unit tests" ON)
 option(FRONTIER_BUILD_LAUNCHER "Build the Windows launcher/loader" ON)
+option(FRONTIER_BUILD_RDRMP_COMPAT "Build the ENet/RDRMP compatibility transport" ON)
+set(FRONTIER_ENET_TAG "v1.3.18" CACHE STRING "Pinned ENet tag used by the RDRMP compatibility transport")
 set(FRONTIER_CEF_PACKAGE_DIR "" CACHE PATH "Optional packaged CEF runtime directory (for example client-rdrmp2/data/cef)")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
@@ -20,9 +22,35 @@ include(cmake/FrontierWarnings.cmake)
 
 add_library(frontier_shared STATIC
     shared/src/protocol.cpp
+    shared/src/rdrmp_wire.cpp
 )
 target_include_directories(frontier_shared PUBLIC shared/include)
 frontier_enable_warnings(frontier_shared)
+
+
+if(FRONTIER_BUILD_RDRMP_COMPAT)
+    include(FetchContent)
+    FetchContent_Declare(
+        enet
+        GIT_REPOSITORY https://github.com/lsalzman/enet.git
+        GIT_TAG ${FRONTIER_ENET_TAG}
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(enet)
+
+    add_library(frontier_rdrmp_enet STATIC
+        shared/src/rdrmp_enet.cpp
+    )
+    target_include_directories(frontier_rdrmp_enet
+        PUBLIC shared/include
+        PRIVATE ${enet_SOURCE_DIR}/include
+    )
+    target_link_libraries(frontier_rdrmp_enet PRIVATE enet)
+    if(WIN32)
+        target_link_libraries(frontier_rdrmp_enet PRIVATE ws2_32 winmm)
+    endif()
+    frontier_enable_warnings(frontier_rdrmp_enet)
+endif()
 
 add_executable(frontier_server
     server/src/main.cpp
@@ -35,6 +63,21 @@ frontier_enable_warnings(frontier_server)
 
 if(WIN32)
     target_link_libraries(frontier_server PRIVATE ws2_32)
+endif()
+
+if(FRONTIER_BUILD_RDRMP_COMPAT)
+    add_executable(frontier_rdrmp_server
+        server/src/rdrmp_main.cpp
+        server/src/rdrmp_server.cpp
+    )
+    target_include_directories(frontier_rdrmp_server PRIVATE
+        shared/include server/include ${enet_SOURCE_DIR}/include
+    )
+    target_link_libraries(frontier_rdrmp_server PRIVATE frontier_shared frontier_rdrmp_enet enet)
+    if(WIN32)
+        target_link_libraries(frontier_rdrmp_server PRIVATE ws2_32 winmm)
+    endif()
+    frontier_enable_warnings(frontier_rdrmp_server)
 endif()
 
 add_executable(frontier_sim_client
@@ -201,6 +244,14 @@ if(FRONTIER_BUILD_TESTS)
     target_link_libraries(frontier_protocol_tests PRIVATE frontier_shared)
     frontier_enable_warnings(frontier_protocol_tests)
     add_test(NAME frontier_protocol_tests COMMAND frontier_protocol_tests)
+
+    add_executable(frontier_rdrmp_wire_tests
+        tests/rdrmp_wire_tests.cpp
+    )
+    target_include_directories(frontier_rdrmp_wire_tests PRIVATE shared/include)
+    target_link_libraries(frontier_rdrmp_wire_tests PRIVATE frontier_shared)
+    frontier_enable_warnings(frontier_rdrmp_wire_tests)
+    add_test(NAME frontier_rdrmp_wire_tests COMMAND frontier_rdrmp_wire_tests)
 
     add_executable(frontier_pattern_tests
         tests/pattern_tests.cpp
