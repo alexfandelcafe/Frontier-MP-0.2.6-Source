@@ -176,9 +176,9 @@ void EnetClient::handle_packet(const std::uint8_t* data, std::size_t size) {
         players_[player.playerId] = player;
         if (localPlayerId_ == 0) {
             localPlayerId_ = player.playerId;
-            if (onPlayer_) onPlayerEvent_(player);
-        } else if (player.playerId == localPlayerId_ && onPlayerEvent_) {
-            onPlayerEvent_(player);
+            if (onPlayer_) onPlayer_(player);
+        } else if (player.playerId == localPlayerId_ && onPlayer_) {
+            onPlayer_(player);
         }
         emit_snapshot();
         break;
