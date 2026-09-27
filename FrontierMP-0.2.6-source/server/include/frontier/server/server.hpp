@@ -5,6 +5,8 @@
 #include "frontier/types.hpp"
 
 #include <chrono>
+#include <array>
+#include <map>
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -40,6 +42,11 @@ private:
         PlayerState state{};
         bool stateInitialized{};
         bool welcomed{};
+        std::array<std::uint32_t, 2> nextChannelSequence{{1, 1}};
+        std::uint32_t nextControlReceiveSequence{1};
+        std::uint32_t lastStateReceiveSequence{};
+        bool controlReceiveInitialized{};
+        std::map<std::uint32_t, protocol::Message> pendingControlMessages;
     };
 
     struct ResumeRecord final {
@@ -54,6 +61,7 @@ private:
     void handle_packet(Connection* connection, const std::vector<std::uint8_t>& bytes, std::uint64_t nowMs);
     void handle_hello(Connection& connection, const protocol::Message& message, std::uint64_t nowMs);
     void handle_player_state(Connection& connection, const protocol::Message& message, std::uint64_t nowMs);
+    void dispatch_message(Connection& connection, const protocol::Message& message, std::uint64_t nowMs);
     void send_message(Connection& connection, protocol::MessageType type, protocol::Channel channel, bool reliable, const std::vector<std::uint8_t>& payload);
     void broadcast_snapshots(std::uint64_t nowMs);
     void prune(std::uint64_t nowMs);
