@@ -158,12 +158,11 @@ bool EnetClient::submit_player_state(const PlayerState& state, std::uint32_t act
         welcomeSent_ = true;
     }
 
-    PlayerTransform transform{};
-    transform.playerId = localPlayerId_;
+    ClientPlayerState transform{};
     transform.position = state.position;
     transform.rotation = {0.0f, state.yaw, 0.0f};
     return send(DeliveryType::Unreliable, PacketId::ClientPlayerState,
-                encode_player_transform(transform));
+                encode_client_player_state(transform));
 }
 
 void EnetClient::handle_packet(const std::uint8_t* data, std::size_t size) {
