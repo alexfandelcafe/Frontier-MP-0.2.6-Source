@@ -2976,3 +2976,18 @@ El worker conserva únicamente el trabajo de red/temporización. Las operaciones
 ### Alcance
 Esto corrige el problema de sincronización señalado en los puntos 1, 2, 6, 7, 9 y 10. No convierte el protocolo UDP actual en ENet ni implementa por sí solo ResourcesManager/Lua/HTTP/server-browser de RDRMP; esas partes requieren reproducir el contrato de red y los subsistemas externos correspondientes, y no se declaran compatibles hasta que ese backend exista.
 
+## 67. Secuenciación por canal del protocolo Frontier (2026-09-27)
+
+Se actualizó el protocolo propio de Frontier de versión 1 a versión 2.
+
+Cada `Message` incorpora `channelSequence`:
+- `Control`: entrega fiable y ordenada. Los mensajes fuera de orden se almacenan temporalmente hasta recibir el precedente.
+- `State`: entrega secuenciada no bloqueante; un paquete antiguo se descarta y un paquete perdido no bloquea el siguiente snapshot.
+- El `PacketHeader.sequence/ack/ackBits` continúa proporcionando la capa de confirmación/retransmisión de paquetes fiables.
+
+Cliente y servidor implementan la misma semántica y reinician los contadores de canal al comenzar una nueva sesión/handshake.
+
+Esto mejora la arquitectura del protocolo propio para futuras operaciones como spawn/destroy/RPC, pero no lo convierte en ENet ni lo hace compatible con el wire protocol del RDRMP original. Para compatibilidad real con RDRMP hace falta implementar el cliente ENet y su contrato de packets/canales correspondiente.
+
+El cambio de wire format requiere que cliente y servidor Frontier utilicen `kProtocolVersion=2` simultáneamente.
+
