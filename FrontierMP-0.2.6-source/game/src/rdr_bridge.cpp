@@ -939,6 +939,13 @@ bool RdrBridge::try_initialize_game_thread_dispatcher() {
 }
 
 bool RdrBridge::advance_historical_online_bootstrap(std::string& logLine) {
+    std::string gameThreadError;
+    if (!require_game_thread_access(gameThreadError)) {
+        
+        error = gameThreadError;
+        return false;
+    }
+
     logLine.clear();
 
     std::lock_guard bootstrapLock(historicalOnlineBootstrapMutex_);
@@ -1558,6 +1565,13 @@ std::uintptr_t pack_vec2(float x, float y) {
 } // namespace
 
 bool RdrBridge::request_remote_actor_test(const PlayerState& origin, std::string& error) const {
+    std::string gameThreadError;
+    if (!require_game_thread_access(gameThreadError)) {
+        
+        error = gameThreadError;
+        return false;
+    }
+
     error.clear();
     if (!initialized_) {
         error = "bridge not initialized";
@@ -2735,6 +2749,13 @@ void RdrBridge::reset_local_player_spawn() {
 
 
 bool RdrBridge::send_ui_event(const std::string& eventName, std::string& error) const {
+    std::string gameThreadError;
+    if (!require_game_thread_access(gameThreadError)) {
+        
+        error = gameThreadError;
+        return false;
+    }
+
     error.clear();
 
     if (eventName.empty()) {
@@ -2779,11 +2800,27 @@ bool RdrBridge::send_ui_event(const std::string& eventName, std::string& error) 
     return error.empty();
 }
 
-bool RdrBridge::read_local_player_state(PlayerState& outState, std::string& error) const {
-    outState = {};
+bool RdrBridge::require_game_thread_access(std::string& error) const {
     error.clear();
     if (!initialized_) {
         error = "bridge not initialized";
+        return false;
+    }
+    if (!gameThreadDispatcher_.attached()) {
+        error = "game-thread dispatcher not attached";
+        return false;
+    }
+    if (!gameThreadDispatcher_.is_game_thread()) {
+        error = "RDR engine access requires the authorized game thread";
+        return false;
+    }
+    return true;
+}
+
+bool RdrBridge::read_local_player_state(PlayerState& outState, std::string& error) const {
+    outState = {};
+    error.clear();
+    if (!require_game_thread_access(error)) {
         return false;
     }
 
