@@ -2100,22 +2100,43 @@ bool install_render_path(CefOverlay* overlay) {
 
     log_line("[FrontierD3D] no targeted RDR D3D11/DXGI render path could be hooked");
 
+    char historicalSwitch[8]{};
+    const DWORD historicalSwitchLength =
+        GetEnvironmentVariableA(
+            "FRONTIER_ENABLE_HISTORICAL_PRESENT",
+            historicalSwitch,
+            sizeof(historicalSwitch));
+    const bool historicalEnabled =
+        historicalSwitchLength > 0 &&
+        historicalSwitchLength < sizeof(historicalSwitch) &&
+        (historicalSwitch[0] == '1' ||
+         historicalSwitch[0] == 'y' ||
+         historicalSwitch[0] == 'Y' ||
+         historicalSwitch[0] == 't' ||
+         historicalSwitch[0] == 'T');
+
+    if (!historicalEnabled) {
+        log_line(
+            "[FrontierD3D] shared historical Present hook disabled by default; "
+            "set FRONTIER_ENABLE_HISTORICAL_PRESENT=1 only for legacy testing");
+        return false;
+    }
+
     // The historical path patches the shared IDXGISwapChain vtable exposed by
     // a probe object. On current RDR this global COM-vtable mutation can be
     // classified as a third-party overlay and produce Rockstar error 25D11007.
-    // Keep it only as a last-resort compatibility path.
     std::string historicalError;
     if (install_historical_present_hook(
             g_presentHook,
             historicalError)) {
         g_presentHook.overlay.store(overlay, std::memory_order_release);
         g_presentHook.installed = true;
-        log_line("[FrontierD3D] historical shared Present path enabled as last resort");
+        log_line("[FrontierD3D] historical shared Present path enabled explicitly");
         return true;
     }
 
     log_line(
-        "[FrontierD3D] all D3D render paths unavailable: " +
+        "[FrontierD3D] historical Present path failed: " +
         (historicalError.empty() ? "unknown error" : historicalError));
     return false;
 }
