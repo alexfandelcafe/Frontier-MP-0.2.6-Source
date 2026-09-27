@@ -63,15 +63,16 @@ void log_remote(const char* format, ...) {
 } // namespace
 
 void RemotePlayerManager::set_local_player_id(std::uint16_t playerId) {
-    localPlayerId_ = playerId;
+    localPlayerId_.store(playerId, std::memory_order_release);
 }
 
 void RemotePlayerManager::on_snapshot(const protocol::Snapshot& snapshot, std::uint64_t nowMs) {
+    std::lock_guard lock(mutex_);
     latestServerTick_ = snapshot.serverTick;
     interpolator_.push_snapshot(snapshot);
 
     for (const auto& state : snapshot.players) {
-        if (state.playerId == localPlayerId_ || state.playerId == 0) continue;
+        if (state.playerId == localPlayerId_.load(std::memory_order_acquire) || state.playerId == 0) continue;
 
         auto [it, inserted] = players_.try_emplace(state.playerId);
         auto& player = it->second;
@@ -135,6 +136,7 @@ bool RemotePlayerManager::ensure_spawned(RemotePlayer& player, std::uint64_t now
 }
 
 void RemotePlayerManager::update(std::uint64_t nowMs, frontier::game::RdrBridge& bridge, bool sessionActive) {
+    std::lock_guard lock(mutex_);
     if (!sessionActive) {
         if (sessionActive_) {
             log_remote("[FrontierRemotePlayer] session inactive; clearing remote actors");
@@ -324,6 +326,7 @@ void RemotePlayerManager::remove_player(
 }
 
 void RemotePlayerManager::clear(frontier::game::RdrBridge& bridge) {
+    std::lock_guard lock(mutex_);
     for (auto it = players_.begin(); it != players_.end();) {
         auto current = it++;
         remove_player(current, bridge);
@@ -332,6 +335,11 @@ void RemotePlayerManager::clear(frontier::game::RdrBridge& bridge) {
     latestServerTick_ = 0;
     lastUpdateMs_ = 0;
     sessionActive_ = false;
+}
+
+std::size_t RemotePlayerManager::size() const {
+    std::lock_guard lock(mutex_);
+    return players_.size();
 }
 
 } // namespace frontier::client
