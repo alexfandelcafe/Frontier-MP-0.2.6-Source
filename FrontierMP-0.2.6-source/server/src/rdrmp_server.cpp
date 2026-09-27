@@ -43,7 +43,9 @@ bool send_packet(_ENetPeer* peer, frontier::rdrmp::DeliveryType delivery,
     if (packet == nullptr) return false;
     const enet_uint8 channel =
         delivery == frontier::rdrmp::DeliveryType::Reliable ? 0U : 1U;
-    return enet_peer_send(peer, channel, packet) == 0;
+    const int result = enet_peer_send(peer, channel, packet);
+    if (result != 0) enet_packet_destroy(packet);
+    return result == 0;
 }
 
 } // namespace
