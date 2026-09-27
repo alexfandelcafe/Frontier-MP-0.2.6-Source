@@ -17,6 +17,9 @@ namespace frontier::game {
 
 namespace {
 std::atomic<GameThreadDispatcher*> g_dispatcher{nullptr};
+std::atomic<NativeInvoker::NativeHandler> g_fallbackOriginalWait{nullptr};
+std::atomic<NativeInvoker::NativeHandler> g_fallbackOriginalGetThisScriptId{nullptr};
+std::atomic<NativeInvoker::NativeHandler> g_fallbackOriginalGetScriptName{nullptr};
 std::atomic<std::uint32_t> g_waitTraceCount{0};
 std::atomic<std::uint32_t> g_scriptIdTraceCount{0};
 constexpr std::uint32_t kNativeScrThreadWait = 0x7715C03Bu;
@@ -28,6 +31,7 @@ std::atomic<std::uint32_t> g_scriptNameTraceCount{0};
 struct ScriptContextIdEntry final {
     std::uintptr_t context{};
     std::uint32_t scriptId{};
+    char scriptName[96]{};
     bool used{};
 };
 
@@ -69,6 +73,51 @@ bool lookup_script_context_id_impl(void* context, std::uint32_t& scriptId) {
     for (const auto& entry : g_scriptContextIds) {
         if (entry.used && entry.context == key) {
             scriptId = entry.scriptId;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool record_script_context_name_impl(void* context, const char* name) {
+    if (!context || !name || !*name) return false;
+    const auto key = reinterpret_cast<std::uintptr_t>(context);
+    std::lock_guard lock(g_scriptContextIdMutex);
+    for (auto& entry : g_scriptContextIds) {
+        if (entry.used && entry.context == key) {
+            const bool changed = std::strncmp(entry.scriptName, name, sizeof(entry.scriptName)) != 0;
+            std::strncpy(entry.scriptName, name, sizeof(entry.scriptName) - 1);
+            entry.scriptName[sizeof(entry.scriptName) - 1] = '\0';
+            return changed;
+        }
+    }
+    for (auto& entry : g_scriptContextIds) {
+        if (!entry.used) {
+            entry.used = true;
+            entry.context = key;
+            std::strncpy(entry.scriptName, name, sizeof(entry.scriptName) - 1);
+            entry.scriptName[sizeof(entry.scriptName) - 1] = '\0';
+            return true;
+        }
+    }
+    auto& entry = g_scriptContextIds[g_scriptContextIdNext++ % (sizeof(g_scriptContextIds) / sizeof(g_scriptContextIds[0]))];
+    entry.used = true;
+    entry.context = key;
+    entry.scriptId = 0;
+    std::strncpy(entry.scriptName, name, sizeof(entry.scriptName) - 1);
+    entry.scriptName[sizeof(entry.scriptName) - 1] = '\0';
+    return true;
+}
+
+bool lookup_script_context_name_impl(void* context, char* out, std::size_t capacity) {
+    if (!context || !out || capacity == 0) return false;
+    out[0] = '\0';
+    const auto key = reinterpret_cast<std::uintptr_t>(context);
+    std::lock_guard lock(g_scriptContextIdMutex);
+    for (const auto& entry : g_scriptContextIds) {
+        if (entry.used && entry.context == key && entry.scriptName[0] != '\0') {
+            std::strncpy(out, entry.scriptName, capacity - 1);
+            out[capacity - 1] = '\0';
             return true;
         }
     }
@@ -189,6 +238,9 @@ bool GameThreadDispatcher::attach(NativeInvoker& invoker, std::string& error) {
     originalWait_.store(original, std::memory_order_release);
     originalGetThisScriptId_.store(originalGetThisScriptId, std::memory_order_release);
     originalGetScriptName_.store(originalGetScriptName, std::memory_order_release);
+    g_fallbackOriginalWait.store(original, std::memory_order_release);
+    g_fallbackOriginalGetThisScriptId.store(originalGetThisScriptId, std::memory_order_release);
+    g_fallbackOriginalGetScriptName.store(originalGetScriptName, std::memory_order_release);
     attached_.store(true, std::memory_order_release);
     gameThreadKnown_.store(false, std::memory_order_release);
     g_dispatcher.store(this, std::memory_order_release);
@@ -307,6 +359,10 @@ void GameThreadDispatcher::detach() {
         g_dispatcher.store(nullptr, std::memory_order_release);
     }
 
+    g_fallbackOriginalWait.store(nullptr, std::memory_order_release);
+    g_fallbackOriginalGetThisScriptId.store(nullptr, std::memory_order_release);
+    g_fallbackOriginalGetScriptName.store(nullptr, std::memory_order_release);
+
     invoker_ = nullptr;
     originalWait_.store(nullptr, std::memory_order_release);
     originalGetThisScriptId_.store(nullptr, std::memory_order_release);
@@ -314,6 +370,7 @@ void GameThreadDispatcher::detach() {
     attached_.store(false, std::memory_order_release);
     gameThreadKnown_.store(false, std::memory_order_release);
     gameThreadId_ = {};
+    gameThreadContext_ = 0;
 }
 
 bool GameThreadDispatcher::submit(std::function<void()> task, std::string& error) {
@@ -421,16 +478,43 @@ bool GameThreadDispatcher::submit_and_wait(std::function<void()> task,
     return true;
 }
 
-std::size_t GameThreadDispatcher::pump(std::size_t maxTasks) {
-    if (!attached_ || maxTasks == 0) return 0;
+std::size_t GameThreadDispatcher::pump(std::size_t maxTasks, void* waitContext) {
+    if (!attached_ || maxTasks == 0 || waitContext == nullptr) return 0;
+
+    if (!is_authorized_wait_context(waitContext)) {
+#ifdef _WIN32
+        static std::atomic<std::uint32_t> deniedTrace{0};
+        const auto trace = deniedTrace.fetch_add(1, std::memory_order_relaxed);
+        if (trace < 16) {
+            char line[256]{};
+            char name[96]{};
+            const bool haveName =
+                lookup_script_context_name_impl(waitContext, name, sizeof(name));
+            std::snprintf(
+                line,
+                sizeof(line),
+                "[FrontierNative] dispatcher Wait ignored: unauthorized context=0x%llX script=%s thread=%lu",
+                static_cast<unsigned long long>(
+                    reinterpret_cast<std::uintptr_t>(waitContext)),
+                haveName ? name : "<unknown>",
+                static_cast<unsigned long>(GetCurrentThreadId()));
+            write_script_trace_line(line);
+        }
+#endif
+        return 0;
+    }
 
     if (!gameThreadKnown_.load(std::memory_order_acquire)) {
-        gameThreadId_ = std::this_thread::get_id();
-        gameThreadKnown_.store(true, std::memory_order_release);
+        std::lock_guard stateLock(queueMutex_);
+        if (!gameThreadKnown_.load(std::memory_order_relaxed)) {
+            gameThreadId_ = std::this_thread::get_id();
+            gameThreadContext_ = reinterpret_cast<std::uintptr_t>(waitContext);
+            gameThreadKnown_.store(true, std::memory_order_release);
 #ifdef _WIN32
-        std::fprintf(stderr, "[FrontierNative] dispatcher first pump thread=%lu\\n",
-                     static_cast<unsigned long>(GetCurrentThreadId()));
+            std::fprintf(stderr, "[FrontierNative] dispatcher authorized context thread=%lu\\n",
+                         static_cast<unsigned long>(GetCurrentThreadId()));
 #endif
+        }
     }
 
     std::size_t processed = 0;
@@ -469,6 +553,32 @@ std::size_t GameThreadDispatcher::pump(std::size_t maxTasks) {
     return processed;
 }
 
+bool GameThreadDispatcher::is_authorized_wait_context(void* context) const {
+    if (!context) return false;
+
+    char name[96]{};
+    if (!lookup_script_context_name_impl(context, name, sizeof(name))) {
+        return false;
+    }
+
+    std::string normalized{name};
+    for (char& ch : normalized) {
+        if (ch == '\\') ch = '/';
+        if (ch >= 'A' && ch <= 'Z') {
+            ch = static_cast<char>(ch - 'A' + 'a');
+        }
+    }
+
+    return normalized == "content/main" ||
+           normalized == "content/pressstart" ||
+           normalized == "main" ||
+           normalized == "pressstart" ||
+           normalized == "content/main.sc" ||
+           normalized == "content/pressstart.sc" ||
+           normalized == "main.sc" ||
+           normalized == "pressstart.sc";
+}
+
 bool GameThreadDispatcher::is_game_thread() const {
     return gameThreadKnown_.load(std::memory_order_acquire) && std::this_thread::get_id() == gameThreadId_;
 }
@@ -491,21 +601,26 @@ void GameThreadDispatcher::wait_hook(void* context) {
             write_script_trace_line(line);
         }
 #endif
-        dispatcher->pump();
+        dispatcher->pump(32, context);
         const auto original = dispatcher->originalWait_.load(std::memory_order_acquire);
         if (original) {
             original(context);
         }
         return;
     }
+
+    const fallback = g_fallbackOriginalWait.load(std::memory_order_acquire);
+    if (fallback) {
+        fallback(context);
+    }
 }
 
 void GameThreadDispatcher::get_this_script_id_hook(void* context) {
     auto* dispatcher = g_dispatcher.load(std::memory_order_acquire);
-    if (!dispatcher) return;
-
-    const auto original =
-        dispatcher->originalGetThisScriptId_.load(std::memory_order_acquire);
+    const auto original = dispatcher != nullptr
+        ? dispatcher->originalGetThisScriptId_.load(std::memory_order_acquire)
+        : g_fallbackOriginalGetThisScriptId.load(std::memory_order_acquire);
+    if (!original) return;
     if (original) {
         original(context);
     }
@@ -533,10 +648,10 @@ void GameThreadDispatcher::get_this_script_id_hook(void* context) {
 }
 void GameThreadDispatcher::get_script_name_hook(void* context) {
     auto* dispatcher = g_dispatcher.load(std::memory_order_acquire);
-    if (!dispatcher) return;
-
-    const auto original =
-        dispatcher->originalGetScriptName_.load(std::memory_order_acquire);
+    const auto original = dispatcher != nullptr
+        ? dispatcher->originalGetScriptName_.load(std::memory_order_acquire)
+        : g_fallbackOriginalGetScriptName.load(std::memory_order_acquire);
+    if (!original) return;
     if (original) {
         original(context);
     }
@@ -549,6 +664,9 @@ void GameThreadDispatcher::get_script_name_hook(void* context) {
         const bool ok = read_pointer_return(context, pointer) &&
                         pointer != 0 &&
                         read_c_string(reinterpret_cast<const void*>(pointer), name, sizeof(name));
+        if (ok) {
+            record_script_context_name_impl(context, name);
+        }
 
         char line[256]{};
         std::snprintf(line, sizeof(line),
