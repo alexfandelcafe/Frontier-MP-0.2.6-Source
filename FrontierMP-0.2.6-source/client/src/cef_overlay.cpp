@@ -524,6 +524,7 @@ struct PresentHookState final {
     std::array<std::size_t, 8> commandQueueOffsets{};
     std::size_t commandQueueOffsetCount{};
     std::size_t activeCommandQueueOffset{static_cast<std::size_t>(-1)};
+    ComPtr<ID3D12CommandQueue> capturedCommandQueue{};
 
     bool installed{};
 };
@@ -1345,7 +1346,10 @@ HRESULT STDMETHODCALLTYPE frontier_present1(
     UINT flags,
     const DXGI_PRESENT_PARAMETERS* parameters);
 
-void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain);
+void hook_swapchain(
+    PresentHookState& state,
+    IDXGISwapChain* swapChain,
+    ID3D12CommandQueue* commandQueueHint = nullptr);
 
 void hook_factory(PresentHookState& state, IDXGIFactory* factory) {
     if (factory == nullptr) return;
@@ -1456,7 +1460,10 @@ void hook_factory(PresentHookState& state, IDXGIFactory* factory) {
         return;
     }
 }
-void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
+void hook_swapchain(
+    PresentHookState& state,
+    IDXGISwapChain* swapChain,
+    ID3D12CommandQueue* commandQueueHint) {
     if (swapChain == nullptr) return;
 
     std::lock_guard lock(state.mutex);
@@ -1543,6 +1550,11 @@ void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
         state.swapchainHooked = true;
         state.swapchain1Hooked = true;
         state.swapchainUsesExtendedVtable = true;
+        state.capturedCommandQueue.Reset();
+        if (commandQueueHint != nullptr) {
+            state.capturedCommandQueue = commandQueueHint;
+            log_line("[FrontierD3D] captured D3D12 command queue from swapchain creation");
+        }
 
         DXGI_SWAP_CHAIN_DESC1 desc1{};
         HWND hwnd1 = nullptr;
@@ -1582,6 +1594,11 @@ void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
         state.originalVtableAddress = *baseVtable;
         *baseVtable = state.hookedVtable.data();
         state.swapchainUsesExtendedVtable = false;
+        state.capturedCommandQueue.Reset();
+        if (commandQueueHint != nullptr) {
+            state.capturedCommandQueue = commandQueueHint;
+            log_line("[FrontierD3D] captured D3D12 command queue from swapchain creation");
+        }
 
         return;
     }
@@ -1610,6 +1627,11 @@ void hook_swapchain(PresentHookState& state, IDXGISwapChain* swapChain) {
     state.hookedSwapChainRef = swapChain;
     state.swapchainHooked = true;
     state.swapchainUsesExtendedVtable = false;
+    state.capturedCommandQueue.Reset();
+    if (commandQueueHint != nullptr) {
+        state.capturedCommandQueue = commandQueueHint;
+        log_line("[FrontierD3D] captured D3D12 command queue from swapchain creation");
+    }
 
     std::ostringstream message;
     message << "[FrontierD3D] hooked IDXGISwapChain swapchain="
@@ -1719,7 +1741,14 @@ HRESULT STDMETHODCALLTYPE frontier_factory_create_swap_chain(
     const HRESULT result = original(factory, device, desc, swapChain);
     if (SUCCEEDED(result) && swapChain != nullptr && *swapChain != nullptr) {
         log_line("[FrontierD3D] DXGI CreateSwapChain produced swapchain");
-        hook_swapchain(g_presentHook, *swapChain);
+        ComPtr<ID3D12CommandQueue> commandQueueHint;
+        if (device != nullptr) {
+            device->QueryInterface(IID_PPV_ARGS(&commandQueueHint));
+        }
+        hook_swapchain(
+            g_presentHook,
+            *swapChain,
+            commandQueueHint.Get());
     }
     return result;
 }
@@ -1777,9 +1806,14 @@ HRESULT STDMETHODCALLTYPE frontier_factory_create_swap_chain_for_hwnd(
 
     if (SUCCEEDED(result) && swapChain != nullptr && *swapChain != nullptr) {
         log_line("[FrontierD3D] DXGI CreateSwapChainForHwnd produced swapchain");
+        ComPtr<ID3D12CommandQueue> commandQueueHint;
+        if (device != nullptr) {
+            device->QueryInterface(IID_PPV_ARGS(&commandQueueHint));
+        }
         hook_swapchain(
             g_presentHook,
-            reinterpret_cast<IDXGISwapChain*>(*swapChain));
+            reinterpret_cast<IDXGISwapChain*>(*swapChain),
+            commandQueueHint.Get());
     }
     return result;
 }
@@ -1812,9 +1846,14 @@ HRESULT STDMETHODCALLTYPE frontier_factory_create_swap_chain_for_composition(
 
     if (SUCCEEDED(result) && swapChain != nullptr && *swapChain != nullptr) {
         log_line("[FrontierD3D] DXGI CreateSwapChainForComposition produced swapchain");
+        ComPtr<ID3D12CommandQueue> commandQueueHint;
+        if (device != nullptr) {
+            device->QueryInterface(IID_PPV_ARGS(&commandQueueHint));
+        }
         hook_swapchain(
             g_presentHook,
-            reinterpret_cast<IDXGISwapChain*>(*swapChain));
+            reinterpret_cast<IDXGISwapChain*>(*swapChain),
+            commandQueueHint.Get());
     }
     return result;
 }
@@ -1936,6 +1975,7 @@ void unhook_render_path() {
     g_presentHook.commandQueueOffsetCount = 0;
     g_presentHook.activeCommandQueueOffset =
         static_cast<std::size_t>(-1);
+    g_presentHook.capturedCommandQueue.Reset();
 
     if (g_presentHook.swapchainUsesExtendedVtable &&
         g_presentHook.swapchain1Hooked &&
@@ -3466,7 +3506,18 @@ void CefOverlay::on_present(::IDXGISwapChain* swapChain) {
         d3d12Device != nullptr) {
         ComPtr<ID3D12CommandQueue> commandQueue;
         std::size_t queueOffset = static_cast<std::size_t>(-1);
-        if (!locate_command_queue(
+        bool historicalQueueLookup = false;
+        {
+            std::lock_guard lock(g_presentHook.mutex);
+            historicalQueueLookup = g_presentHook.sharedPresentPatched;
+            if (!historicalQueueLookup &&
+                g_presentHook.capturedCommandQueue != nullptr) {
+                commandQueue = g_presentHook.capturedCommandQueue;
+            }
+        }
+
+        if (historicalQueueLookup &&
+            !locate_command_queue(
                 g_presentHook,
                 swapChain,
                 commandQueue,
@@ -3475,11 +3526,23 @@ void CefOverlay::on_present(::IDXGISwapChain* swapChain) {
             const auto trace = missingQueueTrace.fetch_add(1, std::memory_order_relaxed);
             if (trace < 8) {
                 std::ostringstream message;
-                message << "[FrontierD3D] D3D12 Present detected but command queue field was not resolved"
+                message << "[FrontierD3D] historical D3D12 Present detected but command queue field was not resolved"
                         << " swapchain=" << static_cast<const void*>(swapChain)
                         << " device=" << static_cast<const void*>(d3d12Device.Get())
                         << " knownOffsets=" << g_presentHook.commandQueueOffsetCount;
                 log_line(message.str());
+            }
+            return;
+        }
+
+        if (commandQueue == nullptr) {
+            static std::atomic<std::uint32_t> missingCapturedQueueTrace{0};
+            const auto trace =
+                missingCapturedQueueTrace.fetch_add(1, std::memory_order_relaxed);
+            if (trace < 8) {
+                log_line(
+                    "[FrontierD3D] targeted D3D12 Present has no captured command queue; "
+                    "skipping private swapchain memory scan");
             }
             return;
         }
@@ -3542,6 +3605,8 @@ void CefOverlay::on_present(::IDXGISwapChain* swapChain) {
                     << " device=" << static_cast<const void*>(d3d12Device.Get())
                     << " queue=" << static_cast<const void*>(commandQueue.Get())
                     << " queueOffset=" << queueOffset
+                    << " queueSource="
+                    << (historicalQueueLookup ? "private-swapchain-scan" : "CreateSwapChain")
                     << " featureLevel=0x" << std::hex
                     << static_cast<unsigned long>(chosenLevel);
             log_line(message.str());
