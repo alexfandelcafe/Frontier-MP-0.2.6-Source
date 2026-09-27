@@ -2991,3 +2991,15 @@ Esto mejora la arquitectura del protocolo propio para futuras operaciones como s
 
 El cambio de wire format requiere que cliente y servidor Frontier utilicen `kProtocolVersion=2` simultáneamente.
 
+## 68. Detach seguro del dispatcher (2026-09-27)
+
+Se añadió un contador global de hooks nativos en vuelo. `wait_hook`, `GET_THIS_SCRIPT_ID` y `GET_SCRIPT_NAME` incrementan el contador al entrar y lo decrementan automáticamente al salir.
+
+Durante `GameThreadDispatcher::detach()`:
+1. se restauran primero los handlers nativos;
+2. se retira el dispatcher global;
+3. se espera a que todos los hooks en vuelo terminen;
+4. recién entonces se limpian los punteros fallback y el estado del dispatcher.
+
+Esto evita que una entrada concurrente al hook ejecute sobre un `GameThreadDispatcher` que ya fue destruido.
+
