@@ -21,6 +21,17 @@ public:
                  const std::string& name,
                  std::string& error);
 
+    // Installs a detour gateway that preserves the complete incoming GPR
+    // register state while executing the callback. The callback uses the
+    // normal Windows x64 argument registers and must return without throwing.
+    // After the callback, the gateway restores the entry state and transfers
+    // control into trampoline() so the original function continues normally.
+    bool install_preserving_entry_registers(std::uintptr_t target,
+                                            std::uintptr_t callback,
+                                            std::size_t patchSize,
+                                            const std::string& name,
+                                            std::string& error);
+
     // Historical game-core locates scrThread::Wait through an E8 call-site
     // pattern, then hooks the decoded call target. This helper redirects only
     // that 5-byte CALL and exposes the original decoded target as trampoline().
@@ -44,6 +55,8 @@ private:
     std::vector<std::uint8_t> originalBytes_{};
     std::uintptr_t relay_{};
     bool ownsRelay_{};
+    std::uintptr_t gateway_{};
+    bool ownsGateway_{};
 };
 
 } // namespace frontier::game
