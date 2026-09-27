@@ -330,23 +330,42 @@ bool InlineHook::install_preserving_entry_registers(
         std::memcpy(gateway + offset, &value, sizeof(value));
         offset += sizeof(value);
     };
-    auto emit_save = [&](std::uint8_t reg) {
-        const auto stackOffset =
-            kShadowSpaceSize + static_cast<std::uint32_t>(reg) * 8u;
+    auto emit_stack_access = [&](std::uint8_t opcode,
+                                  std::uint8_t reg,
+                                  std::uint32_t stackOffset) {
         const std::uint8_t rex = static_cast<std::uint8_t>(
             0x48u | (reg >= 8u ? 0x04u : 0u));
+        if (stackOffset <= 0x7Fu) {
+            const std::uint8_t modrm = static_cast<std::uint8_t>(
+                0x44u | ((reg & 7u) << 3u));
+            emit({rex, opcode, modrm, 0x24u,
+                  static_cast<std::uint8_t>(stackOffset)});
+            return;
+        }
+
+        // RSP-relative disp8 is signed. Offsets >= 0x80 must use a disp32;
+        // otherwise 0x80 becomes -128 and the gateway writes below RSP.
         const std::uint8_t modrm = static_cast<std::uint8_t>(
-            0x44u | ((reg & 7u) << 3u));
-        emit({rex, 0x89u, modrm, 0x24u, static_cast<std::uint8_t>(stackOffset)});
+            0x84u | ((reg & 7u) << 3u));
+        emit({rex, opcode, modrm, 0x24u});
+        emit({
+            static_cast<std::uint8_t>(stackOffset & 0xFFu),
+            static_cast<std::uint8_t>((stackOffset >> 8u) & 0xFFu),
+            static_cast<std::uint8_t>((stackOffset >> 16u) & 0xFFu),
+            static_cast<std::uint8_t>((stackOffset >> 24u) & 0xFFu)
+        });
+    };
+    auto emit_save = [&](std::uint8_t reg) {
+        emit_stack_access(
+            0x89u,
+            reg,
+            kShadowSpaceSize + static_cast<std::uint32_t>(reg) * 8u);
     };
     auto emit_restore = [&](std::uint8_t reg) {
-        const auto stackOffset =
-            kShadowSpaceSize + static_cast<std::uint32_t>(reg) * 8u;
-        const std::uint8_t rex = static_cast<std::uint8_t>(
-            0x48u | (reg >= 8u ? 0x04u : 0u));
-        const std::uint8_t modrm = static_cast<std::uint8_t>(
-            0x44u | ((reg & 7u) << 3u));
-        emit({rex, 0x8Bu, modrm, 0x24u, static_cast<std::uint8_t>(stackOffset)});
+        emit_stack_access(
+            0x8Bu,
+            reg,
+            kShadowSpaceSize + static_cast<std::uint32_t>(reg) * 8u);
     };
 
     // Preserve every GPR except RSP. Present has no stack arguments, so the
