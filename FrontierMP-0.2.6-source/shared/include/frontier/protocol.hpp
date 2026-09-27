@@ -90,6 +90,9 @@ struct Message final {
     MessageType type{MessageType::Ping};
     Channel channel{Channel::Control};
     bool reliable{};
+    // Monotonic sequence within the logical channel. Control messages are
+    // delivered reliably/in-order; State messages are sequenced but may skip.
+    std::uint32_t channelSequence{};
     std::vector<std::uint8_t> payload;
 };
 
