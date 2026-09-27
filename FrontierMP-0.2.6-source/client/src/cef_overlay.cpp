@@ -526,6 +526,11 @@ struct PresentHookState final {
     std::size_t activeCommandQueueOffset{static_cast<std::size_t>(-1)};
     ComPtr<ID3D12CommandQueue> capturedCommandQueue{};
 
+    // The game must finish its loading/shader-preload transition before the
+    // overlay can touch a real RDR swapchain. This starts false and is raised
+    // by the game-thread pump after consecutive world-ready observations.
+    std::atomic<bool> renderActivationAllowed{false};
+
     bool installed{};
 };
 
@@ -1484,6 +1489,16 @@ void hook_swapchain(
         return;
     }
 
+    if (!state.renderActivationAllowed.load(std::memory_order_acquire)) {
+        static std::atomic<std::uint32_t> gatedHookTrace{0};
+        const auto trace = gatedHookTrace.fetch_add(1, std::memory_order_relaxed);
+        if (trace < 4) {
+            log_line(
+                "[FrontierD3D] swapchain hook deferred until RDR loading/shader preload completes");
+        }
+        return;
+    }
+
     // Query the highest swap-chain interface exposed by the RDR object before
     // replacing its vtable. A D3D12 swap chain commonly exposes IDXGISwapChain4;
     // its complete COM table has 41 entries. Replacing that table with only the
@@ -2082,6 +2097,8 @@ bool install_render_path(CefOverlay* overlay) {
         return false;
     }
 
+    g_presentHook.renderActivationAllowed.store(false, std::memory_order_release);
+
     std::string error;
     bool anyHookInstalled = false;
 
@@ -2255,6 +2272,7 @@ HRESULT STDMETHODCALLTYPE frontier_present(
         shouldRender =
             overlay != nullptr &&
             original != nullptr &&
+            g_presentHook.renderActivationAllowed.load(std::memory_order_acquire) &&
             (g_presentHook.sharedPresentPatched ||
              swapChain == g_presentHook.hookedSwapChain);
     }
@@ -2306,6 +2324,7 @@ HRESULT STDMETHODCALLTYPE frontier_present1(
         shouldRender =
             overlay != nullptr &&
             original != nullptr &&
+            g_presentHook.renderActivationAllowed.load(std::memory_order_acquire) &&
             (g_presentHook.sharedPresent1Patched ||
              swapChain == g_presentHook.hookedSwapChain1Ref.Get());
     }
@@ -2425,6 +2444,9 @@ struct CefOverlay::State final {
     std::uint64_t frameGeneration{};
     bool firstPaintLogged{};
     bool firstCompositeLogged{};
+
+    std::uint32_t renderReadyStreak{};
+    bool renderActivationLogged{};
 
     ComPtr<ID3D11Device> d3dDevice{};
     ComPtr<ID3D11DeviceContext> d3dContext{};
@@ -2560,6 +2582,7 @@ void CefOverlay::stop() {
     }
 
     g_activeOverlay.store(nullptr, std::memory_order_release);
+    g_presentHook.renderActivationAllowed.store(false, std::memory_order_release);
     unhook_render_path();
     bridge_ = nullptr;
 }
@@ -2795,10 +2818,55 @@ void CefOverlay::pump_on_game_thread() {
         return;
     }
 
+    // Do not touch the RDR swapchain/D3D11On12 path while the game is still
+    // in its title/loading state. The 25D11007 path is especially sensitive
+    // to third-party render interception during shader preload. Wait for
+    // repeated observations of the real world state before allowing any
+    // swapchain hook or CEF composition.
+    if (bridge_ != nullptr) {
+        std::int32_t gameState = -1;
+        bool worldLoaded = false;
+        bool worldLoadedKnown = false;
+        bool simulateStartMultiplayer = false;
+        bool simulateStartMultiplayerKnown = false;
+        bool startPosCommandLine = false;
+        bool startPosCommandLineKnown = false;
+        std::string runtimeError;
+
+        const bool runtimeKnown = bridge_->read_game_runtime(
+            gameState,
+            worldLoaded,
+            worldLoadedKnown,
+            simulateStartMultiplayer,
+            simulateStartMultiplayerKnown,
+            startPosCommandLine,
+            startPosCommandLineKnown,
+            runtimeError);
+
+        if (runtimeKnown &&
+            worldLoadedKnown &&
+            worldLoaded &&
+            gameState == 3) {
+            state_->renderReadyStreak =
+                std::min<std::uint32_t>(state_->renderReadyStreak + 1u, 8u);
+        } else {
+            state_->renderReadyStreak = 0;
+        }
+
+        if (state_->renderReadyStreak >= 3u &&
+            !g_presentHook.renderActivationAllowed.exchange(
+                true, std::memory_order_acq_rel)) {
+            if (!state_->renderActivationLogged) {
+                state_->renderActivationLogged = true;
+                log_line(
+                    "[FrontierD3D] render activation opened after stable RDR world; "
+                    "shader-preload/title render interception was deferred");
+            }
+        }
+    }
+
     // Keep CEF's browser/process message pump independent from the render
-    // interception. A shared DXGI vtable hook is only a rendering signal;
-    // if the real RDR swapchain does not use that vtable, gating CEF here can
-    // leave the browser initialized but unable to deliver its first OnPaint.
+    // interception. The browser may paint while rendering remains gated.
     CefDoMessageLoopWork();
 
     if (frontendConnectRequested_.load(std::memory_order_acquire) &&
@@ -3485,6 +3553,16 @@ void CefOverlay::on_present(::IDXGISwapChain* swapChain) {
     if (FAILED(swapChain->GetDesc(&desc))) return;
     if (state_->gameWindow == nullptr ||
         desc.OutputWindow != state_->gameWindow) {
+        return;
+    }
+
+    if (!g_presentHook.renderActivationAllowed.load(std::memory_order_acquire)) {
+        static std::atomic<std::uint32_t> renderGateTrace{0};
+        const auto trace = renderGateTrace.fetch_add(1, std::memory_order_relaxed);
+        if (trace < 4) {
+            log_line(
+                "[FrontierD3D] CEF composition deferred while RDR is loading/preloading shaders");
+        }
         return;
     }
 
