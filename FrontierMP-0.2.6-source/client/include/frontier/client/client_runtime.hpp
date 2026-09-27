@@ -28,6 +28,8 @@ private:
     std::atomic<bool> sessionResetPending_{false};
     std::atomic<bool> remoteUpdatePending_{false};
     frontier::game::RdrBridge gameBridge_{};
+    mutable std::mutex sessionSnapshotMutex_;
+    frontier::game::FrontierRuntimeState sessionSnapshot_{};
     std::uint32_t clientTick_{};
     std::uint64_t lastStateSendMs_{};
     std::uint64_t lastBridgeLogMs_{};
