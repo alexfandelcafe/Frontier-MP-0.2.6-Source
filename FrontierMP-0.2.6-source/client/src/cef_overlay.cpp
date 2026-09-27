@@ -1812,7 +1812,7 @@ HRESULT STDMETHODCALLTYPE frontier_factory_create_swap_chain(
         if (device != nullptr) {
             device->QueryInterface(IID_PPV_ARGS(&commandQueueHint));
         }
-        hook_swapchain(
+        defer_swapchain_hook(
             g_presentHook,
             *swapChain,
             commandQueueHint.Get());
@@ -1917,7 +1917,7 @@ HRESULT STDMETHODCALLTYPE frontier_factory_create_swap_chain_for_composition(
         if (device != nullptr) {
             device->QueryInterface(IID_PPV_ARGS(&commandQueueHint));
         }
-        hook_swapchain(
+        defer_swapchain_hook(
             g_presentHook,
             reinterpret_cast<IDXGISwapChain*>(*swapChain),
             commandQueueHint.Get());
