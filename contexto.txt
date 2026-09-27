@@ -2349,3 +2349,124 @@ principal pertenezca a esa tabla de imports ni que sea el único factory creado.
 
 HEAD DE CONTINUIDAD:
 251f9a58175712cf2d1d243296139239d8414360
+
+
+============================================================
+58. CORRECCIÓN DXGI — VTABLE COMPLETA DE IDXGISWAPCHAIN1 + TRAZAS DE CREACIÓN
+============================================================
+
+Commit de código:
+a2fcb17a0827f861369284c846afad6751773def
+Commit posterior de limpieza:
+dbf49d94c3d66d6a36385ca4299db3255831c2b8
+
+Archivo:
+FrontierMP-0.2.6-source/client/src/cef_overlay.cpp
+
+Hallazgo estático importante en el commit 251f9a58175712cf2d1d243296139239d8414360:
+
+La implementación de IDXGISwapChain1 hacía:
+1. reemplazar primero la vtable de IDXGISwapChain por una tabla de 18 entradas;
+2. luego llamar QueryInterface(IID_IDXGISwapChain1);
+3. leer 23 entradas desde la vtable resultante;
+4. reemplazarla por una tabla de 23 entradas.
+
+Esto es inseguro cuando IDXGISwapChain y IDXGISwapChain1 comparten el mismo objeto/vtable:
+- después del primer reemplazo solo existían 18 entradas de shadow vtable;
+- leer hasta el índice 22 podía acceder fuera de la tabla;
+- una vtable de IDXGISwapChain1 tampoco debe truncarse en Present1, porque existen métodos posteriores.
+
+Evidencia externa usada para validar el layout:
+- Microsoft/SDK documenta Present1 como método de IDXGISwapChain1.
+- El header dxgi1_2.h muestra que IDXGISwapChain1 extiende IDXGISwapChain y continúa después de Present1 hasta GetRotation.
+- En el layout observado, Present está en índice 8 y Present1 en índice 22; la tabla extendida completa termina en índice 27.
+
+Corrección aplicada:
+- IDXGISwapChain1 shadow vtable ahora tiene 28 entradas.
+- QueryInterface se realiza ANTES de modificar cualquier vtable.
+- En el caso normal de mismo objeto/vtable se instala una única tabla extendida que conserva todas las entradas y parchea:
+  index 8  -> frontier_present
+  index 22 -> frontier_present1
+- Se añade swapchainUsesExtendedVtable para restaurar correctamente la vtable original.
+- Si la interfaz base y la extendida fueran objetos/pointers distintos, se conserva un fallback separado.
+- Se restaura el cleanup original del render path.
+
+Trazas nuevas:
+- CreateDXGIFactory2 intercepted
+- CreateDXGIFactory2 result=...
+- CreateSwapChainForHwnd intercepted
+- CreateSwapChainForHwnd result=...
+- hooked IDXGISwapChain1 ... sameObject=... vtableEntries=28
+- Present trace=...
+- Present1 trace=...
+
+Objetivo de la próxima prueba:
+Determinar exactamente en qué punto se corta la cadena:
+
+IAT CreateDXGIFactory2
+    ->
+frontier_create_dxgi_factory2
+    ->
+hook_factory
+    ->
+CreateSwapChainForHwnd/CreateSwapChain
+    ->
+hook_swapchain
+    ->
+Present/Present1
+    ->
+CefOverlay::on_present
+    ->
+GetBuffer(backbuffer)
+    ->
+CreateRenderTargetView
+    ->
+upload_and_draw
+    ->
+first CEF frame composited into RDR backbuffer
+
+Interpretación esperada:
+
+A) Si aparece:
+CreateDXGIFactory2 intercepted
+pero NO aparece:
+CreateSwapChainForHwnd intercepted
+ni
+DXGI CreateSwapChain produced swapchain
+
+entonces el factory interceptado no es el que crea el swapchain principal, o RDR usa otra ruta/módulo/factory.
+
+B) Si aparece:
+CreateSwapChainForHwnd ... produced swapchain
+pero NO:
+hooked IDXGISwapChain1
+
+entonces el fallo está dentro de hook_swapchain/identificación de interfaz.
+
+C) Si aparece:
+hooked IDXGISwapChain1
+pero NO:
+Present trace / Present1 trace
+
+entonces el objeto se creó y la vtable quedó instalada, pero la ruta real de presentación no pasa por ese método/interfaz o el objeto fue reemplazado/recreado.
+
+D) Si aparece:
+Present/Present1 trace
+pero NO:
+first CEF frame composited...
+
+entonces el problema ya está dentro de CefOverlay::on_present/create_d3d_resources/upload_and_draw.
+
+E) Si aparece:
+first CEF frame composited into RDR backbuffer
+pero visualmente no se ve CEF
+entonces la intercepción sí funciona y el siguiente problema pasa a ser composición/estado D3D, alpha/transparencia, viewport o preservación del estado gráfico del juego.
+
+Riesgo todavía abierto:
+- El hook de vtable es estático y no está validado en runtime en esta máquina.
+- No afirmar que el overlay ya funciona visualmente hasta repetir la prueba con RDR1.
+- Todavía no tocar RemotePlayerManager, local-player spawn, START_GAMEPLAY ni la UI nativa.
+
+HEAD de continuidad de código:
+dbf49d94c3d66d6a36385ca4299db3255831c2b8
+
