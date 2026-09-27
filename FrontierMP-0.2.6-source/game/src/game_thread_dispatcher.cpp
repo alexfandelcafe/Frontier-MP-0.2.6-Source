@@ -658,16 +658,16 @@ void GameThreadDispatcher::get_script_name_hook(void* context) {
 
 #ifdef _WIN32
     const auto traceIndex = g_scriptNameTraceCount.fetch_add(1, std::memory_order_relaxed);
-    if (traceIndex < 32) {
-        std::uintptr_t pointer = 0;
-        char name[96]{};
-        const bool ok = read_pointer_return(context, pointer) &&
-                        pointer != 0 &&
-                        read_c_string(reinterpret_cast<const void*>(pointer), name, sizeof(name));
-        if (ok) {
-            record_script_context_name_impl(context, name);
-        }
+    std::uintptr_t pointer = 0;
+    char name[96]{};
+    const bool ok = read_pointer_return(context, pointer) &&
+                    pointer != 0 &&
+                    read_c_string(reinterpret_cast<const void*>(pointer), name, sizeof(name));
+    if (ok) {
+        record_script_context_name_impl(context, name);
+    }
 
+    if (traceIndex < 32) {
         char line[256]{};
         std::snprintf(line, sizeof(line),
                       "[FrontierNative] GET_SCRIPT_NAME trace=%lu context=0x%llX "
