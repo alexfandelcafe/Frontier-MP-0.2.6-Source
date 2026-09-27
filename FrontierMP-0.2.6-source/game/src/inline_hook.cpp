@@ -300,7 +300,11 @@ bool InlineHook::install_preserving_entry_registers(
     }
 
     constexpr std::size_t kGatewaySize = 256u;
-    constexpr std::uint32_t kStackFrameSize = 0xA8u;
+    // Leave the mandatory Windows x64 shadow space untouched. The saved GPRs
+    // begin at +0x40 so the callback cannot overwrite them while using its
+    // home space at +0x00..+0x1F.
+    constexpr std::uint32_t kShadowSpaceSize = 0x40u;
+    constexpr std::uint32_t kStackFrameSize = 0xC8u;
     const auto* trampolineAddress =
         reinterpret_cast<const std::uint8_t*>(trampoline_);
 
@@ -327,18 +331,22 @@ bool InlineHook::install_preserving_entry_registers(
         offset += sizeof(value);
     };
     auto emit_save = [&](std::uint8_t reg) {
+        const auto stackOffset =
+            kShadowSpaceSize + static_cast<std::uint32_t>(reg) * 8u;
         const std::uint8_t rex = static_cast<std::uint8_t>(
             0x48u | (reg >= 8u ? 0x04u : 0u));
         const std::uint8_t modrm = static_cast<std::uint8_t>(
             0x44u | ((reg & 7u) << 3u));
-        emit({rex, 0x89u, modrm, 0x24u, static_cast<std::uint8_t>(reg * 8u)});
+        emit({rex, 0x89u, modrm, 0x24u, static_cast<std::uint8_t>(stackOffset)});
     };
     auto emit_restore = [&](std::uint8_t reg) {
+        const auto stackOffset =
+            kShadowSpaceSize + static_cast<std::uint32_t>(reg) * 8u;
         const std::uint8_t rex = static_cast<std::uint8_t>(
             0x48u | (reg >= 8u ? 0x04u : 0u));
         const std::uint8_t modrm = static_cast<std::uint8_t>(
             0x44u | ((reg & 7u) << 3u));
-        emit({rex, 0x8Bu, modrm, 0x24u, static_cast<std::uint8_t>(reg * 8u)});
+        emit({rex, 0x8Bu, modrm, 0x24u, static_cast<std::uint8_t>(stackOffset)});
     };
 
     // Preserve every GPR except RSP. Present has no stack arguments, so the
