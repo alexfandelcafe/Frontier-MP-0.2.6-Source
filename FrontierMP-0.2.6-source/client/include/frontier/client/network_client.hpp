@@ -31,7 +31,13 @@ public:
     ConnectionState state() const { return state_; }
     std::uint16_t player_id() const { return playerId_; }
     const std::string& session_token() const { return sessionToken_; }
-    bool rdrmp_compatibility_enabled() const { return useRdrmpCompat_; }
+    bool rdrmp_compatibility_enabled() const {
+#ifdef FRONTIER_RDRMP_ENET_AVAILABLE
+        return useRdrmpCompat_;
+#else
+        return false;
+#endif
+    }
 
     void set_on_welcome(WelcomeCallback callback) { onWelcome_ = std::move(callback); }
     void set_on_snapshot(SnapshotCallback callback) { onSnapshot_ = std::move(callback); }
