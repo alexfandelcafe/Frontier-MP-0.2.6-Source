@@ -70,6 +70,20 @@ void test_player_packets() {
     assert(transformBytes.size() == 26);
     assert(transformBytes[0] == 0x12 && transformBytes[1] == 0x34);
 
+    frontier::rdrmp::ClientPlayerState clientState{};
+    clientState.position = {4.0f, 5.0f, 6.0f};
+    clientState.rotation = {0.0f, 45.0f, 0.0f};
+    const auto clientStateBytes = frontier::rdrmp::encode_client_player_state(clientState);
+    assert(clientStateBytes.size() == 24);
+    expect_bytes(clientStateBytes, {
+        0x40, 0x80, 0x00, 0x00,
+        0x40, 0xA0, 0x00, 0x00,
+        0x40, 0xC0, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+        0x42, 0x34, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+    });
+
     frontier::rdrmp::PlayerProperty property{};
     property.playerId = 0x1234;
     property.value = 0xCAFEBABE;
