@@ -40,6 +40,12 @@ namespace frontier::client {
 
 namespace {
 
+HRESULT STDMETHODCALLTYPE frontier_present1(
+    IDXGISwapChain1* swapChain,
+    UINT syncInterval,
+    UINT flags,
+    const DXGI_PRESENT_PARAMETERS* parameters);
+
 using Microsoft::WRL::ComPtr;
 
 void log_line(const std::string& line) {
