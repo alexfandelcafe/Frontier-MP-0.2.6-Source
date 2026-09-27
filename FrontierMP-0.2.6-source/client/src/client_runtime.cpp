@@ -50,6 +50,10 @@ bool ClientRuntime::initialize(const std::string& host, std::uint16_t port, cons
     stopRequested_.store(false, std::memory_order_release);
     sessionResetPending_.store(false, std::memory_order_release);
     remoteUpdatePending_.store(false, std::memory_order_release);
+    {
+        std::lock_guard stateLock(sessionSnapshotMutex_);
+        sessionSnapshot_ = {};
+    }
     lastFrontendBootstrapAttemptMs_ = 0;
     historicalOnlineBootstrapLogged_ = false;
     nativeUiBootstrapEnabled_ = environment_value("FRONTIER_NATIVE_UI_BOOTSTRAP") == "1";
@@ -336,7 +340,11 @@ void ClientRuntime::shutdown() {
     lastStateSendMs_ = 0;
     lastBridgeLogMs_ = 0;
     bridgeStateReady_ = false;
-    session_.reset();
+    sessionResetPending_.store(true, std::memory_order_release);
+    {
+        std::lock_guard stateLock(sessionSnapshotMutex_);
+        sessionSnapshot_ = {};
+    }
     lastSessionUpdateMs_ = 0;
     lastFrontendBootstrapAttemptMs_ = 0;
     {
@@ -454,6 +462,10 @@ void ClientRuntime::update() {
                             }
 
                             sessionRuntime = session_.runtime_state();
+                            {
+                                std::lock_guard stateLock(sessionSnapshotMutex_);
+                                sessionSnapshot_ = sessionRuntime;
+                            }
                         },
                         2000u,
                         taskError);
@@ -597,8 +609,13 @@ void ClientRuntime::update() {
             // Engine actor calls belong to the authorized game thread. Keep at
             // most one pending actor update so the worker cannot flood the
             // dispatcher when the render/script thread is busy.
+            frontier::game::FrontierRuntimeState sessionRuntime{};
+            {
+                std::lock_guard stateLock(sessionSnapshotMutex_);
+                sessionRuntime = sessionSnapshot_;
+            }
             const bool sessionActive =
-                session_.runtime_state().state == frontier::game::FrontierSessionState::Active;
+                sessionRuntime.state == frontier::game::FrontierSessionState::Active;
             if (sessionActive &&
                 !remoteUpdatePending_.exchange(true, std::memory_order_acq_rel)) {
                 std::string queueError;
