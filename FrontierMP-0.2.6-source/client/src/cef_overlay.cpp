@@ -526,6 +526,13 @@ struct PresentHookState final {
     std::size_t activeCommandQueueOffset{static_cast<std::size_t>(-1)};
     ComPtr<ID3D12CommandQueue> capturedCommandQueue{};
 
+    // Never patch a real RDR swapchain while still inside DXGI's
+    // CreateSwapChain* call. RDR/DXGI may continue touching the freshly-created
+    // COM object on the same stack after the factory method returns internally.
+    // Keep the object alive and patch it from the next game-thread tick instead.
+    ComPtr<IDXGISwapChain> pendingSwapChain{};
+    ComPtr<ID3D12CommandQueue> pendingSwapChainQueue{};
+
     // The game must finish its loading/shader-preload transition before the
     // overlay can touch a real RDR swapchain. This starts false and is raised
     // by the game-thread pump after consecutive world-ready observations.
@@ -1356,6 +1363,51 @@ void hook_swapchain(
     IDXGISwapChain* swapChain,
     ID3D12CommandQueue* commandQueueHint = nullptr);
 
+void defer_swapchain_hook(
+    PresentHookState& state,
+    IDXGISwapChain* swapChain,
+    ID3D12CommandQueue* commandQueueHint) {
+    if (swapChain == nullptr) return;
+
+    std::lock_guard lock(state.mutex);
+    if (state.swapchainHooked || state.swapchain1Hooked) return;
+
+    state.pendingSwapChain = swapChain;
+    state.pendingSwapChainQueue.Reset();
+    if (commandQueueHint != nullptr) {
+        state.pendingSwapChainQueue = commandQueueHint;
+    }
+
+    log_line("[FrontierD3D] swapchain hook queued for next RDR game-thread tick");
+}
+
+void activate_pending_swapchain_hook(PresentHookState& state) {
+    if (!state.renderActivationAllowed.load(std::memory_order_acquire)) {
+        return;
+    }
+
+    ComPtr<IDXGISwapChain> pendingSwapChain;
+    ComPtr<ID3D12CommandQueue> pendingQueue;
+    {
+        std::lock_guard lock(state.mutex);
+        if (state.swapchainHooked || state.swapchain1Hooked ||
+            state.pendingSwapChain == nullptr) {
+            return;
+        }
+
+        pendingSwapChain = state.pendingSwapChain;
+        pendingQueue = state.pendingSwapChainQueue;
+        state.pendingSwapChain.Reset();
+        state.pendingSwapChainQueue.Reset();
+    }
+
+    log_line("[FrontierD3D] activating deferred swapchain hook on RDR game-thread tick");
+    hook_swapchain(
+        state,
+        pendingSwapChain.Get(),
+        pendingQueue.Get());
+}
+
 void hook_factory(PresentHookState& state, IDXGIFactory* factory) {
     if (factory == nullptr) return;
 
@@ -1825,7 +1877,7 @@ HRESULT STDMETHODCALLTYPE frontier_factory_create_swap_chain_for_hwnd(
         if (device != nullptr) {
             device->QueryInterface(IID_PPV_ARGS(&commandQueueHint));
         }
-        hook_swapchain(
+        defer_swapchain_hook(
             g_presentHook,
             reinterpret_cast<IDXGISwapChain*>(*swapChain),
             commandQueueHint.Get());
@@ -1911,7 +1963,7 @@ HRESULT WINAPI frontier_create_device_and_swapchain(
         swapChain != nullptr &&
         *swapChain != nullptr) {
         log_line("[FrontierD3D] RDR D3D11CreateDeviceAndSwapChain succeeded");
-        hook_swapchain(g_presentHook, *swapChain);
+        defer_swapchain_hook(g_presentHook, *swapChain, nullptr);
     } else {
         log_line(
             "[FrontierD3D] RDR D3D11CreateDeviceAndSwapChain result=0x" +
@@ -1991,6 +2043,8 @@ void unhook_render_path() {
     g_presentHook.activeCommandQueueOffset =
         static_cast<std::size_t>(-1);
     g_presentHook.capturedCommandQueue.Reset();
+    g_presentHook.pendingSwapChain.Reset();
+    g_presentHook.pendingSwapChainQueue.Reset();
 
     if (g_presentHook.swapchainUsesExtendedVtable &&
         g_presentHook.swapchain1Hooked &&
@@ -2864,6 +2918,10 @@ void CefOverlay::pump_on_game_thread() {
             }
         }
     }
+
+    // Patch the actual RDR swapchain only after the CreateSwapChain* call
+    // has completely returned and the world is stable.
+    activate_pending_swapchain_hook(g_presentHook);
 
     // Keep CEF's browser/process message pump independent from the render
     // interception. The browser may paint while rendering remains gated.
