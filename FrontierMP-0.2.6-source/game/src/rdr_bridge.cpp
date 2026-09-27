@@ -1453,69 +1453,116 @@ bool RdrBridge::read_game_runtime(std::int32_t& gameState, bool& worldLoaded, bo
         return false;
     }
 
-    bool enqueueRefresh = false;
-    RuntimeSnapshot snapshot{};
-    {
-        std::lock_guard lock(runtimeSnapshotMutex_);
-        snapshot = runtimeSnapshot_;
-        if (!runtimeRefreshPending_) {
-            runtimeRefreshPending_ = true;
-            enqueueRefresh = true;
+    // On the authorized game thread, read the live engine state now. This keeps
+    // FrontierSession from consuming a one-tick-old worker snapshot while still
+    // preventing any off-thread native access.
+    if (gameThreadDispatcher_.is_game_thread()) {
+        RuntimeSnapshot refreshed{};
+        std::uint32_t value = 0;
+
+        if (nativeInvoker_.invoke_u32(kNativeGetGameState, value)) {
+            refreshed.gameStateKnown = true;
+            refreshed.gameState = static_cast<std::int32_t>(value);
         }
-    }
+        if (nativeInvoker_.invoke_u32(kNativeStreamingIsWorldLoaded, value)) {
+            refreshed.worldLoadedKnown = true;
+            refreshed.worldLoaded = value != 0;
+        }
+        if (nativeInvoker_.invoke_u32(kNativeIsSimulateStartMultiplayer, value)) {
+            refreshed.simulateStartMultiplayerKnown = true;
+            refreshed.simulateStartMultiplayer = value != 0;
+        }
+        if (nativeInvoker_.invoke_u32(kNativeIsStartPosInCommandLine, value)) {
+            refreshed.startPosCommandLineKnown = true;
+            refreshed.startPosCommandLine = value != 0;
+        }
 
-    if (enqueueRefresh) {
-        std::string dispatchError;
-        const bool submitted = gameThreadDispatcher_.submit(
-            [this]() {
-                RuntimeSnapshot refreshed{};
-                std::uint32_t value = 0;
-
-                if (nativeInvoker_.invoke_u32(kNativeGetGameState, value)) {
-                    refreshed.gameStateKnown = true;
-                    refreshed.gameState = static_cast<std::int32_t>(value);
-                }
-                if (nativeInvoker_.invoke_u32(kNativeStreamingIsWorldLoaded, value)) {
-                    refreshed.worldLoadedKnown = true;
-                    refreshed.worldLoaded = value != 0;
-                }
-                if (nativeInvoker_.invoke_u32(kNativeIsSimulateStartMultiplayer, value)) {
-                    refreshed.simulateStartMultiplayerKnown = true;
-                    refreshed.simulateStartMultiplayer = value != 0;
-                }
-                if (nativeInvoker_.invoke_u32(kNativeIsStartPosInCommandLine, value)) {
-                    refreshed.startPosCommandLineKnown = true;
-                    refreshed.startPosCommandLine = value != 0;
-                }
-
-                std::lock_guard lock(runtimeSnapshotMutex_);
-                if (refreshed.gameStateKnown) {
-                    runtimeSnapshot_.gameStateKnown = true;
-                    runtimeSnapshot_.gameState = refreshed.gameState;
-                }
-                if (refreshed.worldLoadedKnown) {
-                    runtimeSnapshot_.worldLoadedKnown = true;
-                    runtimeSnapshot_.worldLoaded = refreshed.worldLoaded;
-                }
-                if (refreshed.simulateStartMultiplayerKnown) {
-                    runtimeSnapshot_.simulateStartMultiplayerKnown = true;
-                    runtimeSnapshot_.simulateStartMultiplayer = refreshed.simulateStartMultiplayer;
-                }
-                if (refreshed.startPosCommandLineKnown) {
-                    runtimeSnapshot_.startPosCommandLineKnown = true;
-                    runtimeSnapshot_.startPosCommandLine = refreshed.startPosCommandLine;
-                }
-                runtimeRefreshPending_ = false;
-            },
-            dispatchError);
-
-        if (!submitted) {
+        {
             std::lock_guard lock(runtimeSnapshotMutex_);
+            if (refreshed.gameStateKnown) {
+                runtimeSnapshot_.gameStateKnown = true;
+                runtimeSnapshot_.gameState = refreshed.gameState;
+            }
+            if (refreshed.worldLoadedKnown) {
+                runtimeSnapshot_.worldLoadedKnown = true;
+                runtimeSnapshot_.worldLoaded = refreshed.worldLoaded;
+            }
+            if (refreshed.simulateStartMultiplayerKnown) {
+                runtimeSnapshot_.simulateStartMultiplayerKnown = true;
+                runtimeSnapshot_.simulateStartMultiplayer = refreshed.simulateStartMultiplayer;
+            }
+            if (refreshed.startPosCommandLineKnown) {
+                runtimeSnapshot_.startPosCommandLineKnown = true;
+                runtimeSnapshot_.startPosCommandLine = refreshed.startPosCommandLine;
+            }
             runtimeRefreshPending_ = false;
-            error = dispatchError.empty() ? "game-thread runtime refresh enqueue failed" : dispatchError;
+        }
+    } else {
+        bool enqueueRefresh = false;
+        {
+            std::lock_guard lock(runtimeSnapshotMutex_);
+            if (!runtimeRefreshPending_) {
+                runtimeRefreshPending_ = true;
+                enqueueRefresh = true;
+            }
+        }
+
+        if (enqueueRefresh) {
+            std::string dispatchError;
+            const bool submitted = gameThreadDispatcher_.submit(
+                [this]() {
+                    RuntimeSnapshot refreshed{};
+                    std::uint32_t value = 0;
+
+                    if (nativeInvoker_.invoke_u32(kNativeGetGameState, value)) {
+                        refreshed.gameStateKnown = true;
+                        refreshed.gameState = static_cast<std::int32_t>(value);
+                    }
+                    if (nativeInvoker_.invoke_u32(kNativeStreamingIsWorldLoaded, value)) {
+                        refreshed.worldLoadedKnown = true;
+                        refreshed.worldLoaded = value != 0;
+                    }
+                    if (nativeInvoker_.invoke_u32(kNativeIsSimulateStartMultiplayer, value)) {
+                        refreshed.simulateStartMultiplayerKnown = true;
+                        refreshed.simulateStartMultiplayer = value != 0;
+                    }
+                    if (nativeInvoker_.invoke_u32(kNativeIsStartPosInCommandLine, value)) {
+                        refreshed.startPosCommandLineKnown = true;
+                        refreshed.startPosCommandLine = value;
+                    }
+
+                    std::lock_guard lock(runtimeSnapshotMutex_);
+                    if (refreshed.gameStateKnown) {
+                        runtimeSnapshot_.gameStateKnown = true;
+                        runtimeSnapshot_.gameState = refreshed.gameState;
+                    }
+                    if (refreshed.worldLoadedKnown) {
+                        runtimeSnapshot_.worldLoadedKnown = true;
+                        runtimeSnapshot_.worldLoaded = refreshed.worldLoaded;
+                    }
+                    if (refreshed.simulateStartMultiplayerKnown) {
+                        runtimeSnapshot_.simulateStartMultiplayerKnown = true;
+                        runtimeSnapshot_.simulateStartMultiplayer = refreshed.simulateStartMultiplayer;
+                    }
+                    if (refreshed.startPosCommandLineKnown) {
+                        runtimeSnapshot_.startPosCommandLineKnown = true;
+                        runtimeSnapshot_.startPosCommandLine = refreshed.startPosCommandLine;
+                    }
+                    runtimeRefreshPending_ = false;
+                },
+                dispatchError);
+
+            if (!submitted) {
+                std::lock_guard lock(runtimeSnapshotMutex_);
+                runtimeRefreshPending_ = false;
+                error = dispatchError.empty()
+                    ? "game-thread runtime refresh enqueue failed"
+                    : dispatchError;
+            }
         }
     }
 
+    RuntimeSnapshot snapshot{};
     {
         std::lock_guard lock(runtimeSnapshotMutex_);
         snapshot = runtimeSnapshot_;
