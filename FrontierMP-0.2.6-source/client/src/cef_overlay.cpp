@@ -2314,14 +2314,6 @@ HRESULT STDMETHODCALLTYPE frontier_present(
     const std::uint32_t trace = traceCount.fetch_add(1, std::memory_order_relaxed);
     if (trace < 8) {
         std::ostringstream message;
-        void** currentVtable = nullptr;
-        if (swapChain != nullptr) {
-            void*** currentVtableAddress =
-                reinterpret_cast<void***>(swapChain);
-            if (currentVtableAddress != nullptr) {
-                currentVtable = *currentVtableAddress;
-            }
-        }
         message << "[FrontierD3D] Present trace=" << trace
                 << " swapchain=" << static_cast<const void*>(swapChain)
                 << " hooked=" << (shouldRender ? 1 : 0)
